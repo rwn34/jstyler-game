@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>jstylr Games</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #050510;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem;
+    }
+    h1 {
+      margin-bottom: 0.5rem;
+      font-size: 2rem;
+      font-weight: 900;
+      letter-spacing: 3px;
+      background: linear-gradient(90deg, #0ff, #f0f);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      font-size: 0.7rem;
+      color: #555;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-bottom: 2rem;
+    }
+    .game-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1.5rem;
+      width: 100%;
+      max-width: 900px;
+    }
+    .game-card {
+      background: #0a0a14;
+      border: 1px solid #1a1a2a;
+      border-radius: 12px;
+      overflow: hidden;
+      text-decoration: none;
+      color: #e0e0e0;
+      transition: border-color 0.3s, transform 0.2s, box-shadow 0.3s;
+    }
+    .game-card:hover {
+      border-color: var(--card-acc, #0ff);
+      transform: translateY(-4px);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.5), 0 0 15px var(--card-acc-alpha, rgba(0,255,255,0.15));
+    }
+    .thumb-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16/9;
+      overflow: hidden;
+      background: #050510;
+    }
+    .thumb-wrap canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .card-info {
+      padding: 1rem 1.2rem;
+    }
+    .game-card h2 {
+      font-size: 1rem;
+      font-weight: 800;
+      letter-spacing: 1px;
+      margin-bottom: 0.3rem;
+      color: var(--card-grid, #0ff);
+    }
+    .game-card p {
+      font-size: 0.8rem;
+      color: #666;
+    }
+    .game-card .tag {
+      display: inline-block;
+      font-size: 0.6rem;
+      font-weight: bold;
+      letter-spacing: 1px;
+      padding: 2px 8px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #888;
+      margin-top: 0.5rem;
+    }
+    .no-games {
+      text-align: center;
+      color: #444;
+      padding: 4rem;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>jstylr Games</h1>
+  <div class="subtitle">powered by the grid</div>
+  <div class="game-list" id="gameList">
+  </div>
+  <script>
+    var GAMES = <!-- ZIPGAME_GAMES -->;
+
+    function renderThumb(canvas, theme) {
+      var ctx = canvas.getContext('2d');
+      var w = canvas.width, h = canvas.height;
+      var skyT = theme.skyT || '#020208';
+      var skyM = theme.skyM || '#0a0a1a';
+      var skyB = theme.skyB || '#1a0a2a';
+      var grid = theme.grid || '#0ff';
+      var acc = theme.acc || '#f0f';
+      var part = theme.part || '#0ff';
+
+      var grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, skyT);
+      grad.addColorStop(0.5, skyM);
+      grad.addColorStop(1, skyB);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.strokeStyle = grid;
+      ctx.globalAlpha = 0.12;
+      ctx.lineWidth = 1;
+      var sp = 30;
+      for (var x = 0; x < w; x += sp) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+      }
+      for (var y = 0; y < h; y += sp) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      var platY = h * 0.72;
+      var plats = [
+        [w * 0.02, platY, w * 0.18],
+        [w * 0.28, platY + 8, w * 0.15],
+        [w * 0.55, platY - 5, w * 0.2],
+        [w * 0.82, platY + 12, w * 0.16]
+      ];
+      ctx.fillStyle = grid;
+      ctx.shadowColor = grid;
+      ctx.shadowBlur = 6;
+      plats.forEach(function(p) {
+        ctx.fillRect(p[0], p[1], p[2], 4);
+      });
+      ctx.shadowBlur = 0;
+
+      var px = w * 0.12, py = platY - 10;
+      ctx.fillStyle = acc;
+      ctx.shadowColor = acc;
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.arc(px, py, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      for (var i = 0; i < 15; i++) {
+        var ppx = Math.random() * w;
+        var ppy = Math.random() * h * 0.6;
+        ctx.fillStyle = part;
+        ctx.globalAlpha = Math.random() * 0.4 + 0.1;
+        ctx.beginPath();
+        ctx.arc(ppx, ppy, Math.random() * 1.5 + 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      ctx.strokeStyle = grid;
+      ctx.globalAlpha = 0.06;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, h * 0.85);
+      ctx.lineTo(w, h * 0.85);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    (function() {
+      var list = document.getElementById('gameList');
+      if (!GAMES || !GAMES.length) {
+        list.innerHTML = '<div class="no-games">No games found.</div>';
+        return;
+      }
+      GAMES.forEach(function(g) {
+        var a = document.createElement('a');
+        a.className = 'game-card';
+        a.href = '/' + g.id + '/';
+        a.style.setProperty('--card-acc', g.theme.acc || '#f0f');
+        a.style.setProperty('--card-grid', g.theme.grid || '#0ff');
+        a.style.setProperty('--card-acc-alpha', (g.theme.acc || '#f0f') + '26');
+
+        var wrap = document.createElement('div');
+        wrap.className = 'thumb-wrap';
+        var canvas = document.createElement('canvas');
+        canvas.width = 560;
+        canvas.height = 315;
+        wrap.appendChild(canvas);
+        a.appendChild(wrap);
+
+        var info = document.createElement('div');
+        info.className = 'card-info';
+        info.innerHTML = '<h2>' + g.title + '</h2><p>' + (g.desc || '') + '</p>' +
+          (g.diff ? '<span class="tag">' + g.diff + '</span>' : '');
+        a.appendChild(info);
+
+        list.appendChild(a);
+        renderThumb(canvas, g.theme);
+      });
+    })();
+  </script>
+</body>
+</html>
