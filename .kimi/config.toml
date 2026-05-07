@@ -1,0 +1,68 @@
+# =============================================================================
+# Paste-ready Kimi CLI hook configuration
+# =============================================================================
+# What:   Wires the project's 4 bash guard scripts into Kimi Code CLI so they
+#         fire automatically on every tool use (root agent + subagents).
+# How:    Append this entire block to your global ~/.kimi/config.toml, then
+#         restart Kimi Code CLI (or start a fresh session).
+# Scope:  These guards enforce project policy — ADR-0001 root-file allowlist,
+#         framework-directory boundaries, sensitive-file protection, and
+#         destructive-command blocking.
+#
+# PATH NOTE
+# ---------
+# The commands below use "bash" and paths relative to the project root.
+# This works when your Kimi session starts in the project root directory.
+# On Windows, if "bash" is not in PATH, replace with the full Git Bash path:
+#   "C:\Program Files\Git\bin\bash.exe"
+# In TOML you can use a literal string (single quotes) to avoid escaping:
+#   command = '"C:\Program Files\Git\bin\bash.exe" .kimi/hooks/root-guard.sh'
+#
+# SAFETY-CHECK.PS1 COEXISTENCE
+# ----------------------------
+# Your existing config.toml probably already has a safety-check.ps1 hook
+# (matched on Shell). That hook is a BROAD safety net — it blocks patterns
+# that look dangerous in PowerShell. The destructive-guard.sh below is a
+# PROJECT-SPECIFIC policy layer — it knows about ADR-0001, .env rules,
+# git-force blocking, etc. Both can coexist safely:
+#   • Hooks for the same event run IN PARALLEL.
+#   • If EITHER hook exits 2 (block), the operation is blocked.
+#   • If BOTH exit 0, the operation proceeds.
+# Recommendation: KEEP safety-check.ps1 AND add the 4 guards below.
+# =============================================================================
+
+# --- Guard 1: Root file guard ---
+# Blocks writes to project root except ADR-0001 allowlist.
+# Fires before WriteFile and StrReplaceFile.
+[[hooks]]
+event = "PreToolUse"
+matcher = "WriteFile|StrReplaceFile"
+command = "bash .kimi/hooks/root-guard.sh"
+timeout = 10
+
+# --- Guard 2: Framework directory guard ---
+# Blocks writes to .claude/ and .kiro/ (other CLIs' framework dirs).
+# Fires before WriteFile and StrReplaceFile.
+[[hooks]]
+event = "PreToolUse"
+matcher = "WriteFile|StrReplaceFile"
+command = "bash .kimi/hooks/framework-guard.sh"
+timeout = 10
+
+# --- Guard 3: Sensitive file guard ---
+# Blocks writes to .env*, *.key, *.pem, id_rsa*, secrets.*, credentials.*, etc.
+# Fires before WriteFile and StrReplaceFile.
+[[hooks]]
+event = "PreToolUse"
+matcher = "WriteFile|StrReplaceFile"
+command = "bash .kimi/hooks/sensitive-guard.sh"
+timeout = 10
+
+# --- Guard 4: Destructive command guard ---
+# Blocks rm -rf /, DROP TABLE, git push --force, git reset --hard, etc.
+# Fires before Shell tool execution.
+[[hooks]]
+event = "PreToolUse"
+matcher = "Shell"
+command = "bash .kimi/hooks/destructive-guard.sh"
+timeout = 10
