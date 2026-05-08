@@ -1,12 +1,12 @@
 {
   "name": "N30N DASH J",
-  "short_name": "N30N Dash",
+  "short_name": "n3ondashj",
   "description": "A neon dash platformer by jstylr.",
-  "id": "./",
-  "start_url": "./",
-  "scope": "./",
-  "display": "fullscreen",
-  "orientation": "landscape",
+  "id": "/n3ondashj/",
+  "start_url": "/n3ondashj/",
+  "scope": "/n3ondashj/",
+  "display": "standalone",
+  "orientation": "any",
   "background_color": "#050510",
   "theme_color": "#00ffff",
   "categories": ["games"],
@@ -14,8 +14,23 @@
     {
       "src": "icon.svg",
       "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

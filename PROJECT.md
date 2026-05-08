@@ -17,6 +17,19 @@ When the user says "zipgame":
 5. **Zip**: Create a zip of the regenerated `index.html` and all game folders.
 6. **Filename format**: `yyyymmddhhmm.zip` (e.g. `202605052130.zip`).
 7. **Place** the zip into `deploy/` (create if needed).
+8. **Verify version & timestamp**: Ensure the version string displayed in the game settings (e.g. `v1.3.0 | Updated: May 8, 2026`) matches the current version being built. The service worker `CACHE_NAME` must also match (e.g. `n3ondashj-v1.3.0`). Update both if they don't match before zipping.
+
+## Versioning Scheme
+- **Patch (1.3.X)** — increments on every code change/iteration during development
+- **Minor (1.X.0)** — increments on `zipgame` (resets patch to 0). This is the deploy version.
+- **Major (X.0.0)** — major redesigns or breaking changes (manual decision)
+
+Example flow: working at v1.3.5 → `zipgame` → deploys as v1.4.0 → next changes become v1.4.1, v1.4.2...
+
+Version must be updated in 3 places:
+1. Boot screen HTML (`<span>v1.X.Y</span>`)
+2. Settings panel (`v1.X.Y | Updated: ...`)
+3. Service worker `CACHE_NAME` (`n3ondashj-v1.X.Y`)
 
 ## Project Structure
 - `index.html` — Game portal / landing page (template with `<!-- ZIPGAME_GAMES -->` placeholder)
