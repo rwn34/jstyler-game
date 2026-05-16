@@ -1,0 +1,22 @@
+name = "ndj-metrics"
+main = "src/index.js"
+compatibility_date = "2024-09-01"
+
+[vars]
+DASHBOARD_KEY = "qwepoi123098"
+
+# Allow importing HTML files as raw text
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
+# After running `npx wrangler d1 create ndj-metrics-db`,
+# paste the database_id from the output below
+[[d1_databases]]
+binding = "DB"
+database_name = "ndj-metrics-db"
+database_id = "74d7bb68-78f3-4189-8183-91618c1ebe03"
+
+[triggers]
+crons = ["0 * * * *"]

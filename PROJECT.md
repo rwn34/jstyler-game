@@ -11,20 +11,20 @@ When the user says "zipgame":
    - `desc` — first level's name from the LEVELS array (e.g. first `.name` value), or a fallback like the folder name
    - `diff` — first level's difficulty from the LEVELS array (e.g. first `.diff` value)
    - `theme` — first theme object from the THEMES array, extracting: `skyT`, `skyM`, `skyB`, `grid`, `acc`, `part`
-   - `version` — from `GAME_VERSION` variable, or the version string in the HTML (e.g. `v1.0.1`)
+   - `version` — from `GAME_VERSION` variable, or the version string in the HTML (e.g. `v1.0.25`)
 3. **Regenerate `index.html`**: Replace the `<!-- ZIPGAME_GAMES -->` placeholder in the root `index.html` template with a JSON **array** of game metadata. IMPORTANT: PowerShell `ConvertTo-Json` unwraps single-element arrays — wrap with `,@(...)` or use `,[System.Object[]]` to force array output: `[{"id":"n3ondashj","title":"N30N DASH J",...}]`
 4. **Copy per-game assets**: If `src/<gameid>/` exists, copy all files inside it into the built `<gameid>/` directory. This is required for PWA assets such as `manifest.webmanifest`, `sw.js`, and icons.
-5. **Zip**: Create a zip of the regenerated `index.html` and all game folders.
-6. **Filename format**: `yyyymmddhhmm.zip` (e.g. `202605052130.zip`).
+5. **Zip**: Create a zip of the regenerated `index.html` and all game folders. Use `[System.IO.Compression.CompressionLevel]::Fastest` and forward slashes in entry paths. Write all text files with UTF-8 no-BOM encoding.
+6. **Filename format**: `yyyymmddhhmm_vX.Y.Z.zip` (e.g. `202605081206_v1.0.25.zip`).
 7. **Place** the zip into `deploy/` (create if needed).
-8. **Verify version & timestamp**: Ensure the version string displayed in the game settings (e.g. `v1.3.0 | Updated: May 8, 2026`) matches the current version being built. The service worker `CACHE_NAME` must also match (e.g. `n3ondashj-v1.3.0`). Update both if they don't match before zipping.
+8. **Verify version & timestamp**: Ensure the version string displayed in the game settings (e.g. `v1.0.25 | Updated: May 8, 2026`) matches the current version being built. The service worker `CACHE_NAME` must also match (e.g. `n3ondashj-v1.0.25`). On `zipgame`, bump the minor version (e.g. v1.0.24 → v1.0.25).
 
 ## Versioning Scheme
-- **Patch (1.3.X)** — increments on every code change/iteration during development
-- **Minor (1.X.0)** — increments on `zipgame` (resets patch to 0). This is the deploy version.
+- Format: `vMAJOR.0.MINOR` (e.g. `v1.0.25`)
+- **Minor (1.0.X)** — increments on every `zipgame`. This is the deploy version.
 - **Major (X.0.0)** — major redesigns or breaking changes (manual decision)
 
-Example flow: working at v1.3.5 → `zipgame` → deploys as v1.4.0 → next changes become v1.4.1, v1.4.2...
+Example flow: working at v1.0.24 → `zipgame` → deploys as v1.0.25 → next becomes v1.0.26
 
 Version must be updated in 3 places:
 1. Boot screen HTML (`<span>v1.X.Y</span>`)
