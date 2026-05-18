@@ -1,0 +1,1230 @@
+﻿?<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>N3ON DashJ | jstylr</title>
+<style>
+/* Base Reset */
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+body{background:#050510;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden;height:100vh;width:100vw}
+
+/* Apply touch-action:none only to game specific elements */
+#gameCanvas, #weatherCanvas, #jZone, #jBtn, #gameTitleHUD, #boot, #cardWrap, #arrowControls, .arr-btn { touch-action: none; }
+
+/* Boot Screen */
+#boot{position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .6s;overflow:hidden;}
+#boot.hidden{display:none}
+#boot h1{font-size:2.8rem;font-weight:900;letter-spacing:6px;color:#fff;position:relative;}
+#boot h1 .glitch{position:absolute;inset:0;overflow:hidden;}
+#boot h1 .glitch::before,#boot h1 .glitch::after{content:attr(data-text);position:absolute;top:0;left:0;width:100%;height:100%;}
+#boot h1 .glitch::before{color:#0ff;clip-path:polygon(0 0,100% 0,100% 35%,0 35%);transform:translateX(-2px);animation:bootGlitch1 .8s infinite linear alternate-reverse;}
+#boot h1 .glitch::after{color:#f0f;clip-path:polygon(0 65%,100% 65%,100% 100%,0 100%);transform:translateX(2px);animation:bootGlitch2 .6s infinite linear alternate-reverse;}
+@keyframes bootGlitch1{0%{transform:translateX(-2px)}100%{transform:translateX(2px)}}
+@keyframes bootGlitch2{0%{transform:translateX(2px) skewX(0deg)}100%{transform:translateX(-2px) skewX(-1deg)}}
+#boot .sub{font-size:.7rem;color:#666;letter-spacing:6px;text-transform:uppercase}
+#boot .ring-wrap{position:relative;width:100px;height:100px;margin-top:10px;}
+#boot .ring-wrap svg{width:100%;height:100%;transform:rotate(-90deg);}
+#boot .ring-wrap circle{fill:none;stroke-width:3;}
+#boot .ring-bg{stroke:rgba(255,255,255,0.08);}
+#boot .ring-fg{stroke:#0ff;stroke-linecap:round;stroke-dasharray:283;stroke-dashoffset:283;transition:stroke-dashoffset .1s linear,stroke .2s;}
+#boot .pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.9rem;font-family:monospace;color:#fff;font-weight:700;}
+@keyframes p{0%,100%{opacity:.6}50%{opacity:1}}
+
+/* Level Select & Ambient Glow */
+#levelSelect{position:fixed;inset:0;z-index:100;background-color:#050510;display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:16px 0;overflow-y:auto;overflow-x:hidden;touch-action:pan-y;transition:background-color 0.5s;}
+#ambientGlow { position:absolute; inset:0; z-index:-1; background:radial-gradient(circle at 50% 40%, var(--glow-color, rgba(0,255,255,0.1)) 0%, transparent 65%); transition: background 0.6s ease; pointer-events:none; }
+
+#levelSelect.active{display:flex}
+#levelSelect.entering { animation: fadeIn 0.5s ease; }
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+#cardWrap.switching { animation: cardSwitch 0.3s ease; }
+@keyframes cardSwitch { 0%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.97)} 100%{opacity:1;transform:scale(1)} }
+#dotNav .dot.active { animation: dotPulse 1.5s ease infinite; }
+@keyframes dotPulse { 0%,100%{box-shadow:0 0 8px var(--dot-color,#0ff)} 50%{box-shadow:0 0 16px var(--dot-color,#0ff)} }
+#lsDetails.entering { animation: slideUp 0.3s ease; }
+@keyframes slideUp { from{opacity:0.5;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+/* Top-Left Gem Wallet */
+#lsTopStats { position: absolute; top: 16px; left: 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; background: transparent; padding: 4px 0; border: none; font-family: monospace; font-size: 0.85rem; font-weight: bold; z-index: 110; text-align: left; text-shadow: 0 1px 4px rgba(0,0,0,0.85), 0 0 8px rgba(0,0,0,0.6); }
+
+/* Single Card Display */
+#cardWrap { position:relative; width:90vw; max-width:400px; height:clamp(140px, 25vh, 220px); margin-top:10px; border-radius:12px; overflow:hidden; border:2px solid rgba(0,229,255,0.4); box-shadow:0 0 30px rgba(0,229,255,0.2); transition:border-color 0.4s,box-shadow 0.4s; flex-shrink:0; aspect-ratio:2/1; }
+#cardWrap canvas { position:absolute; inset:0; width:100%; height:100%; }
+#cardWrap::after { content:''; position:absolute; inset:0; pointer-events:none; background:linear-gradient(transparent 50%,rgba(0,0,0,0.1) 50%); background-size:100% 4px; z-index:3; }
+#cardWrap .num { position:absolute; top:12px; left:14px; font-weight:900; color:rgba(255,255,255,0.9); z-index:4; font-size:1.4rem; text-shadow:0 2px 8px rgba(0,0,0,0.9); }
+#cardWrap .lock-icon { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:3rem; background:rgba(0,0,0,0.6); z-index:4; }
+#cardWrap.locked { filter:grayscale(1); opacity:0.4; border-color:#333; box-shadow:none; }
+
+/* Card Stats Overlay */
+#cardWrap .t-stat { position:absolute; font-family:monospace; font-size:0.55rem; color:rgba(255,255,255,0.7); z-index:4; display:flex; align-items:center; gap:4px; text-shadow:0 1px 3px rgba(0,0,0,0.8); }
+.t-stat.tr { top:12px; right:14px; }
+.t-stat.bl { bottom:12px; left:14px; }
+.t-stat.br { bottom:12px; right:14px; }
+
+/* Dot Navigation */
+#dotNav { display:flex; gap:6px; margin-top:14px; align-items:center; flex-wrap:wrap; justify-content:center; max-width:min(90vw,320px); padding:0 10px; }
+#dotNav .dot { width:10px; height:10px; border-radius:50%; border:1.5px solid rgba(255,255,255,0.3); background:transparent; cursor:pointer; transition:all 0.3s; padding:0; appearance:none; -webkit-appearance:none; }
+#dotNav .dot.unlocked { background:var(--dot-color,#0ff); border-color:var(--dot-color,#0ff); opacity:0.5; }
+#dotNav .dot.active { opacity:1; transform:scale(1.4); box-shadow:0 0 8px var(--dot-color,#0ff); }
+#dotNav .dot.locked { opacity:0.2; cursor:default; }
+#dotNav .dot.daily-active { box-shadow:0 0 12px #ffd700, 0 0 4px #ffd700 inset; border-color:#ffd700 !important; position:relative; animation:dotPulse 1.5s ease infinite; }
+#dotNav .dot.daily-active::after { content:'\1F48E'; position:absolute; top:-12px; left:50%; transform:translateX(-50%); font-size:.55rem; pointer-events:none; }
+#dotNav .dot.daily-claimed { border-color:rgba(255,215,0,0.5) !important; }
+#dotNav .dot.daily-claimed::after { content:'\2713'; position:absolute; top:-10px; left:50%; transform:translateX(-50%); font-size:.5rem; color:rgba(255,215,0,0.6); pointer-events:none; }
+
+.nav-btn { position:absolute; top:50%; transform:translateY(-50%); width:40px; height:40px; background:rgba(0,0,0,0.7); border:1px solid rgba(255,255,255,0.2); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.1rem; cursor:pointer; z-index:20; color:#fff; padding:0; font:inherit; appearance:none; -webkit-appearance:none; transition:all 0.2s; }
+.nav-btn:hover { border-color:#0ff; background:rgba(0,229,255,0.2); }
+#navLeft { left:8px; }
+#navRight { right:8px; }
+
+#lsDetails { display:flex; flex-direction:column; align-items:center; gap:6px; margin-top:10px; width:100%; max-width:400px; padding:0 20px; }
+#lsName { font-size: 1.6rem; font-weight: 800; letter-spacing: 2px; text-shadow: 0 0 10px currentColor; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;}
+#lsTags { font-size: 0.75rem; font-weight: bold; letter-spacing: 2px; padding: 4px 12px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-bottom: 5px; transition: color 0.3s;}
+.stats-row { display: flex; gap: 10px; width: 100%; justify-content: center; }
+.stat-box { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 5px; flex: 1; text-align: center; font-size: 0.50rem; color: #aaa; letter-spacing: 1px; }
+.stat-box b { display: block; font-size: 0.9rem; color: #fff; margin-top: 3px; font-family: monospace; transition: color 0.3s;}
+#hazardLog { font-size:0.6rem; color:#666; text-align:center; margin-top:8px; font-family:monospace; letter-spacing:1px; }
+#lsPlayBtn { padding:14px 40px; font-size:1rem; font-weight:900; letter-spacing:3px; border:none; border-radius:8px; background:linear-gradient(90deg,#0ff,#08f); color:#000; cursor:pointer; box-shadow:0 0 20px rgba(0,229,255,0.3); margin-top:12px; transition:transform 0.2s,box-shadow 0.2s; width:100%; max-width:320px; }
+#lsPlayBtn:hover { transform:scale(1.03); box-shadow:0 0 30px rgba(0,229,255,0.5); }
+#lsPlayBtn:active { transform:scale(0.97); }
+#lsPlayBtn:disabled { background:#222!important; color:#555!important; box-shadow:none!important; cursor:not-allowed; transform:none; border:1px solid #333; }
+
+/* Global Stats */
+#globalStats { display:flex; gap:6px; width:100%; margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.06); justify-content:center; flex-wrap:wrap; }
+.g-stat { display:flex; flex-direction:column; align-items:center; padding:8px 12px; border-radius:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); min-width:60px; }
+.g-stat.full-row { width:100%; padding:10px; background:linear-gradient(180deg,rgba(255,255,255,0.04),transparent); }
+.g-stat.full-row .val { font-size:1.2rem; letter-spacing:2px; text-shadow:0 0 10px currentColor; text-transform:uppercase; }
+.g-stat .ico { font-size:1.2rem; margin-bottom:2px; }
+.g-stat .val { font-size:0.9rem; font-weight:900; color:#fff; font-family:monospace; }
+.g-stat .lbl { font-size:0.5rem; color:#888; text-transform:uppercase; letter-spacing:1px; margin-top:2px; }
+
+/* Game Canvas & FX */
+#gameCanvas{position:fixed;inset:0;z-index:50;display:none}
+#gameCanvas.active{display:block}
+#gameCanvas.grey{filter:grayscale(1) brightness(.6);transition:filter .3s ease}
+#gameCanvas.shake{animation:shk .3s ease}
+@keyframes shk{0%,100%{transform:translate(0)}20%{transform:translate(-8px,4px)}40%{transform:translate(8px,-4px)}60%{transform:translate(-4px,8px)}80%{transform:translate(4px,-8px)}}
+
+/* TOP HUD LAYOUT */
+/* 1. Top-Left: Logo / Home Button */
+#gameTitleHUD {
+    position: fixed; top: 12px; left: 12px; z-index: 310;
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    border: 1px solid rgba(0,229,255,0.3); border-radius: 8px;
+    padding: 6px 10px; cursor: pointer; background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(8px); overflow: hidden; transition: all 0.2s;
+}
+#gameTitleHUD:hover { border-color: #0ff; box-shadow: 0 0 10px rgba(0,229,255,0.3); transform: scale(1.05); }
+#gameTitleHUD.active { display: flex; }
+#gameTitleHUD .txt-n { font-size: 1.1rem; font-weight: 900; letter-spacing: 2px; line-height: 1; text-shadow: 0 0 5px #0ff; background:linear-gradient(90deg,#0ff,#08f);-webkit-background-clip:text;-webkit-text-fill-color:transparent; }
+#gameTitleHUD .txt-d { font-size: 0.6rem; font-weight: 800; letter-spacing: 4px; line-height: 1; margin-top: 2px; text-shadow: 0 0 5px #f0f; background:linear-gradient(90deg,#f0f,#a0f);-webkit-background-clip:text;-webkit-text-fill-color:transparent; }
+#homeBtnProg { position: absolute; bottom: 0; left: 0; height: 3px; background: #0ff; width: var(--p, 0%); transition: none; box-shadow: 0 0 8px #0ff; }
+
+#homeTooltip { position: fixed; top: 60px; left: 12px; z-index: 320; background: rgba(0,0,0,0.85); border: 1px solid rgba(0,229,255,0.5); color: #fff; font-size: 0.65rem; font-family: monospace; letter-spacing: 1px; padding: 6px 10px; border-radius: 6px; backdrop-filter: blur(6px); opacity: 0; pointer-events: none; transition: opacity 0.5s ease; display: flex; align-items: center; gap: 6px; max-width: calc(100vw - 24px); box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+#homeTooltip.active { opacity: 1; }
+#npcAdvice { position: fixed; top: 30%; left: 50%; transform: translateX(-50%); z-index: 199; background: linear-gradient(135deg, rgba(20,20,40,0.92), rgba(40,20,60,0.92)); border: 1px solid rgba(255,170,0,0.6); border-radius: 12px; padding: 12px 18px; max-width: 80vw; color: #fff; font-size: 0.75rem; font-family: monospace; letter-spacing: 1px; line-height: 1.5; text-align: center; backdrop-filter: blur(8px); box-shadow: 0 0 30px rgba(255,170,0,0.4), inset 0 0 20px rgba(255,170,0,0.1); opacity: 0; pointer-events: none; transition: opacity 0.6s ease, transform 0.6s ease; display: none; }
+#npcAdvice.active { opacity: 1; display: block; }
+#npcAdvice .npc-icon { display: block; font-size: 1.2rem; margin-bottom: 4px; color: #fa0; }
+#npcAdvice .npc-msg { font-weight: 700; }
+
+/* 2. Top-Center: Sector Info & Progress */
+#hudCenter {
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 200;
+    display: none; flex-direction: column; align-items: center;
+    background: rgba(0,0,0,0.6); padding: 6px 20px; border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px);
+}
+#hudCenter.active { display: flex; }
+#hudCenter .sector-name { font-size: 0.8rem; font-weight: bold; letter-spacing: 2px; margin-bottom: 6px; text-transform: uppercase; text-shadow: 0 0 5px currentColor; }
+#hudCenter .prog-container { width: 160px; height: 4px; background: rgba(255,255,255,0.15); border-radius: 2px; overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.5); }
+#hudCenter .prog-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #0ff, #f0f); transition: width 0.2s; box-shadow: 0 0 8px #0ff; }
+
+/* 3. Top-Right: Stats Stack */
+#hudRight {
+    position: fixed; top: 12px; right: 12px; z-index: 200;
+    display: none; flex-direction: column; align-items: flex-end; gap: 4px;
+    background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); pointer-events: none;
+}
+#hudRight.active { display: flex; }
+#hudRight div { font-size: 0.65rem; font-family: monospace; color: #aaa; letter-spacing: 1px; }
+#hudRight b { color: #fff; font-size: 0.75rem; }
+
+
+/* Controls */
+#jZone{position:fixed;z-index:200;display:none; transition: width 0.2s, height 0.2s, left 0.2s, bottom 0.2s;}
+#jZone.active{display:block}
+.jBase{position:absolute;inset:10px;border-radius:50%;border:2px solid rgba(0,229,255,.3);background:rgba(0,229,255,.05);box-shadow:inset 0 0 20px rgba(0,229,255,.1)}
+.jKnob{position:absolute;border-radius:50%;background:radial-gradient(circle at 35% 35%,#0ff,#08a);box-shadow:0 0 15px #0ff;border:2px solid rgba(255,255,255,.3)}
+
+#jBtn{position:fixed;bottom:24px;right:24px;width:80px;height:80px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#0f8,#0a5);border:2px solid rgba(255,255,255,.2);box-shadow:0 0 20px rgba(0,255,136,.3);z-index:200;display:none;align-items:center;justify-content:center;font-size:1.8rem;color:#fff;text-shadow:0 0 8px rgba(255,255,255,.5);cursor:pointer}
+#jBtn.active{display:flex}
+#jBtn:active{transform:scale(.9)}
+#jBtn .cd{position:absolute;inset:0;border-radius:50%;pointer-events:none;}
+#jBtn .ring{position:absolute;inset:-3px;border-radius:50%;border:2px solid transparent;animation:rp 1.2s ease infinite}
+@keyframes rp{0%,100%{border-color:transparent;box-shadow:none}50%{border-color:rgba(170,136,255,.6);box-shadow:0 0 12px rgba(170,136,255,.3)}}
+
+#arrowControls{position:fixed;left:0;right:0;z-index:200;display:none;align-items:flex-end;justify-content:flex-start;pointer-events:none;padding:0 24px;bottom:24px;}
+#arrowControls.active{display:flex}
+.arr-btn{pointer-events:auto;width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.8rem;color:#fff;text-shadow:0 0 8px rgba(255,255,255,.5);cursor:pointer;background:radial-gradient(circle at 35% 35%,#0ff,#08a);border:2px solid rgba(255,255,255,.2);box-shadow:0 0 15px rgba(0,229,255,.3);user-select:none;-webkit-user-select:none;transition:transform .1s;padding:0;font:inherit;appearance:none;-webkit-appearance:none}
+.arr-btn:active{transform:scale(.9)}
+.arr-jump{background:radial-gradient(circle at 35% 35%,#0f8,#0a5);box-shadow:0 0 20px rgba(0,255,136,.3);position:relative;width:80px;height:80px;font-size:1.8rem}
+.arr-jump .ring{position:absolute;inset:-3px;border-radius:50%;border:2px solid transparent;animation:rp 1.2s ease infinite}
+.arr-jump .cd{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);border-radius:0 0 50% 50%;transition:height .1s}
+.arr-left-group{display:flex;gap:10px;pointer-events:auto}
+
+/* Overlays */
+#overlay{position:fixed;inset:0;z-index:300;background:rgba(2,2,5,.92);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+#overlay.active{display:flex;animation:fi .4s ease}
+#overlay h2{font-size:2rem;font-weight:800;text-shadow:0 0 20px currentColor; text-align:center;}
+#overlay p{color:#aaa;font-size:.9rem;max-width:340px;text-align:center;line-height:1.4}
+#overlay button{padding:12px 36px;font-size:1rem;font-weight:700;border:none;border-radius:30px;cursor:pointer;color:#fff;background:linear-gradient(135deg,#0c8,#0e6);box-shadow:0 0 20px rgba(0,200,83,.4);transition:transform .2s}
+#overlay button:hover{transform:scale(1.05)}
+
+#store{position:fixed;inset:0;z-index:400;background:#020205;display:none;flex-direction:column;align-items:center;justify-content:flex-start;gap:12px;overflow-y:auto;padding:24px 16px;}
+#store.active{display:flex}
+/* When any overlay is active, hide level-select UI elements that may bleed through */
+body:has(#store.active) #levelSelect .ls-ui,
+body:has(#settings.active) #levelSelect .ls-ui,
+body:has(#gameSettings.active) #levelSelect .ls-ui,
+body:has(#overlay.active) #levelSelect .ls-ui,
+body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
+.stab{padding:8px 16px;font-size:0.7rem;font-weight:700;border:none;border-radius:8px;background:rgba(255,255,255,0.1);color:#aaa;cursor:pointer;letter-spacing:1px;}
+.stab.active{background:linear-gradient(135deg,#ffd700,#f80);color:#000;}
+.store-item{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}
+.store-item .si-info{flex:1;}
+.store-item .si-name{font-size:0.8rem;font-weight:700;color:#fff;}
+.store-item .si-desc{font-size:0.6rem;color:#888;margin-top:2px;}
+.store-item .si-cost{font-family:monospace;font-size:0.75rem;margin-right:10px;}
+.store-item .si-btn{padding:6px 12px;font-size:0.65rem;font-weight:700;border:none;border-radius:6px;cursor:pointer;color:#fff;}
+.store-item.owned{border-color:rgba(0,255,136,0.3);}
+.store-item.equipped{border-color:rgba(0,255,255,0.5);background:rgba(0,255,255,0.05);}
+.si-preview{width:50px;height:50px;border-radius:6px;background:#0a0a15;border:1px solid rgba(255,255,255,0.1);flex-shrink:0;margin-right:10px;}
+.tier-common .si-name{color:#fff}
+.tier-uncommon .si-name{color:#0f8}
+.tier-rare .si-name{color:#0af}
+.tier-legendary .si-name{color:#f0f}
+.tier-master .si-name{color:#ffd700;text-shadow:0 0 8px rgba(255,215,0,0.6)}
+.tier-master{border:1px solid rgba(255,215,0,0.5) !important;background:linear-gradient(135deg,rgba(255,215,0,0.05),rgba(255,140,0,0.03)) !important}
+.confetti-piece{position:fixed;top:-20px;width:10px;height:14px;pointer-events:none;z-index:9998;animation:confettiFall linear forwards;will-change:transform,opacity}
+@keyframes confettiFall{0%{transform:translateY(0) rotate(0)}100%{transform:translateY(110vh) rotate(720deg);opacity:0.5}}
+#settings,#gameSettings,#changelog{position:fixed;inset:0;z-index:400;background:#020205;display:none;flex-direction:column;align-items:center;justify-content:flex-start;gap:18px;overflow-y:auto;padding:24px 16px;min-height:100vh}
+#settings.active,#gameSettings.active,#changelog.active{display:flex}
+#settings h2,#gameSettings h2,#changelog h2{font-size:1.4rem;margin-bottom:10px; color:#0ff;}
+#settings .row,#gameSettings .row{display:flex;gap:12px;align-items:center; width: 320px; justify-content: space-between;}
+#settings label,#gameSettings label{font-size:.8rem;color:#aaa;min-width:90px;}
+#settings input[type="range"],#gameSettings input[type="range"]{flex-grow: 1;}
+#settings select,#gameSettings select{background:#1a1a2e;border:1px solid rgba(255,255,255,.3);color:#fff;padding:6px 12px;border-radius:8px;font-size:.8rem}
+#settings select option,#gameSettings select option{background:#1a1a2e;color:#fff;}
+#settings span,#gameSettings span { font-size: 0.75rem; color:#0ff; min-width: 40px; text-align:right;}
+#settings button,#gameSettings button,#changelog button{padding:10px 30px;font-size:.9rem;font-weight:700;border:none;border-radius:20px;cursor:pointer;color:#fff;background:linear-gradient(135deg,#08f,#0af)}
+.btn-install { background: linear-gradient(135deg, #f0f, #a0f) !important; margin-top:0; display:none; }
+
+.gear{position:fixed;top:16px;right:16px;z-index:110;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;font-size:1rem;color:#fff;padding:0;appearance:none;-webkit-appearance:none}
+.store-btn{position:fixed;top:16px;right:60px;z-index:110;height:36px;padding:0 12px 0 10px;border-radius:18px;background:linear-gradient(135deg,rgba(0,255,255,0.15),rgba(255,0,255,0.1));border:1px solid rgba(0,255,255,0.4);display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;transition:all .2s;font-size:1rem;color:#fff;font-weight:700;letter-spacing:1px;font-family:inherit;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
+.store-btn span{font-size:0.65rem;color:#0ff;letter-spacing:1.5px;}
+.store-btn:hover,.store-btn:focus{background:linear-gradient(135deg,rgba(0,255,255,0.3),rgba(255,0,255,0.2));border-color:rgba(0,255,255,0.7);}
+.chest-pulse{background:linear-gradient(135deg,rgba(255,170,0,0.7),rgba(255,102,0,0.5))!important;border-color:#fa0!important;animation:chestPulse 1.4s ease-in-out infinite;}
+@keyframes chestPulse{0%,100%{box-shadow:0 0 6px rgba(255,170,0,0.5),inset 0 0 4px rgba(255,170,0,0.3);transform:scale(1);}50%{box-shadow:0 0 18px rgba(255,170,0,0.9),inset 0 0 8px rgba(255,170,0,0.6);transform:scale(1.08);}}
+.rank-grid{display:flex;flex-direction:column;gap:18px;}
+@media (orientation: landscape) and (min-width: 580px){.rank-grid{display:grid !important;grid-template-columns:1fr 1fr !important;gap:24px !important;}}
+#onboard{position:fixed;inset:0;z-index:600;background:radial-gradient(ellipse at center,#0a0a20 0%,#020208 100%);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;overflow-y:auto;}
+#onboard.active{display:flex}
+#onboard .onb-logo{font-weight:900;letter-spacing:6px;background:linear-gradient(90deg,#0ff,#f0f);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:0 0 30px rgba(0,255,255,0.4);text-align:center;}
+#onboard .onb-logo .n{font-size:2.2rem;line-height:1;}
+#onboard .onb-logo .d{font-size:1rem;letter-spacing:10px;margin-top:4px;color:#0ff;-webkit-text-fill-color:#0ff;background:none;}
+#onboard .onb-tag{font-size:0.7rem;color:#888;letter-spacing:3px;text-transform:uppercase;margin-top:-4px;margin-bottom:8px;}
+#onboard .onb-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px 18px;width:100%;max-width:320px;}
+#onboard .onb-label{font-size:0.65rem;color:#0ff;letter-spacing:2px;font-weight:700;margin-bottom:8px;text-transform:uppercase;}
+#onboard .onb-input{width:100%;padding:10px;font-size:1rem;font-family:monospace;text-align:center;background:#111;color:#0ff;border:2px solid #0ff;border-radius:8px;text-transform:uppercase;letter-spacing:2px;}
+#onboard .onb-ctrl-row{display:flex;gap:10px;}
+#onboard .onb-ctrl{flex:1;padding:14px 8px;border:2px solid rgba(0,229,255,0.3);border-radius:10px;background:rgba(0,229,255,0.04);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;transition:all 0.2s;}
+#onboard .onb-ctrl.active{border-color:#0ff;background:rgba(0,229,255,0.15);box-shadow:0 0 20px rgba(0,255,255,0.3);}
+#onboard .onb-ctrl .ico{width:34px;height:34px;border-radius:50%;border:2px solid #0ff;display:flex;align-items:center;justify-content:center;font-size:1rem;color:#0ff;}
+#onboard .onb-ctrl .ttl{color:#fff;font-size:0.75rem;font-weight:700;letter-spacing:1px;}
+#onboard .onb-ctrl .sub{color:#888;font-size:0.55rem;text-align:center;line-height:1.3;}
+#onboard .onb-howto{font-size:0.65rem;color:#aaa;line-height:1.7;}
+#onboard .onb-howto b{color:#0ff;}
+#onboard .onb-start{width:100%;max-width:320px;padding:14px;font-size:0.95rem;font-weight:900;letter-spacing:4px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ff,#f0f);color:#000;cursor:pointer;box-shadow:0 0 30px rgba(0,255,255,0.4);margin-top:6px;}
+#onboard .onb-start:disabled{opacity:0.4;cursor:not-allowed;box-shadow:none;}
+#onboard .onb-warn{font-size:0.65rem;color:#f80;text-align:center;min-height:14px;}
+#btnHints{position:fixed;top:56px;right:10px;z-index:115;display:none;flex-direction:column;gap:4px;align-items:flex-end;animation:fadeIn 0.5s ease;}
+#btnHints.active{display:flex}
+#btnHints .hint-tag{font-size:0.6rem;color:#fff;background:rgba(0,0,0,0.8);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:3px 8px;white-space:nowrap;backdrop-filter:blur(5px);}
+#btnHints.fading{animation:fadeOut 1s ease forwards;}
+@keyframes fadeOut{from{opacity:1}to{opacity:0}}
+.gear:hover{background:rgba(0,229,255,.2);border-color:#0ff;transform:rotate(30deg)}
+
+.weather{position:fixed;inset:0;pointer-events:none;z-index:60}
+
+@keyframes fi{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+  #gameCanvas.shake { animation: none !important; }
+}
+/* Landscape stage-select layout — for short-height landscape phones (e.g., Z Fold cover, low-end devices) */
+@media (orientation: landscape) and (max-height: 600px) {
+  #lsLogo { top: 6px !important; }
+  #lsLogo > div:first-child { font-size: 1.2rem !important; letter-spacing: 3px !important; }
+  #lsLogo > div:nth-child(2) { font-size: 0.6rem !important; letter-spacing: 4px !important; margin-top: 0 !important; }
+  #ghostBanner { top: 28px !important; font-size: 0.55rem !important; padding: 3px 10px !important; max-width: 65vw !important; }
+  #lsTopStats { top: 8px !important; right: auto !important; left: 8px !important; transform: none !important; font-size: 0.65rem !important; gap: 6px !important; padding: 4px 8px !important; flex-direction: row !important; flex-wrap: wrap !important; max-width: 50vw !important; }
+  /* Compact top buttons in landscape */
+  .gear { width: 30px !important; height: 30px !important; font-size: 0.85rem !important; top: 8px !important; }
+  .store-btn { height: 30px !important; padding: 0 8px 0 6px !important; top: 8px !important; gap: 4px !important; font-size: 0.85rem !important; }
+  .store-btn span { font-size: 0.55rem !important; }
+  #levelSelect {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 14px !important;
+    padding: 44px 16px 12px 16px !important;
+  }
+  #cardWrap {
+    width: auto !important;
+    flex: 1.1 !important;
+    max-width: 44vw !important;
+    height: 76vh !important;
+    max-height: 420px !important;
+    aspect-ratio: auto !important;
+    margin-top: 0 !important;
+  }
+  /* Character portrait: inline before card, narrower flex */
+  #lsCharPortrait {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    width: auto !important;
+    flex: 0 0 80px !important;
+    max-width: 80px !important;
+    height: 76vh !important;
+    max-height: 420px !important;
+    border-radius: 12px !important;
+    background: #0a0a18 !important;
+    z-index: auto !important;
+  }
+  #lsDetails {
+    flex: 1 !important;
+    max-width: 42vw !important;
+    margin-top: 0 !important;
+    padding: 0 4px !important;
+    align-items: stretch !important;
+    overflow-y: auto !important;
+    max-height: 76vh !important;
+    gap: 4px !important;
+  }
+  #lsDetails h2 { font-size: 1rem !important; margin: 0 !important; }
+  #lsDetails .tag { font-size: 0.6rem !important; padding: 2px 6px !important; }
+  #lsPhysics { font-size: 0.55rem !important; line-height: 1.3 !important; }
+  #lsDetails .stats-row { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 4px !important; width: 100% !important; }
+  #lsDetails .stat-box { padding: 4px 6px !important; font-size: 0.55rem !important; }
+  #lsDetails .stat-box b { font-size: 0.85rem !important; }
+  #hazardLog { font-size: 0.5rem !important; padding: 2px 6px !important; }
+  #lsPlayBtn { padding: 8px 18px !important; font-size: 0.8rem !important; margin-top: 4px !important; }
+  #dotNav { width: 100% !important; max-width: 100% !important; margin-top: 6px !important; flex-wrap: wrap !important; }
+  #dotNav .dot { width: 6px !important; height: 6px !important; }
+  /* globalStats sits inside lsDetails column (after Play DashJ), stuck to bottom */
+  #globalStats { 
+    position: static !important; 
+    width: 100% !important; 
+    max-width: 100% !important; 
+    padding: 6px 10px !important; 
+    margin: auto 0 0 0 !important; /* push to bottom of flex column */
+    background: rgba(0,0,0,0.4) !important;
+    border: 1px solid rgba(0,255,255,0.2) !important;
+    border-radius: 8px !important;
+    backdrop-filter: blur(6px) !important;
+    z-index: 50 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    grid-template-columns: none !important;
+    gap: 10px !important;
+    justify-content: space-around !important;
+    align-self: stretch !important;
+  }
+  #globalStats .g-stat { 
+    padding: 0 !important; 
+    background: transparent !important; 
+    border: none !important; 
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 4px !important;
+    font-size: 0.55rem !important;
+  }
+  #globalStats .g-stat .ico { font-size: 0.75rem !important; margin: 0 !important; }
+  #globalStats .g-stat .val { font-size: 0.7rem !important; font-weight: 700 !important; }
+  #globalStats .g-stat .lbl { display: none !important; }
+  #btnHints { display: none !important; }
+  /* Compact store/settings panels in low-height landscape */
+  #store, #settings, #gameSettings, #changelog {
+    padding: 6px 16px !important;
+    gap: 4px !important;
+    justify-content: flex-start !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  /* Settings/gameSettings grid in compact landscape — tighter padding, max-height to enable scroll */
+  #settings.active, #gameSettings.active {
+    padding: 6px 16px !important;
+    gap: 2px 16px !important;
+    max-height: 100vh !important;
+  }
+  #pauseShopList { gap: 3px !important; }
+  #pauseShopList > div { padding: 3px 6px !important; font-size: 0.55rem !important; }
+  #pauseShopList > div > div { font-size: 0.55rem !important; }
+  #pauseShopList button { padding: 2px 6px !important; font-size: 0.55rem !important; }
+  /* Container of pause-shop items wrapper: internal scroll if too tall */
+  #gameSettings > div[style*="border-top"] {
+    max-height: 100% !important;
+    overflow-y: auto !important;
+  }
+  #store h2, #settings h2, #gameSettings h2, #changelog h2 {
+    font-size: 1.05rem !important;
+    margin: 0 0 2px 0 !important;
+  }
+  #shopkeeper {
+    margin-bottom: 2px !important;
+    padding: 4px 8px !important;
+  }
+  #shopkeeper > div:first-child { font-size: 1rem !important; }
+  #shopkeeperMsg {
+    font-size: 0.55rem !important;
+    line-height: 1.3 !important;
+  }
+  #storeBalance { font-size: 0.7rem !important; }
+  #dailyChestBtn { padding: 4px 8px !important; font-size: 0.6rem !important; }
+  #storeTabs { margin-bottom: 4px !important; gap: 4px !important; }
+  .stab { padding: 4px 10px !important; font-size: 0.65rem !important; }
+  #storeContent { max-height: calc(100vh - 150px) !important; }
+  #store > button[onclick*="closeStore"], #settings > button:last-of-type, #gameSettings > button[onclick*="resume"], #gameSettings > button[onclick*="goHome"] {
+    margin-top: 4px !important;
+    padding: 6px 24px !important;
+    font-size: 0.8rem !important;
+  }
+}
+/* Portrait orientation AND large landscape (tablet/fold) — character + stats side-by-side at top */
+@media (orientation: portrait), (orientation: landscape) and (min-height: 601px) {
+  /* Reserve top header zone (char/stats/logo) so content can't scroll under logo */
+  #levelSelect {
+    padding-top: 130px !important;
+    padding-bottom: 16px !important;
+  }
+  #lsCharPortrait {
+    top: 8px !important;
+    left: 8px !important;
+    width: 56px !important;
+    height: 68px !important;
+    z-index: 111 !important;
+  }
+  #lsTopStats {
+    top: 8px !important;
+    right: auto !important;
+    left: 70px !important;
+    max-width: 110px !important;
+    transform: none !important;
+    font-size: 0.6rem !important;
+    gap: 3px !important;
+    padding: 6px 8px !important;
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    align-items: flex-start !important;
+    height: 68px !important;
+    justify-content: center !important;
+    background: rgba(0,0,0,0.35) !important;
+    border-radius: 8px !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    overflow: hidden !important;
+  }
+  #lsTopRank { display: block !important; width: 100% !important; box-sizing: border-box !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; max-width: 100% !important; font-size: 0.55rem !important; padding: 4px 6px !important; line-height: 1.4 !important; text-align: center !important; }
+  #lsPlayerName { font-size: 0.7rem !important; }
+  #lsGems { font-size: 0.6rem !important; }
+  /* Chest button: pushed to its own row well below logo to clear stats card */
+  #lsChestBtn { top: 116px !important; right: 16px !important; }
+  /* Logo positioned below the header row, 25% bigger and clearly readable */
+  #lsLogo { top: 66px !important; }
+  #lsLogo > div:first-child { font-size: 1.5rem !important; letter-spacing: 2px !important; }
+  #lsLogo > div:nth-child(2) { font-size: 0.75rem !important; letter-spacing: 4px !important; margin-top: 0 !important; }
+  /* In-game HUD compact in portrait — prevent overlap of left/center/right */
+  #hudLeft, #hudRight {
+    padding: 4px 8px !important;
+    gap: 2px !important;
+  }
+  #hudLeft { top: 110px !important; left: 8px !important; }
+  #hudRight { top: 8px !important; right: 8px !important; }
+  #hudLeft > div, #hudRight > div { font-size: 0.5rem !important; letter-spacing: 0.5px !important; }
+  #hudLeft b, #hudRight b { font-size: 0.6rem !important; }
+  #hudSplit { font-size: 0.45rem !important; }
+  #hudCenter { top: 64px !important; padding: 3px 12px !important; }
+  #hudCenter .sector-name { font-size: 0.6rem !important; margin-bottom: 2px !important; letter-spacing: 1px !important; }
+  #hudCenter .prog-container { width: 110px !important; }
+  /* Pause panel overflow protection — long text doesn't break button bounds */
+  #gameSettings button, #settings button {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  /* Pause control preview text fluid width */
+  #gCtrlPreview, #ctrlPreview {
+    width: auto !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+}
+/* Store two-column layout in landscape orientation */
+@media (orientation: landscape) and (min-width: 580px) {
+  #storeContent {
+    max-width: 760px !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px 10px !important;
+    align-content: start !important;
+  }
+  #storeContent .store-item { margin-bottom: 0 !important; }  /* Settings panel — two-column grid (only when active) */
+  #settings.active, #gameSettings.active {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    align-content: start !important;
+    align-items: center !important;
+    justify-items: center !important;
+    gap: 4px 24px !important;
+    padding: 8px 16px !important;
+    max-width: 800px !important;
+    margin: 0 auto !important;
+  }
+  #settings h2, #gameSettings h2 {
+    grid-column: 1 / -1 !important;
+    margin: 2px 0 4px 0 !important;
+    font-size: 1rem !important;
+  }
+  #settings .row, #gameSettings .row {
+    width: 100% !important;
+    max-width: 320px !important;
+    gap: 8px !important;
+  }
+  #settings select, #gameSettings select { padding: 4px 8px !important; font-size: 0.7rem !important; }
+  #settings label, #gameSettings label { font-size: 0.7rem !important; min-width: 70px !important; }
+  #settings button, #gameSettings button { padding: 6px 14px !important; font-size: 0.75rem !important; }
+  #ctrlPreview, #gCtrlPreview {
+    width: 100% !important;
+    max-width: 320px !important;
+    font-size: 0.55rem !important;
+  }
+  /* Bottom action buttons span both columns */
+  #settings > div[style*="flex-direction:column"],
+  #gameSettings > div[style*="flex-direction:column"],
+  #settings > div[style*="flex-direction: column"],
+  #gameSettings > div[style*="flex-direction: column"] {
+    grid-column: 1 / -1 !important;
+    max-width: 600px !important;
+    width: 100% !important;
+  }
+  /* Pause: shop on left (spans rows), action buttons stacked on right */
+  #gameSettings > div[style*="border-top"] {
+    grid-column: 1 / 2 !important;
+    grid-row: span 3 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    border-top: none !important;
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+  }
+  #btnAdjust {
+    grid-column: 2 / 3 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin-top: 0 !important;
+    padding: 8px !important;
+  }
+  /* Action buttons (Apply | Exit) stacked vertically on right column in landscape (shop is on left) */
+  #gameSettings > div[style*="flex-direction:column"][style*="margin-top:15px"] {
+    grid-column: 2 / 3 !important;
+    flex-direction: column !important;
+    margin-top: 14px !important;
+    width: 100% !important;
+    max-width: none !important;
+    gap: 6px !important;
+  }
+  #gameSettings > div[style*="flex-direction:column"][style*="margin-top:15px"] > button {
+    flex: none !important;
+    width: 100% !important;
+  }
+  /* Changelog — wider and grid-friendly */
+  #changelog { padding: 12px 20px !important; }
+  #changelog > div { max-width: 720px !important; max-height: 80vh !important; }
+  /* Onboarding — tighter spacing */
+  #onboard { padding: 12px 20px !important; gap: 8px !important; }
+  /* Generic overlay (win, die, share, ceremony, etc.) — tighter for short heights */
+  #overlay { padding: 12px !important; gap: 8px !important; }
+  #ovTitle { font-size: 1.5rem !important; }
+  #ovMsg { font-size: 0.8rem !important; max-width: 600px !important; max-height: 65vh !important; overflow-y: auto !important; }
+  #shareCustomMsg { height: 50px !important; }
+  /* Cosmetic preview panel — fits comfortably */
+  #cosPreviewPanel { gap: 6px !important; }
+  /* Itemrules popup */
+  #itemInfo { padding: 12px !important; }
+}
+.adjust-mode .jBase{border-style:dashed;border-color:#0ff;}
+.adjust-mode #jZone,.adjust-mode #jBtn,.adjust-mode #arrowControls{pointer-events:none;}
+.adjust-mode #jBtn,.adjust-mode .arr-btn{border-style:dashed;opacity:0.8;}
+.adjust-overlay{position:fixed;inset:0;z-index:210;background:rgba(0,0,0,0.5);display:none;}
+.adjust-overlay.active{display:block;}
+.hidden{display:none!important}
+.diff-easy{color:#0f8 !important;border-color:rgba(0,255,136,0.3) !important}
+.diff-med{color:#fa0 !important;border-color:rgba(255,170,0,0.3) !important}
+.diff-hard{color:#f05 !important;border-color:rgba(255,0,85,0.3) !important}
+.diff-starter{color:#0fc !important;border-color:rgba(0,255,200,0.3) !important}
+.diff-simple{color:#0f8 !important;border-color:rgba(0,255,136,0.3) !important}
+.diff-moderate{color:#fa0 !important;border-color:rgba(255,170,0,0.3) !important}
+#tutorial{position:fixed;inset:0;z-index:500;background:rgba(2,2,5,.97);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+#tutorial.active{display:flex}
+</style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#00ffff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="N3ON DashJ">
+<base target="_blank">
+</head>
+<body>
+<div id="boot">
+    <canvas id="bootBg" style="position:absolute;inset:0;z-index:0;"></canvas>
+    <canvas id="bootParticles" style="position:absolute;inset:0;z-index:2;"></canvas>
+    <h1 style="z-index:1;">N3ON DashJ<span class="glitch" data-text="N3ON DashJ"></span></h1>
+    <span class="sub" style="z-index:1;">jstylr</span>
+    <span style="z-index:1;font-size:.55rem;color:#444;font-family:monospace;">v1.1.16</span>
+    <div class="ring-wrap" style="z-index:1;">
+        <svg viewBox="0 0 100 100"><circle class="ring-bg" cx="50" cy="50" r="45"/><circle class="ring-fg" id="bootRing" cx="50" cy="50" r="45"/></svg>
+        <div class="pct" id="bootPct">0%</div>
+    </div>
+</div>
+
+<!-- Refactored Level Select -->
+<div id="levelSelect">
+    <div id="ambientGlow"></div>
+    <div id="lsLogo" class="ls-ui" style="position:absolute;top:60px;left:50%;transform:translateX(-50%);text-align:center;z-index:100;pointer-events:none;">
+        <div style="font-size:1.4rem;font-weight:900;letter-spacing:6px;background:linear-gradient(90deg,#0ff,#f0f);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:0 0 20px rgba(0,255,255,0.3);line-height:1;">N3ON</div>
+        <div style="font-size:0.7rem;font-weight:700;letter-spacing:8px;color:#0ff;margin-top:2px;">DashJ</div>
+    </div>
+    <div id="ghostBanner" style="display:none;position:absolute;top:120px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.7);border:1px solid rgba(0,255,255,0.4);border-radius:10px;padding:6px 14px;text-align:center;font-size:0.65rem;color:#aaa;backdrop-filter:blur(8px);z-index:100;pointer-events:none;max-width:90vw;"></div>
+    
+    <div id="lsTopStats" class="ls-ui">
+        <span id="lsTopRank" onclick="showRankPopup()" style="color:#ffd700;font-weight:700;letter-spacing:0.5px;font-size:0.65rem;cursor:pointer;padding:2px 6px;border:1px solid rgba(255,215,0,0.4);border-radius:4px;">— ⓘ</span>
+        <span id="lsPlayerName" style="color:#0ff;font-weight:900;letter-spacing:1px;"></span>
+        <span id="lsGems" style="display:flex;gap:8px;align-items:center;">
+            <span style="color:#ffd700; filter:drop-shadow(0 0 5px rgba(255,215,0,0.5));">★ <span id="lsTopGold">0</span></span>
+            <span style="color:#ccc; filter:drop-shadow(0 0 5px rgba(255,255,255,0.5));">♦ <span id="lsTopSilver">0</span></span>
+        </span>
+    </div>
+    <canvas id="lsCharPortrait" class="ls-ui" width="50" height="60" style="position:absolute;top:8px;left:8px;z-index:111;border-radius:8px;background:#0a0a18;border:2px solid #0ff;box-sizing:border-box;"></canvas>
+    
+    <button class="gear ls-ui" type="button" onclick="openSettings()" aria-label="Settings">⚙</button>
+    <button class="gear ls-ui" type="button" onclick="shareGame()" aria-label="Share" style="right:60px;top:16px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></button>
+    <button class="store-btn ls-ui" type="button" onclick="openStore()" aria-label="Store" style="right:104px;top:16px;">🛒<span>STORE</span></button>
+    <button class="gear ls-ui" id="lsChestBtn" type="button" onclick="claimDailyChestFromHome()" aria-label="Daily Chest" style="right:214px;top:16px;display:none;">🎁</button>
+    <div id="btnHints">
+        <div class="hint-tag">⚙ Settings — sound, controls, export</div>
+        <div class="hint-tag">🛒 Store — skills, cosmetics</div>
+        <div class="hint-tag">↗ Share — invite friends with a personal message</div>
+    </div>
+    
+    <div id="cardWrap">
+        <button id="navLeft" class="nav-btn" type="button" onclick="moveCar(-1)" aria-label="Previous">&#10094;</button>
+        <canvas id="activeThumb"></canvas>
+        <div class="num" id="cardNum">1</div>
+        <div class="lock-icon" id="cardLock" style="display:none;">🔒</div>
+        <div class="t-stat tr" id="cardStatTR"></div>
+        <div class="t-stat bl" id="cardStatBL"></div>
+        <div class="t-stat br" id="cardStatBR"></div>
+        <button id="navRight" class="nav-btn" type="button" onclick="moveCar(1)" aria-label="Next">&#10095;</button>
+    </div>
+    
+    <div id="lsDetails" class="ls-ui">
+        <h2 id="lsName">--</h2>
+        <div id="lsTags" class="tag">--</div>
+        <div id="lsPhysics" style="font-size:0.65rem;color:#aaa;margin-top:4px;">--</div>
+        <div class="stats-row">
+            <div class="stat-box">BEST TIME<br><b id="lsTime">--</b></div>
+            <div class="stat-box">GEMS<br><b id="lsChips">--</b></div>
+            <div class="stat-box">MATCHES<br><b id="lsAtt">--</b></div>
+            <div class="stat-box">SCORE<br><b id="lsScore">--</b></div>
+        </div>
+        <div id="hazardLog">LOG » FALLS: <span id="gDeadFall">0</span> | SPIKES: <span id="gDeadSpike">0</span> | LASERS: <span id="gDeadLaser">0</span></div>
+        <button id="lsPlayBtn" onclick="playSelected()">Play DashJ</button>
+        
+        <div id="globalStats">
+            <div class="g-stat"><div class="ico">🎮</div><div class="val" id="gMatches">0</div><div class="lbl">Matches</div></div>
+            <div class="g-stat"><div class="ico">⏱️</div><div class="val" id="gTime">0m</div><div class="lbl">Time</div></div>
+            <div class="g-stat"><div class="ico">🚩</div><div class="val" id="gClear">0%</div><div class="lbl">Cleared</div></div>
+            <div class="g-stat"><div class="ico">💀</div><div class="val" id="gDeaths">0</div><div class="lbl">Hazards</div></div>
+        </div>
+        <div id="dotNav"></div>
+    </div>
+</div>
+
+<div id="settings">
+<h2>⚙ SETTINGS</h2>
+<div class="row"><label>SFX</label><select id="setSfx"><option value="1">On</option><option value="0">Off</option></select></div>
+<div class="row"><label>Music</label><select id="setMusic"><option value="1">On</option><option value="0">Off</option></select></div>
+<div class="row"><label>Visual</label><select id="setVisual"><option value="high">High</option><option value="med">Medium</option><option value="low">Low</option></select></div>
+<div class="row"><label>Ghost Replays</label><select id="setGhost"><option value="1">On</option><option value="0">Off</option></select></div>
+<div class="row"><label>Show FPS</label><select id="setShowFps"><option value="0">Off</option><option value="1">On</option></select></div>
+<div class="row"><label>Controls</label><select id="setCtrl"><option value="arrows">Arrow Buttons</option><option value="analog">Analog Joystick</option></select></div>
+<div id="ctrlPreview" style="font-size:0.65rem;color:#888;text-align:center;width:320px;font-style:italic;"></div>
+<div class="row"><label>Vibrate</label><select id="setVibrate"><option value="1">On</option><option value="0">Off</option></select></div>
+<div class="row"><label>Orientation</label><select id="setOrient"><option value="landscape">Landscape</option><option value="portrait">Portrait</option></select></div>
+<div class="row"><label>Auto-retry on death</label><select id="setAutoRetry"><option value="none">No auto</option><option value="0">Instant</option><option value="0.5">0.5s</option><option value="1">1s</option><option value="2">2s</option></select></div>
+<div style="display:flex; flex-direction:column; gap:10px; margin-top:15px; width:100%; max-width:320px;">
+    <button onclick="saveSettings()" style="width:100%;">SAVE & BACK</button>
+    <button id="btnInstall" class="btn-install" onclick="installPWA()" style="width:100%; padding: 10px 0;">INSTALL APP</button>
+    <div style="display:flex; gap:10px;">
+        <button onclick="showExport()" style="flex:1; padding: 10px 0; background:linear-gradient(135deg,#0aa,#055);">EXPORT SAVE</button>
+        <button onclick="showImport()" style="flex:1; padding: 10px 0; background:linear-gradient(135deg,#fa0,#d80);">IMPORT SAVE</button>
+    </div>
+    <div style="text-align: center; margin-top: 15px; font-family: monospace;">
+        <div style="display:flex;gap:6px;width:100%;">
+            <button onclick="openChangelog()" style="flex:1;padding:8px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#333,#222);border:1px solid rgba(255,255,255,0.15);color:#aaa;">📋 UPDATE LOG &nbsp; <span style='color:#666;font-size:0.6rem;'>v1.1.16</span></button>
+            <button onclick="restartGame()" title="Restart the game to apply updates" style="flex:0 0 auto;padding:8px 14px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#0a4,#062);border:1px solid rgba(0,255,136,0.3);color:#0f8;">🔄 RESTART</button>
+        </div>
+        <button onclick="confirmReset()" style="background:transparent; border:none; color:#444; font-size:0.6rem; font-weight:normal; text-decoration:underline; cursor:pointer; padding:5px; box-shadow:none; margin-top:2px;">Reset All Data</button>
+    </div>
+</div>
+</div>
+
+<div id="changelog">
+<h2>📋 UPDATE LOG</h2>
+<div style="width:100%;max-width:360px;max-height:60vh;overflow-y:auto;text-align:left;padding:10px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.1);">
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.15 — Stage select dot navigation placement</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Stage navigation dots now appear BELOW the global stats strip in all orientations (was above on landscape compact). Dots moved to be the last child of <code>lsDetails</code> in DOM, so they consistently flow under the global stats card.</li>
+</ul>
+
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.14 — Bug fixes + Consumable persistence + Resurrect nerf</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Tablet rank chip: stats card height 52→68px, comfortable padding, line-height 1.4 — text no longer cropped by border.</li>
+<li>Daily Chest button shows ✅ icon (instead of 🎁) when claimed, half opacity, click disabled.</li>
+<li>Daily Master Chip now picks from levels you've UNLOCKED (was picking from all 20, sometimes locked levels). New players see today's daily on a level they can actually play.</li>
+<li>"DAILY MASTER" → "DAILY GEM" so it's clearer this is for everyone, not master-only. Champions still get +5 gold, others get +5 silver.</li>
+<li>Stage select dot navigation: max-width clamped to thumbnail width (min(90vw, 320px)), dots reordered to flow under the global stats strip via CSS order.</li>
+<li><b style="color:#ffd700;">⚡ Resurrect cooldown 5min → 2min</b> — much more usable.</li>
+<li><b style="color:#ffd700;">Consumables persist across retries.</b> Death no longer consumes inventory. Shield with 1 hit remaining stays at 1 hit on retry. Triple Jump and Time Freeze stay active. Only WIN or EXIT TO STAGE SELECTION consumes the inventory item.</li>
+<li>Triple Jump activation now consistent: deferred decrement (was eagerly decremented on activate). Now matches dblshield/timefreeze pattern.</li>
+<li>Shopkeeper tip in store now shows "1 / 50 ▶" with arrow indicator so it's obvious you can tap to cycle.</li>
+</ul>
+
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.13 — Auto-retry single setting</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Auto-retry consolidated to one setting "Auto-retry on death" with options: <b>No auto / Instant / 0.5s / 1s / 2s</b>. Death screen always appears; the chosen value is how long to wait before auto-retrying.</li>
+<li>Settings migration: existing v1.1.9 setups (autoRetry on/off + deathScreenDelay) auto-converted on load — if previously enabled with 1s delay, becomes "1s" auto-retry; if previously off, becomes "No auto".</li>
+<li>Tap-to-retry still works at any time after a 300ms safety gate (prevents stray taps from in-game).</li>
+</ul>
+
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.12 — Polish: retry placement, rank chip, daily indicators</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>In-game pause: 🔄 RETRY LEVEL button moved to the bottom action group between APPLY & RESUME and BACK TO STAGE SELECTION (was floating above QUICK SHOP).</li>
+<li>Stage select rank chip: text no longer cropped/clipped — bumped padding 1px → 3px vertical, font 0.5 → 0.55rem, explicit line-height 1.3.</li>
+<li>Daily Chest button on stage select: when claimed, stays visible at half opacity (no longer disappears). Click is disabled while claimed.</li>
+<li>💎 Daily Master Chip indicator added: dot in stage navigation now shows a 💎 marker for today's daily stage (or ✓ if already claimed). Stage info tags also display "💎 DAILY MASTER" / "💎 DAILY (claimed)".</li>
+</ul>
+
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.10 — Reflex Dash Toggle</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li><b style="color:#ffd700;">Champions can now toggle Reflex Dash ENABLE/DISABLE</b> from the store. Defaults to ENABLED on first unlock.</li>
+<li>When you equip Air Dash → Reflex Dash auto-disables (AD covers the basic case; having both was redundant).</li>
+<li>When you sell Air Dash → Reflex Dash auto-disables too (clean slate). Re-enable manually if you want it back.</li>
+<li>Manually enabling Reflex Dash → unequips Air Dash automatically (mutual exclusion).</li>
+<li>While disabled, Reflex Dash grants no Air Dash effect either — you have to equip a separate Air Dash if you want any dash.</li>
+</ul>
+
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.9 — Auto-retry & Pause Retry</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li><b style="color:#ffd700;">🔄 RETRY LEVEL</b> button added to in-game pause panel — restart the current level on demand without dying first or backing out.</li>
+<li><b style="color:#ffd700;">Auto-retry on death</b> setting (default OFF). When enabled, after the configurable delay, the level auto-restarts without a tap.</li>
+<li><b>Death screen delay</b> setting: 0.5s / 1s / 2s (default) / 3s. Controls how long the death banner stays visible.</li>
+<li>Both settings available in stage-select Settings AND in-game pause panel — toggle anywhere, persists between sessions.</li>
+<li>Tap-to-retry still works as fallback when auto-retry is on (instant retry before timer fires).</li>
+</ul>
+
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.8 — Gold Economy Fix</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li><b style="color:#ffd700;">Master gems now actually give +2 gold each</b> (champion-only). Previously the credit was silently absorbed by an anti-cheat clamp — your master gem collections gave nothing.</li>
+<li><b style="color:#ffd700;">Daily Champion bonus now gives +5 gold</b> as advertised. Same fix.</li>
+<li>Retroactive credit: every master gem you've already collected is automatically added to your balance on next load (≈ 2 gold per master gem).</li>
+<li><b>Gem ratio display fixed.</b> Previously stored gem-collection state at sparse indices, then `normalizeBestChips` truncated indices > 6, silently losing 4 of every 6 collections on each page reload. Now stored as packed (0..maxGems-1).</li>
+<li>Migration: existing gem-collection data is auto-packed on next load. Caps at level's max gems (e.g. 7/7) — players who legitimately cleared a level keep full credit.</li>
+<li>Buy/sell skills now uses straightforward arithmetic — no more anti-cheat clamp eating gold.</li>
+<li>Self-heal: if `goldSpent` went negative from old bug, auto-resets to current owned skills cost on next load.</li>
+</ul>
+
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.7 — Telemetry Naming Fix</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Session start now deferred until a player name is set (returning users send immediately, new users send after onboarding)</li>
+<li>Heartbeats only fire after the player has named themselves (no nameless online-counting)</li>
+<li>New 'name_set' event fires when a player picks/changes their name — fuels the metrics funnel</li>
+<li>No gameplay impact — pure metrics quality fix</li>
+</ul>
+
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.6 — Telemetry Plus</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Heartbeat interval 60s → 90s (lower bandwidth + DB cost; same online detection)</li>
+<li>Session start now reports display mode (PWA standalone vs browser), PWA support flag, install timestamp — fuels new metrics dashboard</li>
+<li>PWA install lifecycle tracked: prompt shown, accepted, dismissed, browser-confirmed install</li>
+<li>UI clicks tracked anonymously: share, store, settings, play, store-tab — helps tune which buttons are reachable</li>
+<li>Internal: new metric event type 'ui_event' for these signals</li>
+</ul>
+
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.5 — Skill Swap, Replay Fix, Username</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li><b style="color:#ffd700;">⚡ Reflex Dash is now a Champion-only reward</b> — too overpowered for new players. Champions clear all 20 stages → Reflex Dash unlocks free, doesn't use a slot, includes Air Dash effect.</li>
+<li><b style="color:#0ff;">🌀 Clipping is now purchasable for all (22 gold)</b>, no prereq, equips a slot. Once per run, ignore the first hazard hit.</li>
+<li>Migration: existing Reflex Dash purchases auto-refunded (12 gold added back to balance), removed from owned/equipped lists.</li>
+<li><b style="color:#0ff;">📺 Watch Replay no longer counts as a level completion</b> — bypasses win banner, stats, rewards, ghost recording. Goes straight back to stage select.</li>
+<li>Migration: existing inflated completion counts auto-corrected on boot. Each level's completions capped at attempts. Total matches recomputed from sum of attempts. Stale bestTimes/bestChips/ghostData scrubbed for levels with zero legit completions.</li>
+<li>Username minimum: 3 → <b>5 characters</b> (3 was too short to recognize). Onboarding, name change prompt, Name Change consumable preview all updated.</li>
+<li>Pause-aware ghost replay timing — ghost rival now freezes during pause (was using Date.now() which kept advancing).</li>
+</ul>
+
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.4d — Layout polish + ghost pause fix</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Ghost rival now freezes during pause (uses pauseTime instead of Date.now()) — no more teleport on resume</li>
+<li>Replay timing also pause-aware — same fix applies to replay frames</li>
+<li>In-game HUD: gems/deaths/weather panel moved below the N3ON DashJ logo (no more overlap on PC desktop)</li>
+<li>Weather + gravity + friction info now stacks on separate lines (RAIN / NORMAL G / NORMAL FRIC) instead of one long horizontal row</li>
+<li>In-game HUD compact in portrait: logo top-left, time/dist top-right, sector+progress middle row, gems/deaths/weather lower row — clean three-row stack</li>
+<li>Stage select rank chip on desktop: full-width bar with centered text + ellipsis, never overflows the stats card border</li>
+<li>Pause panel buttons (BACK TO STAGE SELECTION etc.): white-space nowrap + ellipsis so long text never breaks button bounds</li>
+<li>Stage select on tablet/fold: levelSelect padding-top 130px reserved so cardWrap and physics text never scroll under the logo</li>
+<li>Control preview text in pause panel: fluid width (was hardcoded 320px)</li>
+</ul>
+
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.4c — Show Off Your Style (refined)</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li><b style="color:#0ff;">★ Stage select character portrait</b> — animated mini-canvas showing your character running with all equipped cosmetics (hat, cape, body, glow, trail). Theme-color border matches the thumbnail. Auto-resizes for portrait phone, tablet, and Z Fold cover/main screen.</li>
+<li><b style="color:#0ff;">📤 Share images</b> — character with cosmetics now embedded on win-share PNG (after stage clear), Champion ceremony PNG, AND the SHARE button image (600×400 brand card).</li>
+<li>Share dialog: pre-filled default note "Hey! Try this game with me — it's wild." auto-selected on open — type to replace, or send as-is</li>
+<li>Character running animation: faster cycle, body bob, alternating leg lift, opposite-phase arm swing, ground motion streaks — clearly running in place</li>
+<li>Logo "N3ON DashJ" 25% bigger in portrait + landscape stage select</li>
+<li>Stats card (rank/name/gems) better padding, no more "tight wrap" feeling</li>
+<li>Chest button moved to its own row in portrait — no more visual collision with rank chip</li>
+<li>Tablet + Z Fold main screen layout fixed: char portrait no longer covers thumbnail or stats text</li>
+<li>Stage-select stats strip (MATCHES/TIME/CLEARED/HAZARDS) now sits inside the right column under Play DashJ in landscape — tied to bottom of column</li>
+<li>Store/settings panels in compact landscape: tighter padding, scrollable content, compact QUICK SHOP items so all entries are reachable</li>
+<li>Overlay backdrops fully opaque + level-select UI hidden when overlays open — no more bleed-through</li>
+<li>In-game HUD compact in portrait: left/center/right groups no longer stack on each other</li>
+<li>Rank chip ellipsizes when too long instead of clipping mid-character</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.4a — Show Off Your Style (bugfix)</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Stage select character portrait — animated mini-canvas showing your character with all equipped cosmetics (hat, cape, body, glow, trail). Top-left in portrait, alongside the thumbnail in landscape.</li>
+<li>Landscape layout fix: portrait sits beside the thumbnail card (same height, narrower width) instead of overlapping. Total card+portrait width matches old thumbnail width — clean two-card row.</li>
+<li>Win-share PNG (after stage clear) and Champion ceremony PNG include character + cosmetics on the right side</li>
+<li>Stage select SHARE button now also generates a 600x400 character + brand PNG attached to the share. Recipient sees your decked-out character before they even click the link.</li>
+</ul>
+<div style="font-size:0.75rem;color:#ffd700;font-weight:700;margin-bottom:6px;">v1.1.3 — Master Economy</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li><b style="color:#ffd700;">★ Master Gems</b>: 40 hidden rainbow gems across the 20 stages — 1 (Starter/Simple), 2 (Moderate), 3 (Hard) per stage. Only champions see them. Each worth +2 gold (+80 gold total). Placed above platforms in tricky positions.</li>
+<li><b style="color:#0ff;">💎 Daily Master Chip</b>: rotating stage each day gets a special diamond. Champions get +5 gold, non-champions get +5 silver. Resets at next calendar day.</li>
+<li><b style="color:#26a1ff;">⚡ Reflex Dash</b> skill (12 ★, requires Air Dash): adds dash even when double-jump is on cooldown. Equipping it gives full Air Dash effect too — only one slot needed.</li>
+<li>Magnet skill now attracts <b>both</b> silver arc gems and gold platform gems</li>
+<li>Pulse platform redesign: bright purple gradient, dashed animated outline, glowing top edge, white floating dots inside — clearly recognizable as landable</li>
+<li>Pulse warning duration: 0.5s → <b>1 second</b> (more reaction time)</li>
+<li>Lightning strike death: now shows "⚡ STRUCK!" (was incorrectly "FALLEN" or "LASERED!")</li>
+<li>Bouncy platform: spring-coil zigzag pattern (was a simple ▲)</li>
+<li>Phase Dash renamed to <b>Clipping</b></li>
+<li>Black body cosmetic: now suppresses default theme glow halo (so it actually looks black)</li>
+<li>Champion's Aura cosmetic: store shows 🔒 LOCKED instead of free BUY when not yet unlocked</li>
+<li>Skills tab order: Air Dash, Reflex Dash, then the rest</li>
+<li>Pause panel landscape layout: Quick Shop on left, ADJUST + APPLY + EXIT stacked on right</li>
+<li>Reflex Dash + Master Gems + Daily Master integrated into store, info panels, and rules</li>
+<li>Game name finalized: <b>N3ON DashJ</b></li>
+<li>Manifest orientation set to landscape (PWA installs lock to landscape natively)</li>
+<li>Multiple bug fixes: home button leak protection (body pointer-events block), exit double-fire guard, lightning death cause, magnet gold support</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.2 — Polish</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>🔄 RESTART button added to Settings (next to UPDATE LOG) — forces a clean reload to pick up new updates from the service worker</li>
+<li>Pause settings: Quick Shop on left, ADJUST/APPLY/EXIT buttons stacked on right (landscape) — better space use</li>
+<li>Bouncy platform: replaced ▲ with spring-coil zigzag pattern (resembles a compressed spring)</li>
+<li>Top buttons reordered: 🎁 Daily Chest / 🛒 STORE / ↗ Share / ⚙ Settings (left to right)</li>
+<li>Game name updated to <b>N3ON DashJ</b> (uppercase N3ON)</li>
+<li>Black body suppresses default theme glow halo when no glow cosmetic equipped</li>
+<li>Champion's Aura in store now shows 🔒 LOCKED until earned (was showing free BUY button)</li>
+<li>Cape physics rewritten: simple lerp + shortest-angle path + behind-hemisphere clamp (no more flipping in front)</li>
+<li>Stage select stars removed from rank chip and player name (kept on gold gem)</li>
+<li>lsTopStats background made transparent (was covering game title on narrow screens)</li>
+<li>Dot navigation no longer overlaps global stats strip in landscape</li>
+<li>Orientation lock now persists through menus (not just gameplay) — first user gesture triggers fullscreen + lock</li>
+<li>Orientation change in settings re-locks immediately</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.1 — Polish & UX</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Game renamed: <b>N3ON DashJ</b> (was N30N DASH J) — friendlier in titles and headers</li>
+<li>Stage select play button: "Play DashJ" (was "ENTER DASH J")</li>
+<li>Pause: "Back to Stage Selection" (was "EXIT TO HOME")</li>
+<li>Top-right buttons reordered: 🎁 Daily Chest → ↗ Share → ⚙ Settings (rightmost). 🛒 STORE pill stays at far left of cluster.</li>
+<li>Player Rank popup now uses two columns in landscape (rank tiers + progress on left; how to earn points on right)</li>
+<li>Store cosmetics ordered by category: Hat → Cape → Glow first, then Trail/Body/Death/Jump/Platform; within each: Common → Master tier, then by cost</li>
+<li>"Body: White" replaced with <b>"Body: Black"</b> (default body is already light cyan; black gives real contrast). Existing owners auto-migrated.</li>
+<li>"Show FPS" toggle added to in-game pause Settings (was only in main settings)</li>
+<li>Fixed: settings panels appearing as locked overlay when rotating phone (CSS grid was applying without .active class check)</li>
+<li>Removed orange "DAILY CHEST READY" banner from stage select — pulsing 🎁 icon button is enough</li>
+<li>Share dialog: removed duplicate URL (was appearing twice on WhatsApp etc.)</li>
+<li>Stage card: simplified ghost status to icon-only "👻 🚫" when no recording (was "🚫 no ghost yet (replay to record)")</li>
+<li>Orientation setting: removed "Auto" option. Default Landscape. Existing "Auto" settings auto-migrated to Landscape.</li>
+<li>Orientation setting added to main Settings panel (was only in pause)</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.0 — Master Update</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li><b style="color:#ffd700;">★ Champion of N30N</b> — clear all 20 stages to unlock: ★ MASTER badge next to your name, Champion's Aura cosmetic, Clipping skill (one free hazard pass per run), and 1.5× silver multiplier. End-of-game ceremony with confetti, dedicated share card.</li>
+<li><b style="color:#a0f;">🌀 Pulse Platforms</b> — new mechanic on Moderate (12%) and Hard (22%) stages: platforms that appear → warning flicker → disappear in a 6.5s cycle. Time your jumps or fall through the gap.</li>
+<li><b style="color:#0ff;">🎬 Replay System</b> — record + watch your own ghost run. Inline "👻 ghost ready ▶" text on stage select, WATCH button on the win screen.</li>
+<li><b style="color:#fa0;">💎 Gem Escrow</b> — collected gems persist across deaths/retries within the same stage session. Gems are credited to wallet only on completion. Exit-to-home loses all uncashed gems.</li>
+<li><b style="color:#0f8;">🔄 UPDATED Tag</b> — stages with new content show this badge on the card until you replay them. Achievement preserved.</li>
+<li><b style="color:#0aa;">📐 Mobile Landscape</b> — stage select redesigned for short-height phones (Z Fold cover, low-end devices): two-column thumbnail-dominant layout, compact stats strip, smaller top buttons.</li>
+<li><b style="color:#fa0;">🎁 Daily Chest</b> — moved to stage select. Pulsing icon top-right + glowing banner when ready. Tap to claim instant rewards.</li>
+<li><b style="color:#0ff;">⭐ Player Rank</b> — chip moved next to your name with click-to-popup for full progression details.</li>
+<li><b style="color:#aaa;">🛒 STORE button</b> — now a labeled pill (was a star icon) for clarity.</li>
+<li><b style="color:#0aa;">🎨 Visual Quality</b> — new Low/Med/High setting for lower-end devices. Live FPS counter (toggleable). Auto-recommend lower quality if FPS drops. Confirmation when switching to LOW (since it disables ghost replays for performance).</li>
+<li><b style="color:#fa0;">📁 Save File Export/Import</b> — file download instead of giant clipboard text. Optional ghost data inclusion (default off, keeps file small).</li>
+<li><b style="color:#0ff;">🦸 Cape Physics</b> — capes now react to jump direction: trail down when jumping up, trail up when falling. Length harmonized between in-game and store preview.</li>
+<li><b style="color:#0ff;">🎮 Default Controls</b> — Arrow Buttons now the recommended default (was Joystick). Switch in settings anytime.</li>
+<li>Cosmetic store preview overhaul: body color now actually applies, hat/cape positioning matches in-game, glow_champion preview shows ascending sparks.</li>
+<li>Replay no longer counts as game completion or attempt. Anti-fraud: gems are runtime-only until you complete the stage.</li>
+<li>Many bug fixes: home button leak to game, Void Walker white-screen, replay state leaking, double-event taps, edge-landing effect simplified.</li>
+</ul>
+<div style="font-size:0.6rem;color:#888;font-weight:700;margin-bottom:6px;">v1.0.37 ~ v1.0.46</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>★ MASTER OF N30N reward: clear all 20 stages → end ceremony, ★ MASTER badge, Champion's Aura cosmetic, Clipping skill, 1.5× silver multiplier</li>
+<li>Clipping: once per run, ignore one hazard (HUD icon 🌀 → ⚫ when used)</li>
+<li>Champion's Aura: pulsing gold halo + ascending sparks (Glow slot)</li>
+<li>Backfill: existing all-clear players see ceremony + rewards on next launch</li>
+<li>Visual Quality setting (Low/Med/High) — affects particles, atmosphere, stars, bg shapes for low-spec phones</li>
+<li>FPS counter (toggleable) + auto-recommend lower visual quality on sustained low FPS</li>
+<li>Ghost Replay toggle — disable ghost recording/render entirely for performance</li>
+<li>Live Visual quality picker in pause menu (no restart needed)</li>
+<li>Save export → file download (no more clipboard size limit)</li>
+<li>Save import → file picker (paste textarea kept as fallback)</li>
+<li>Optional ghost data in save export (default off — keeps file small)</li>
+<li>WATCH REPLAY: inline clickable "👻 ghost ready ▶" on stage select (subtle); WATCH button on win screen</li>
+<li>Cape length harmonized between in-game and store preview (in-game lengthened, preview shortened — both ~16px)</li>
+<li>Store button now a labeled pill: 🛒 STORE (was ★)</li>
+<li>Daily Chest moved out of store onto stage select: pulsing 🎁 icon top-right + banner when ready, hidden when claimed</li>
+<li>Player rank chip moved next to player name (top-left bar) with click-to-popup; removed the big rank tile</li>
+<li>Landscape compact stats strip at bottom of stage select (matches/time/clear%/deaths) instead of being hidden</li>
+<li>Stage select now uses a two-column layout in landscape mode on short-height phones (Z Fold cover screen, low-end devices) — thumbnail dominates left, details on the right scrollable column</li>
+<li>Cosmetic store preview fixed: body color now actually applies to the stickman, hat/cape positioning matches in-game, glow_champion preview shows ascending sparks</li>
+<li>Persistent gems across retries: collected gems stay collected on death/retry within a stage session — only awarded to wallet on completion. Exit-to-home loses all uncashed gems (anti-fraud)</li>
+<li>New mechanic on Moderate/Hard stages: pulse platforms (appear/disappear cycle, ~6.5s loop with warning flicker before disappearing). 12% rate on Moderate, 22% on Hard</li>
+<li>"🔄 UPDATED" tag on stage cards when stage gameplay content changes — preserves achievement, prompts a replay (ghost recordings auto-wiped for stages 6+)</li>
+<li>Visual quality LOW now confirms before applying (also disables Ghost Replays automatically since both are perf-related)</li>
+<li>Champion ceremony confetti (DOM-based, falls past the canvas)</li>
+<li>Clipping visible in store — Skills tab, gold "★ MASTER" badge when unlocked, info button shows rules</li>
+<li>Champion / quality settings now in save export/import (previously lost on transfer)</li>
+<li>Share card now displays player name with ★ MASTER prefix in gold when champion</li>
+<li>Champion's Aura particles fixed (were spawning in wrong screen location due to coord-system mix-up)</li>
+<li>Default controls: Arrow Buttons (was Joystick) — onboarding shows Buttons first as the recommended choice; can switch to Joystick anytime in settings</li>
+<li>Champion ceremony share: dedicated gold-themed share card "★ MASTER OF N30N ★" with career stats (was incorrectly using last stage's theme)</li>
+<li>Replay (WATCH) no longer counts as game completion or attempt — stats untouched, no analytics event sent</li>
+<li>Bug: home button sometimes returned to game — pointer-events blocked briefly after exit</li>
+<li>Void Walker white-screen fix (3-char hex caused gradient NaN crash)</li>
+<li>Edge landing: simplified to text only (no particle ring)</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.0.27 ~ v1.0.36</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Stage order overhaul: 4 difficulty tiers (Starter / Simple / Moderate / Hard); Terminal is now the hardest stage</li>
+<li>Weather gameplay impact: rain/snow slippery, dust visibility, storm lightning strikes (Stage 7+)</li>
+<li>Starter tier (Stage 1-2): wider platforms, no weather penalty — honeymoon phase</li>
+<li>Distinct background visuals per stage (Bio Lab tubes, Aurora ribbons, Starlight stars, Obsidian shards, Mirror City glass, Rust Belt smokestacks, etc.)</li>
+<li>Stars only show at night for star-themed stages</li>
+<li>Day/night cycle: 1 min day + 1 min night with sun/moon overlay, random per-stage start</li>
+<li>Atmospheric overlays per stage: embers, bubbles, fog, shooting stars, snow, dust, haze, aurora ribbons, matrix code, glitch artifacts, lightning, wisps, window lights, star twinkles</li>
+<li>Slow Fall moved back to Skills (most expensive at 30g)</li>
+<li>3 new skills: Coyote Boost (10g), Magnet (20g), Platform Bounce (22g)</li>
+<li>Ghost Rival now FREE — auto-unlocked after Stages 1 & 2; doesn't use slot</li>
+<li>Ghost Rival rendered as translucent stickman with running/in-air poses</li>
+<li>Auto Resurrect grand visual: rings, particles, screen flash</li>
+<li>Shield visual: dashed cyan ring + sparkles only when absorbing hit (1s grace)</li>
+<li>Shield bug fixed: now only consumes ONE shield per hit</li>
+<li>Double Shield + Time Freeze only consumed from inventory if actually used</li>
+<li>End-of-run finalization on death, win, and exit-to-home</li>
+<li>Trail cosmetics enhanced: glow, larger dots, walking visibility</li>
+<li>Skill buttons (👻 Ghost, ⏸ Time Freeze) moved to top center</li>
+<li>Live cooldown HUD: Triple Jump, Time Freeze, Slow Fall, Resurrect timers</li>
+<li>Pause menu shows active skills + Resurrect cooldown</li>
+<li>Fixed Exit confirmation needing two taps</li>
+<li>Always-on ghost recording (regardless of skill ownership); only saves new best time runs</li>
+<li>Resurrect teleport shown as visual effect in ghost replay</li>
+<li>LAYOUT_VERSION migration: cleans stale stats/ghosts after stage reorder</li>
+<li>"No ghost yet" hint on level select with replay instruction</li>
+<li>Bug fix: Enter key during username no longer auto-starts level</li>
+<li>Bug fix: trail not appearing for new accounts</li>
+<li>Save/Export complete: all progression and cooldowns persisted</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.0.21 ~ v1.0.26</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Daily chest in Store — free gold/silver gems every 24 hours, occasional consumable drop</li>
+<li>Shopkeeper NPC with random tips, clickable for new tip</li>
+<li>Button hints for new players on level select</li>
+<li>In-game Update Log page in Settings</li>
+<li>Physics-based cape animation — flies behind when running, hangs when idle</li>
+<li>Death bonus consumable after many deaths (15-25 threshold)</li>
+<li>Skills refactor: Shield removed (Double Shield covers it), Slow Fall + Time Freeze became consumables (later reverted)</li>
+<li>Auto-refund of obsolete skills with gold migration</li>
+<li>In-game pause shop with active item status</li>
+<li>Comprehensive ℹ️ rules popup for every skill and consumable</li>
+<li>Self-correcting gold balance (auto-fixes drift)</li>
+<li>Human-readable physics labels in level select (gravity, friction, weather)</li>
+<li>Death cosmetics fleshed out: pixel blocks, dissolve drift, N30N logo, supernova rings</li>
+<li>Jump cosmetics: lightning streaks, electric sparks</li>
+<li>Cape direction fixed (now trails behind)</li>
+<li>Default body color now fixed cyan (was theme-dependent)</li>
+<li>Unified onboarding screen — name, controls, how-to-play in one welcome</li>
+<li>HUD indicators: Resurrection cooldown, Triple Jump CD, Shield count visible</li>
+<li>Stronger triple jump glow + double jump ring</li>
+<li>Top-left stats stack vertically; N3ON DashJ logo on stage selection</li>
+<li>Ranks recalibrated for better progression curve</li>
+<li>Ziplines positioned higher and longer (proper bridge between platforms)</li>
+<li>Versioning scheme renamed: x.y.z → x.0.y</li>
+<li>HUD shows human-readable physics (LOW G • SLIPPERY • RAIN)</li>
+<li>Trail rainbow now graduates per dot; trail glitch random per dot</li>
+<li>Pause-menu shop activates consumables in current run if not in use</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.0.14 ~ v1.0.20</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Best time tracking and split timer; Progress bar HUD</li>
+<li>Consumable items: Speed Boost, Magnet, Triple Jump</li>
+<li>Style points and combo system; Edge landing detection</li>
+<li>Skill system (initial): Shield, Slow Fall, Ghost Rival, Air Dash, Resurrect, Time Freeze</li>
+<li>Skill store with gem currency</li>
+<li>Zipline obstacles added to levels</li>
+<li>Laser hazards with timed activation</li>
+<li>Cosmetic store: trails, platform skins, death effects</li>
+<li>Gold/silver gem economy and spending</li>
+<li>Themed platform step effects (fire, poison, water, sparks per stage)</li>
+<li>Expanded parallax backgrounds unique to each stage theme</li>
+<li>Ghost mode toggle button</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.0.2</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>PWA install support (offline play)</li>
+<li>Arrow button controls option</li>
+<li>Vibration feedback</li>
+<li>Delta-time physics (frame-rate independent)</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.0.0 — May 5, 2026</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Initial release: 20 themed levels, double jump, weather effects</li>
+</ul>
+</div>
+<button onclick="closeChangelog()" style="width:100%;max-width:320px;margin-top:12px;">BACK</button>
+</div>
+
+<div id="gameSettings">
+<h2>⚙ CONTROLS</h2>
+<div class="row"><label>Visual</label><select id="gSetVisual" onchange="setQualityConfirmed(this.value,this);"><option value="high">High</option><option value="med">Medium</option><option value="low">Low</option></select></div>
+<div class="row"><label>Show FPS</label><select id="gSetShowFps"><option value="0">Off</option><option value="1">On</option></select></div>
+<div class="row"><label>Orientation</label><select id="gSetOrient"><option value="landscape">Landscape</option><option value="portrait">Portrait</option></select></div>
+<div class="row"><label>Vibrate</label><select id="gSetVibrate"><option value="1">On</option><option value="0">Off</option></select></div>
+<div class="row"><label>Controls</label><select id="gSetCtrl"><option value="arrows">Arrow Buttons</option><option value="analog">Analog Joystick</option></select></div>
+<div id="gCtrlPreview" style="font-size:0.65rem;color:#888;text-align:center;width:320px;font-style:italic;"></div>
+<div class="row"><label>Auto-retry on death</label><select id="gSetAutoRetry"><option value="none">No auto</option><option value="0">Instant</option><option value="0.5">0.5s</option><option value="1">1s</option><option value="2">2s</option></select></div>
+<button id="btnAdjust" onclick="enterAdjustMode()" style="width:320px;padding:12px;font-size:0.85rem;font-weight:700;border:none;border-radius:12px;background:linear-gradient(135deg,#0af,#08f);color:#fff;cursor:pointer;margin-top:10px;letter-spacing:1px;">⊞ ADJUST LAYOUT</button>
+<div style="width:320px;border-top:1px solid rgba(255,255,255,0.1);padding-top:12px;margin-top:8px;">
+<div style="font-size:0.7rem;color:#aaa;margin-bottom:8px;text-align:center;letter-spacing:1px;">QUICK SHOP — <span id="pauseSilver" style="color:#ccc;">♦ 0</span></div>
+<div id="pauseShopList" style="display:flex;flex-direction:column;gap:6px;"></div>
+</div>
+<div style="display:flex; flex-direction:column; gap:10px; margin-top:15px; width:100%; max-width:320px;">
+    <button onclick="saveGameSettings()" style="width:100%;">APPLY & RESUME</button>
+    <button onclick="retryFromPause()" style="width:100%; background:linear-gradient(135deg,#f80,#a50); color:#fff;">🔄 RETRY LEVEL</button>
+    <button onclick="confirmExit()" style="width:100%; background:linear-gradient(135deg,#a00,#600);">BACK TO STAGE SELECTION</button>
+</div>
+</div>
+
+<div id="store">
+<h2 style="color:#ffd700;">★ STORE ♦</h2>
+<div style="display:flex;align-items:center;justify-content:space-between;width:100%;max-width:360px;margin-bottom:10px;">
+<div id="storeBalance" style="font-family:monospace;font-size:0.85rem;"></div>
+<button id="dailyChestBtn" onclick="claimDailyChest()" style="display:none;padding:6px 12px;font-size:0.7rem;font-weight:700;border:none;border-radius:8px;cursor:pointer;color:#fff;background:linear-gradient(135deg,#fa0,#f60);">🎁 DAILY</button>
+</div>
+<div id="shopkeeper" onclick="updateShopkeeper()" style="width:100%;max-width:360px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px 12px;display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;cursor:pointer;position:relative;">
+<div style="font-size:1.5rem;line-height:1;">🤖</div>
+<div id="shopkeeperMsg" style="font-size:0.65rem;color:#aaa;line-height:1.5;font-style:italic;flex:1;"></div>
+<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-family:monospace;color:#666;font-size:0.55rem;">
+    <span id="shopkeeperIdx">— / —</span>
+    <span style="font-size:0.65rem;color:#0ff;">▶</span>
+</div>
+</div>
+<div id="storeTabs" style="display:flex;gap:8px;margin-bottom:15px;">
+<button class="stab active" onclick="showStoreTab('consumables')">CONSUMABLES</button>
+<button class="stab" onclick="showStoreTab('cosmetics')">COSMETICS</button>
+<button class="stab" onclick="showStoreTab('skills')">SKILLS</button>
+</div>
+<div id="storeContent" style="width:100%;max-width:360px;max-height:60vh;overflow-y:auto;"></div>
+<div id="cosPreviewPanel" style="display:none;position:fixed;inset:0;z-index:450;background:rgba(0,0,0,0.9);flex-direction:column;align-items:center;justify-content:center;gap:12px;" onclick="closeCosPreview()">
+<canvas id="cosPreviewCanvas" width="280" height="160" style="border-radius:12px;border:1px solid rgba(255,255,255,0.15);"></canvas>
+<div id="cosPreviewName" style="font-size:1rem;font-weight:800;color:#fff;letter-spacing:2px;"></div>
+<div style="font-size:0.6rem;color:#666;">TAP TO CLOSE</div>
+</div>
+<button onclick="closeStore()" style="margin-top:15px;width:100%;max-width:320px;padding:10px 30px;font-size:.9rem;font-weight:700;border:none;border-radius:20px;cursor:pointer;color:#fff;background:linear-gradient(135deg,#555,#333);">BACK</button>
+</div>
+
+<div id="itemInfo" style="position:fixed;inset:0;z-index:460;background:rgba(0,0,0,0.92);flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;display:none;" onclick="closeItemRules()">
+<div onclick="event.stopPropagation()" style="background:rgba(20,20,30,0.95);border:1px solid rgba(0,255,255,0.3);border-radius:14px;padding:18px 22px;max-width:340px;width:100%;box-shadow:0 0 30px rgba(0,255,255,0.15);">
+<div id="iiTitle" style="font-size:1.2rem;font-weight:900;color:#0ff;margin-bottom:10px;text-align:center;letter-spacing:1px;"></div>
+<div id="iiBody"></div>
+<button onclick="closeItemRules()" style="margin-top:14px;width:100%;padding:8px;font-size:0.75rem;font-weight:700;border:none;border-radius:8px;background:linear-gradient(135deg,#08f,#0af);color:#fff;cursor:pointer;letter-spacing:1px;">CLOSE</button>
+</div>
+</div>
+<style>#itemInfo.active{display:flex !important;}</style>
+
+<canvas id="gameCanvas"></canvas>
+<canvas class="weather" id="weatherCanvas"></canvas>
+
+<!-- 1. Top-Left: Logo / Home Button -->
+<div id="gameTitleHUD" onpointerdown="startHomeHold(event)" onpointerup="endHomeHold(event)" onpointerleave="endHomeHold(event)" onpointercancel="endHomeHold(event)">
+    <div class="txt-n">N3ON</div>
+    <div class="txt-d">DashJ</div>
+    <div id="homeBtnProg"></div>
+</div>
+<div id="homeTooltip"><b style="color:#0ff; font-size:1rem; line-height:1;">↖</b> HOLD to Exit to Stage Select / TAP to Pause</div>
+<div id="npcAdvice"></div>
+
+<!-- 2. Top-Center: Sector Info & Progress -->
+<div id="hudCenter">
+    <div class="sector-name" id="hudLvl">--</div>
+    <div class="prog-container"><div id="progFill" class="prog-bar"></div></div>
+    <div id="hudSkillBar" style="display:flex;gap:8px;margin-top:6px;justify-content:center;">
+        <button id="freezeBtn" type="button" tabindex="-1" onclick="this.blur();activateFreeze();" style="width:36px;height:36px;border-radius:50%;background:rgba(0,136,255,0.2);border:2px solid #08f;display:none;align-items:center;justify-content:center;font-size:1rem;color:#08f;cursor:pointer;padding:0;">⏸</button>
+        <button id="ghostBtn" type="button" tabindex="-1" onclick="this.blur();toggleGhost();" style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.1);border:2px solid rgba(255,255,255,0.4);display:none;align-items:center;justify-content:center;font-size:1rem;color:#fff;cursor:pointer;padding:0;opacity:0.8;">👻</button>
+    </div>
+</div>
+
+<!-- 3. Top-Right: Stats Stack -->
+<div id="hudRight">
+    <div>TIME: <b id="hudTime">0.00</b>s</div>
+    <div id="hudSplit" style="font-size:0.6rem;"></div>
+    <div>DIST: <b id="hudDist">0</b> / <b id="hudMax">0</b>m (<b id="hudPct">0</b>%)</div>
+</div>
+
+<!-- 4. Bottom-Left: Gems & Status -->
+<div id="hudLeft" style="position:fixed;top:64px;left:12px;z-index:200;display:none;flex-direction:column;gap:3px;background:rgba(0,0,0,0.6);padding:5px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(10px);pointer-events:none;">
+    <div style="font-size:0.6rem;font-family:monospace;color:#aaa;">GEMS: <b id="hudChips" style="color:#fff;font-size:0.7rem;"><span style="color:#ffd700">★ 0</span> &nbsp; <span style="color:#ccc">♦ 0</span></b></div>
+    <div style="font-size:0.6rem;font-family:monospace;color:#aaa;">DEATHS: <b id="hudDeath" style="color:#fff;font-size:0.7rem;">0</b></div>
+    <div id="hudFx" style="font-family:monospace;color:#0ff;font-size:0.5rem;line-height:1.3;"></div>
+    <div id="hudConsumable" style="font-size:0.65rem;color:#08f;font-weight:700;"></div>
+    <div id="hudSkills" style="font-size:0.55rem;color:#aaa;"></div>
+    <div id="hudShield" style="font-size:0.7rem;color:#0ff;font-weight:700;display:none;"></div>
+    <div id="hudResurrect" style="font-size:0.55rem;color:#aaa;display:none;"></div>
+</div>
+
+<div id="jZone"><div class="jBase"></div><div class="jKnob" id="jKnob"></div></div>
+<div id="jBtn"><div class="ring" id="jRing"></div><div class="cd" id="jCd"></div>⬆</div>
+
+<div id="arrowControls">
+    <div class="arr-left-group">
+        <button id="arrLeft" class="arr-btn" type="button" tabindex="-1" aria-label="Move left">◀</button>
+        <button id="arrRight" class="arr-btn" type="button" tabindex="-1" aria-label="Move right">▶</button>
+    </div>
+</div>
+
+<div id="adjustOverlay" class="adjust-overlay"></div>
+<button id="adjustDone" style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:500;display:none;padding:12px 36px;font-size:1rem;font-weight:900;border:none;border-radius:30px;background:linear-gradient(90deg,#0f8,#0c8);color:#000;cursor:pointer;box-shadow:0 0 20px rgba(0,255,136,0.4);letter-spacing:2px;" onclick="exitAdjustMode()">✓ DONE</button>
+<div id="adjustPanel" style="position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:500;display:none;background:rgba(0,0,0,0.85);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:12px 20px;backdrop-filter:blur(8px);flex-direction:column;gap:8px;align-items:center;">
+<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:0.7rem;color:#aaa;min-width:50px;">Size</label><input type="range" id="adjSize" min="60" max="120" value="80" style="width:140px;" oninput="applyAdjustSize(this.value)"><span id="adjSizeVal" style="font-size:0.7rem;color:#0ff;min-width:35px;">80px</span></div>
+<button onclick="resetAdjustDefaults()" style="padding:8px 20px;font-size:0.75rem;font-weight:700;border:none;border-radius:8px;background:rgba(255,255,255,0.1);color:#f80;cursor:pointer;letter-spacing:1px;width:100%;">↺ RESET TO DEFAULT</button>
+</div>
+
+<div id="onboard">
+<div class="onb-logo"><div class="n">N3ON</div><div class="d">DashJ</div></div>
+<div class="onb-tag">welcome, runner</div>
+
+<div class="onb-card">
+<div class="onb-label">&#x270f;&#xfe0f; Your Name</div>
+<input id="onbName" class="onb-input" type="text" maxlength="10" placeholder="5-10 chars" onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();finishOnboard();}">
+</div>
+
+<div class="onb-card">
+<div class="onb-label">&#x1f3ae; Choose Controls</div>
+<div class="onb-ctrl-row">
+<div class="onb-ctrl active" data-ctrl="arrows" onclick="selectOnbCtrl('arrows')">
+<div class="ico">&#x25c0;&#x25b6;</div>
+<div class="ttl">BUTTONS</div>
+<div class="sub">Tap &#x25c0;&#x25b6; to move<br>Tap &#x2b06; to jump</div>
+</div>
+<div class="onb-ctrl" data-ctrl="analog" onclick="selectOnbCtrl('analog')">
+<div class="ico">&#x2295;</div>
+<div class="ttl">JOYSTICK</div>
+<div class="sub">Drag to move<br>Tap &#x2b06; to jump</div>
+</div>
+</div>
+</div>
+
+<div class="onb-card">
+<div class="onb-label">&#x1f680; How to Play</div>
+<div class="onb-howto">
+<div>&#x2022; <b>Reach</b> the SECTOR END flag</div>
+<div>&#x2022; <b>Jump + Double-jump</b> to cross gaps</div>
+<div>&#x2022; <b>Collect gems</b> &#x2014; &#x2605; gold (rare), &#x2666; silver (common)</div>
+<div>&#x2022; <b>Avoid</b> spikes &#x1f53a; and lasers</div>
+<div>&#x2022; Beat 20 themed sectors to reach Terminal</div>
+</div>
+</div>
+
+<div id="onbWarn" class="onb-warn"></div>
+<button id="onbStart" class="onb-start" onclick="finishOnboard()">START PLAYING</button>
+</div>
+
+<div id="ctrlPicker" style="position:fixed;inset:0;z-index:500;background:rgba(2,2,5,0.97);display:none;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:20px;">
+<h2 style="font-size:1.4rem;font-weight:900;letter-spacing:3px;color:#0ff;">CHOOSE CONTROLS</h2>
+<p style="font-size:0.7rem;color:#888;text-align:center;">You can change this anytime in Settings</p>
+<div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;">
+<button onclick="pickCtrl('analog')" style="width:140px;padding:20px 10px;border:2px solid rgba(0,229,255,0.4);border-radius:12px;background:rgba(0,229,255,0.05);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:10px;">
+<div style="width:50px;height:50px;border-radius:50%;border:2px solid #0ff;display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:#0ff;">⊕</div>
+<div style="color:#fff;font-size:0.8rem;font-weight:700;">JOYSTICK</div>
+<div style="color:#888;font-size:0.6rem;">Drag to move<br>Tap ⬆ to jump</div>
+</button>
+<button onclick="pickCtrl('arrows')" style="width:140px;padding:20px 10px;border:2px solid rgba(0,229,255,0.4);border-radius:12px;background:rgba(0,229,255,0.05);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:10px;">
+<div style="display:flex;gap:6px;"><div style="width:24px;height:24px;border-radius:50%;border:2px solid #0ff;display:flex;align-items:center;justify-content:center;color:#0ff;font-size:0.8rem;">◀</div><div style="width:24px;height:24px;border-radius:50%;border:2px solid #0ff;display:flex;align-items:center;justify-content:center;color:#0ff;font-size:0.8rem;">▶</div></div>
+<div style="color:#fff;font-size:0.8rem;font-weight:700;">BUTTONS</div>
+<div style="color:#888;font-size:0.6rem;">Tap ◀▶ to move<br>Tap ⬆ to jump</div>
+</button>
+</div>
+</div>
+
+<div id="tutorial">
+<h2 style="font-size:1.6rem;font-weight:900;letter-spacing:3px;background:linear-gradient(90deg,#0ff,#f0f);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">WELCOME RUNNER</h2>
+<p id="tutorialControls" style="color:#0ff;font-size:0.9rem;font-weight:bold;"></p>
+<div style="text-align:left;max-width:280px;margin:10px auto;font-size:0.8rem;color:#aaa;line-height:1.6;">
+<div style="margin-bottom:6px;">⚡ <b style="color:#fff;">Double Jump</b> — Tap ⬆ again mid-air</div>
+<div style="margin-bottom:6px;">🏁 <b style="color:#fff;">Goal</b> — Reach the green finish platform</div>
+<div style="margin-bottom:6px;">💎 <b style="color:#fff;">Gems</b> — Optional, but prove your skill</div>
+<div style="margin-bottom:6px;">⭐ <b style="color:#fff;">Store</b> — Buy skills, cosmetics & consumables</div>
+</div>
+<button onclick="dismissTutorial()" style="padding:14px 40px;font-size:1.1rem;font-weight:900;letter-spacing:3px;border:none;border-radius:30px;background:linear-gradient(90deg,#0ff,#08f);color:#000;cursor:pointer;box-shadow:0 0 20px rgba(0,229,255,0.4);margin-top:10px;">START</button>
+</div>
+
+<div id="overlay">
+<h2 id="ovTitle">SECTOR CLEAR!</h2>
+<p id="ovMsg">Nice run!</p>
+<div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; justify-content:center;">
+    <button id="ovBtn">CONTINUE</button>
+    <button id="ovBtnExtra" style="display:none; background:linear-gradient(135deg,#0af,#08f);">REPLAY</button>
+    <button id="ovBtnReplay" style="display:none; background:linear-gradient(135deg,#a0f,#60a);">WATCH</button>
+    <button id="ovBtnCancel" style="display:none; background:linear-gradient(135deg,#555,#333);">CANCEL</button>
+</div>
+</div>
+
+<script src="n3ondashj/00-pwa.js"></script>
+<script src="n3ondashj/01-audio.js"></script>
+<script src="n3ondashj/02-data.js"></script>
+<script src="n3ondashj/03-save.js"></script>
+<script src="n3ondashj/04-ui.js"></script>
+<script src="n3ondashj/05-game.js"></script>
+<script src="n3ondashj/06-render.js"></script>
+</body>
+</html>

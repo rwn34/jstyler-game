@@ -1,4 +1,4 @@
-const CACHE_NAME = 'n3ondashj-v1.1.14';
+const CACHE_NAME = 'n3ondashj-v1.2.0';
 const APP_SHELL = [
   './',
   'index.html',

@@ -1,5 +1,179 @@
 # Changelog
 
+## v1.2.0 — May 18, 2026 — Daily Stage, Collection, Share Cards & More
+
+### Added
+- **Daily Stage** — fresh procedurally-generated stage every day (5 AM UTC+7 reset). Mix-and-match themes, reversed difficulty, rank-scaled
+- **Daily Stage Collection** — completed dailies become collectible badges (date, time, rank). Replay any past daily for practice — exact same stage, no gems, no deaths tracked
+- **Streak System** — Duolingo-style week-grid calendar, 2 free Streak Freezes at start, buy extras for 15 ♦
+- **Share Cards** — stage-themed visual cards for menu share, win screen, champion screen, and daily. Competitive "Can you beat this?" text
+- **Daily preview panel** — see difficulty, streak, and best time before playing
+- **Daily rewards** — random roll on completion (gold, silver, consumables, streak freeze)
+- **75 random tips** in non-blocking top bar
+- **Dashboard "🔥 Daily" tab** — analytics for daily stage attempts, completions, death causes
+- Security hardening: rate limiting, server-side validation, CORS restrictions, security headers
+
+### Changed
+- Master gems increased in normal stages (2/3/4 for Easy/Moderate/Hard), removed from daily stages
+- Daily stages only have persistent silver gems (collected ones don't respawn on retry)
+- Streak calendar: horizontal strip → CSS week grid
+- Streak Freeze price: 10 ♦ → 15 ♦
+- Share cards no longer show death count or attempt count
+
+## v1.1.49 — May 18, 2026 — Daily Stage Collection
+
+### Added
+- **Daily Stage Collection** — every completed daily stage is saved as a collectible badge with date, time, and rank index
+- **Replay past daily stages** — each collected badge has a replay button that recreates the exact same procedural stage (same seed + rank). Replay mode has:
+  - No gems (no gold, no silver, no master gems)
+  - No death tracking in stats
+  - No ghost recording
+  - No rewards or streak updates
+  - Simple "✓ Replay Complete" overlay with time
+- Collection list rendered on the daily win screen, sorted by date descending (newest first)
+- Date formatted as "26May23" style in the collection list
+
+### Changed
+- `generateDailyLevel()` now accepts optional `dateKey` and `forcedRankIdx` parameters for replay generation
+- `goHome()` now resets `isDailyReplay` flag
+
+## v1.1.46 — May 18, 2026 — Free Streak Freezes
+
+### Added
+- **All players receive 2 free Streak Freezes** — one-time migration bumps existing players with fewer than 2 up to the max
+
+## v1.1.43 — May 18, 2026 — Daily Stage Gems + Calendar Grid
+
+### Added
+- **Daily stage silver gem persistence** — collected silver gems in daily stages are saved per-day and don't respawn on retry
+- Week-based streak calendar grid layout (7 columns × 4 rows + 3 days)
+
+### Changed
+- **Daily stages no longer spawn gold gems** — removes excessive gold income from daily farming
+- **Daily stages no longer spawn master gems** — master gems are normal-stage only
+- **Master gem count increased** in normal stages: Easy 1→2, Moderate 2→3, Hard 3→4
+- **Streak Freeze price**: 10 ♦ → 15 ♦ (buying both default slots costs 30 ♦)
+- Streak calendar: horizontal strip → CSS grid with week day headers (M T W T F S S)
+
+## v1.1.41 — May 18, 2026 — Share Stats Cleanup
+
+### Changed
+- All share cards no longer display **death count** or **attempt/match count**
+- Rank remains visible on all share cards (menu, win, champion, daily)
+- Share text templates updated to remove deaths/attempts references
+
+## v1.1.40 — May 18, 2026 — Result Share Redesign
+
+### Added
+- **In-game result shares** now generate visual cards for all three result types:
+  - **Win screen** (`shareResult`): 400px canvas with stage theme, "💥 CAN YOU BEAT THIS? 💥" challenge text, best score, attempts, larger character
+  - **Champion screen** (`shareChampionResult`): 400px gold canvas with "💥 CAN YOU MATCH THIS? 💥" challenge text, larger character
+  - **Daily stage** (`shareDailyResult`): now generates an image card (was text-only) using the daily's mixed theme, streak, reward, and "💥 CAN YOU BEAT TODAY? 💥" text
+- All result share text messages now include competitive hooks ("Think you can beat my time?")
+
+### Changed
+- `shareResult` canvas height 340 → 400px for consistent layout with menu share card
+- `shareChampionResult` canvas height 380 → 400px, character scale 1.8 → 2.4
+
+## v1.1.39 — May 18, 2026 — Share Card Redesign
+
+### Added
+- **Stage-specific share cards** — the SHARE button on stage select now generates a visual card themed to the currently selected stage
+  - Background gradient uses the stage's sky colors (top/mid/bottom)
+  - Grid overlay in the stage's grid color
+  - Stage name in accent color, player name + rank, best time, score, deaths, style, attempts
+  - Character rendered with all equipped cosmetics
+  - "💥 CAN YOU BEAT THIS? 💥" challenge text
+  - Share text template now includes stage name, best time, score, and competitive hook
+
+### Changed
+- Default share textarea message: "Think you can beat my time? 💥" (was "Hey! Try this game with me — it's wild.")
+
+## v1.1.33 — May 18, 2026 — Overlay & Timer Fixes
+
+### Fixed
+- Missing `#dailyPreview` and `#streakCalendar` HTML in `index.html` causing blank overlays
+- Daily chest timer now uses UTC+7 day boundaries (5 AM cutoff) instead of raw 24h diff
+- Removed old "daily master chip" mechanic from normal stages — daily gem lives exclusively in daily stage (`lvl === -1`)
+
+## v1.1.30–v1.1.32 — May 17–18, 2026 — Syntax Fixes
+
+### Fixed
+- Brace duplication (`}},10);`) from module boundary corruption when `00-pwa.js` was reconstructed
+
+## v1.1.29 — May 17, 2026 — Build Script
+
+### Changed
+- `zipgame.ps1` now outputs `deploy/latest/` unzipped folder for instant local testing
+
+## v1.1.28 — May 17, 2026 — QoL Polish
+
+### Added
+- Chest countdown timer on stage select (hours until next UTC+7 5 AM reset)
+- 75 random tips in non-blocking top bar (`#npcAdvice`) on stage select
+
+### Changed
+- Pause/exit tooltip auto-hides after 20 matches
+- TIPS array expanded to 75 entries
+
+## v1.1.27 — May 17, 2026 — Streak Calendar + Daily Preview
+
+### Added
+- **Streak calendar overlay** (`#streakCalendar`) — 31-day Duolingo-style strip showing play days, streak count, freeze inventory
+- Streak freeze purchasable from calendar (10♦, max 2)
+- **Daily preview panel** (`#dailyPreview`) — shows difficulty, streak, best time, PLAY/CLOSE buttons
+
+## v1.1.26 — May 17, 2026 — Boot Crash Fix
+
+### Fixed
+- Missing `updateLsDailyBtn()` was aborting `initLevelSelect()`, breaking portrait animation, thumbnail init, dot nav, and achievement rendering
+- Changelog overlay now has sticky close button
+- Daily stage launch flow properly hides level select
+
+## v1.1.25 — May 17, 2026 — Dashboard Analytics
+
+### Added
+- Worker `/stats/dailystage` endpoint with 11 SQL queries for daily stage analytics
+- Dashboard **🔥 Daily** tab: attempts, unique players, completions, completion rate, deaths, avg time, best time, death causes chart, difficulty table, daily trend
+
+## v1.1.22 — May 17, 2026 — Daily Stage + Streak System
+
+### Added
+- **Daily Stage** — a procedurally generated stage every day, same for everyone at the same rank
+  - Mix-and-match theme system: sky from one theme, grid/particles from another, physics/weather from a third
+  - Inverted sky gradient + reversed difficulty curve (hard start, easier finish)
+  - 7 base templates × 20 themes × 6 rank modifiers = effectively infinite variety
+  - UTC+7 reset at 5 AM
+- **Streak system** — Duolingo-style daily streak, updated when playing any mode
+  - 2 streak freeze slots by default (protects against missed days)
+  - Streak Freeze buyable from store for 10 silver (max 2)
+- **Daily gem** moved from normal stages to the daily stage
+- **Daily completion rewards** — random roll: gold, silver, consumables, or streak freeze
+- **Daily share** — share your daily completion time and streak to friends
+- **Fire indicator** on stage select: dim = streak alive but not played today, bright = played
+
+### Changed
+- No ghost rival recording on daily stages (fair competition)
+- Gems collected during daily stage are kept even on death
+
+## v1.1.21 — May 16, 2026 — Security Hardening
+
+### Security
+- Metrics worker: server-side name validation (`NAME_REGEX`) prevents XSS via crafted API requests
+- Metrics worker: per-IP (600/5min) and per-player-ID (300/5min) rate limiting on ingestion endpoints
+- Metrics worker: auth changed from fail-open to fail-closed (no `DASHBOARD_KEY` = no access)
+- Metrics worker: dashboard `Cache-Control` changed from `public, max-age=300` to `no-store`
+- Metrics worker: CORS `*` restricted to public ingestion endpoints only (`/session`, `/event`, `/events/batch`)
+- Metrics worker: security headers added (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`)
+- Metrics worker: raw user agent stripped from player profile API response
+- Dashboard: HTML-escape function added; all player name renders now escaped before `innerHTML`
+- Game: save import error display now escapes `<` and `>` before `innerHTML`
+- Game: name input value attribute now escapes quotes (defense in depth)
+- Cloudflare Pages: `_headers` file adds security headers to static assets
+
+### Added
+- In-game Privacy Policy accessible from Settings panel
+
 ## v1.1.1 — May 13, 2026
 
 ### Changed

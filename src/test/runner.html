@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>N3ON DashJ — Smoke Test</title>
+<style>
+body{background:#050510;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;padding:20px}
+.pass{color:#0f8}
+.fail{color:#f05;font-weight:bold}
+.test{margin:4px 0;font-family:monospace;font-size:0.85rem}
+h1{font-size:1.2rem;margin-bottom:10px}
+#summary{margin-top:15px;padding:10px;border-radius:6px;background:rgba(255,255,255,0.05)}
+</style>
+</head>
+<body>
+<h1>🧪 N3ON DashJ Smoke Test</h1>
+<div id="log"></div>
+<div id="summary"></div>
+
+<script>
+let passed=0,failed=0;
+function log(msg,ok){
+    var el=document.createElement('div');el.className='test '+(ok?'pass':'fail');el.textContent=(ok?'✓':'✗')+' '+msg;document.getElementById('log').appendChild(el);
+    if(ok)passed++;else failed++;
+}
+function assert(label,cond){log(label,!!cond);}
+function assertEq(label,a,b){log(label+' (got '+JSON.stringify(a)+')',a===b);}
+</script>
+
+<!-- Load modules under test -->
+<script src="../n3ondashj/02-data.js"></script>
+<script src="../n3ondashj/03-save.js"></script>
+
+<script>
+// === DATA INTEGRITY ===
+assert('LEVELS is array', Array.isArray(LEVELS));
+assertEq('LEVELS has 20 entries', LEVELS.length, 20);
+
+var hasAllFields=true;
+for(var i=0;i<LEVELS.length;i++){
+    var lv=LEVELS[i];
+    if(typeof lv.name!=='string'||typeof lv.diff!=='string'||typeof lv.plats!=='number'||!Array.isArray(lv.gaps)){hasAllFields=false;break;}
+}
+assert('Every level has name/diff/plats/gaps', hasAllFields);
+
+var validThemes=true;
+for(var i=0;i<LEVELS.length;i++){
+    var t=LEVELS[i].theme;
+    if(t<0||t>=THEMES.length){validThemes=false;break;}
+}
+assert('Every level theme index is valid', validThemes);
+
+assert('THEMES has at least 20 entries', THEMES.length>=20);
+assert('First theme has skyT', typeof THEMES[0].skyT==='string');
+
+// === UTILS ===
+assertEq('cleanNumber(5,0)', cleanNumber(5,0), 5);
+assertEq('cleanNumber(NaN,10)', cleanNumber(NaN,10), 10);
+assertEq('cleanNumber(undefined,3)', cleanNumber(undefined,3), 3);
+assertEq('clamp(5,0,10)', clamp(5,0,10), 5);
+assertEq('clamp(15,0,10)', clamp(15,0,10), 10);
+assertEq('clamp(-5,0,10)', clamp(-5,0,10), 0);
+
+assertEq('getMaxChips(0) >= 0', getMaxChips(0)>=0, true);
+assertEq('getMaxChips(19) >= 0', getMaxChips(19)>=0, true);
+
+assert('gravLabel returns string', typeof gravLabel(0.6)==='string');
+assert('fricLabel returns string', typeof fricLabel(0.85)==='string');
+
+// === SAVE NORMALIZATION ===
+var nu1=normalizeUnlocked([0,1]);
+assertEq('normalizeUnlocked([0,1])', JSON.stringify(nu1), JSON.stringify([0,1]));
+
+var nu2=normalizeUnlocked([99]);
+assertEq('normalizeUnlocked([99]) defaults', JSON.stringify(nu2), JSON.stringify([0,1]));
+
+var ng=normalizeGlobalData({timePlayed:100,matches:5,deadFall:1});
+assertEq('normalizeGlobalData.timePlayed', ng.timePlayed, 100);
+assertEq('normalizeGlobalData.matches', ng.matches, 5);
+
+var nls=normalizeLevelStat({attempts:3,completions:1,silver:10});
+assertEq('normalizeLevelStat.attempts', nls.attempts, 3);
+assertEq('normalizeLevelStat.completions', nls.completions, 1);
+
+// === SUMMARY ===
+var sum=document.getElementById('summary');
+sum.innerHTML='<b>'+(failed===0?'ALL PASSED':'SOME FAILED')+'</b> — '+passed+' passed, '+failed+' failed';
+sum.style.background=failed===0?'rgba(0,255,136,0.1)':'rgba(255,0,85,0.1)';
+sum.style.border='1px solid '+(failed==='0'?'#0f8':'#f05');
+</script>
+</body>
+</html>

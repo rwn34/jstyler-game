@@ -128,6 +128,7 @@
     <button class="tab" data-tab="sessions">Sessions</button>
     <button class="tab" data-tab="engagement">Engagement</button>
     <button class="tab" data-tab="economy">Economy</button>
+    <button class="tab" data-tab="dailystage">🔥 Daily</button>
     <button class="tab" data-tab="feed">Live Feed</button>
   </div>
 
@@ -137,6 +138,7 @@
   <div class="pane" id="pane-sessions"><div style="color:#666">Loading…</div></div>
   <div class="pane" id="pane-engagement"><div style="color:#666">Loading…</div></div>
   <div class="pane" id="pane-economy"><div style="color:#666">Loading…</div></div>
+  <div class="pane" id="pane-dailystage"><div style="color:#666">Loading…</div></div>
   <div class="pane" id="pane-feed"><div style="color:#666">Loading…</div></div>
 
   <div class="footer">N3ON DashJ Metrics • 5-min cache • Times in UTC+7 • <span id="lastUpdate">—</span></div>
@@ -169,6 +171,7 @@
   var fmtDateTime=function(ts){return new Date(ts).toLocaleString('en-GB',{timeZone:TZ,year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});};
   var fmtAgo=function(ts){var s=Math.floor((Date.now()-ts)/1000);if(s<60)return s+'s ago';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago';};
   var truncatePid=function(pid){return pid?pid.slice(0,12)+(pid.length>12?'…':''):'—';};
+  var escapeHtml=function(str){if(str==null)return'';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');};
 
   // State
   var currentRange = localStorage.getItem('ndj_range') || '2d';
@@ -231,6 +234,7 @@
     else if (tab==='sessions') loadSessions(force);
     else if (tab==='engagement') loadEngagement(force);
     else if (tab==='economy') loadEconomy(force);
+    else if (tab==='dailystage') loadDailyStage(force);
     else if (tab==='feed') loadFeed(force);
   }
 
@@ -428,7 +432,8 @@
 
   function playerRowCells(p, i, prefix){
     prefix = prefix || '';
-    return '<td>'+(i+1)+'</td><td><a href="javascript:openPlayer(\''+p.pid+'\')" style="color:#0ff;text-decoration:none;border-bottom:1px dotted rgba(0,255,255,.3);">'+prefix+(p.name||'(anon)')+'</a></td><td class="pid"><a href="javascript:openPlayer(\''+p.pid+'\')" style="color:#666;text-decoration:none;">'+truncatePid(p.pid)+'</a></td>';
+    var displayName = escapeHtml(p.name) || '(anon)';
+    return '<td>'+(i+1)+'</td><td><a href="javascript:openPlayer(\''+p.pid+'\')" style="color:#0ff;text-decoration:none;border-bottom:1px dotted rgba(0,255,255,.3);">'+prefix+displayName+'</a></td><td class="pid"><a href="javascript:openPlayer(\''+p.pid+'\')" style="color:#666;text-decoration:none;">'+truncatePid(p.pid)+'</a></td>';
   }
 
   // === SESSIONS ===
@@ -711,6 +716,49 @@
     return svg;
   }
 
+  // === DAILY STAGE ===
+  function loadDailyStage(force){
+    fetchJson('/stats/dailystage', force).then(function(d){
+      lastLoaded.dailystage = Date.now();
+      var html = '<div class="grid">';
+      html += card('Attempts', fmtNum(d.starts), '', 'total starts');
+      html += card('Unique Players', fmtNum(d.startPlayers), 'live', 'tried daily');
+      html += card('Completions', fmtNum(d.completes), 'green', 'cleared');
+      html += card('Completion Rate', d.completionRate+'%', d.completionRate>=50?'green':'warn', '');
+      html += '</div>';
+      html += '<div class="grid" style="margin-top:8px">';
+      html += card('Deaths', fmtNum(d.deaths), 'warn', 'on daily stage');
+      html += card('Avg Time', fmtMs(d.avgTime), '', 'per completion');
+      html += card('Best Time', fmtMs(d.bestTime), 'gold', 'fastest clear');
+      html += card('Avg Deaths/Run', d.avgDeaths, '', 'per completion');
+      html += '</div>';
+
+      if (d.deathCauses && d.deathCauses.length) {
+        html += '<h2>Death Causes (Daily Stage)</h2><div class="panel">'+renderCauseBars(d.deathCauses)+'</div>';
+      }
+
+      if (d.byDiff && d.byDiff.length) {
+        html += '<h2>By Difficulty (Rank Tier)</h2><div class="panel scroll-x"><table><thead><tr><th>Difficulty</th><th class="num">Starts</th><th class="num">Completions</th><th class="num">Rate</th></tr></thead><tbody>';
+        d.byDiff.forEach(function(r){
+          var rate = r.starts > 0 ? Math.round((r.completes/r.starts)*1000)/10 : 0;
+          html += '<tr><td><span class="badge '+(r.diff==='HARD'?'bad':r.diff==='MODERATE'?'warn':'')+'">'+(r.diff||'?')+'</span></td><td class="num">'+fmtNum(r.starts)+'</td><td class="num">'+fmtNum(r.completes)+'</td><td class="num">'+rate+'%</td></tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+
+      if (d.byDay && d.byDay.length) {
+        html += '<h2>Daily Trend</h2><div class="panel scroll-x"><table><thead><tr><th>Day</th><th class="num">Attempts</th><th class="num">Completions</th><th class="num">Unique Players</th></tr></thead><tbody>';
+        d.byDay.forEach(function(r){
+          html += '<tr><td>Day '+(r.day!=null?r.day:'?')+'</td><td class="num">'+fmtNum(r.starts)+'</td><td class="num">'+fmtNum(r.completes)+'</td><td class="num">'+fmtNum(r.players)+'</td></tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+
+      document.getElementById('pane-dailystage').innerHTML = html;
+      statusOk();
+    }).catch(statusErr);
+  }
+
   // === LIVE FEED ===
   function loadFeed(force){
     fetchJson('/stats/feed', force).then(function(d){
@@ -741,7 +789,7 @@
         else if (e.type === 'ui_event') meta = (data.action||'')+(data.meta?' '+data.meta:'');
         var lvlStr = e.level != null ? 'L'+(e.level+1)+' ' : '';
         var verif = e.verified ? '' : ' <span class="badge bad">unv</span>';
-        html += '<div class="feed-item"><div class="ago">'+fmtAgo(e.server_ts)+'</div><div class="type '+typeClass+'">'+e.type+'</div><div class="who"><a href="javascript:openPlayer(\''+e.pid+'\')" style="color:#aaa;text-decoration:none">'+lvlStr+(e.name||truncatePid(e.pid))+'</a>'+verif+'</div><div class="meta">'+meta+'</div></div>';
+        html += '<div class="feed-item"><div class="ago">'+fmtAgo(e.server_ts)+'</div><div class="type '+typeClass+'">'+e.type+'</div><div class="who"><a href="javascript:openPlayer(\''+e.pid+'\')" style="color:#aaa;text-decoration:none">'+lvlStr+(escapeHtml(e.name)||truncatePid(e.pid))+'</a>'+verif+'</div><div class="meta">'+meta+'</div></div>';
       });
       html += '</div>';
 
@@ -762,7 +810,7 @@
       if (!j||!j.ok) throw new Error((j&&j.error)||'API error');
       renderPlayer(j.data);
     }).catch(function(e){
-      document.getElementById('playerBody').innerHTML = '<div class="err">Error: '+e.message+'</div>';
+      document.getElementById('playerBody').textContent = 'Error: ' + e.message;
     });
   };
   window.closePlayer = function(){
@@ -775,7 +823,7 @@
     var flag = d.country ? (COUNTRY_FLAGS[d.country] || '🌍') + ' ' + d.country : '';
 
     document.getElementById('playerHeader').innerHTML =
-      '<b style="color:#0ff;font-size:1.1rem">'+(d.name||'(anon)')+'</b> '+champBadge+returnBadge+
+      '<b style="color:#0ff;font-size:1.1rem">'+(escapeHtml(d.name)||'(anon)')+'</b> '+champBadge+returnBadge+
       '<br>PID: <code style="color:#666">'+d.pid+'</code> • '+flag+
       '<br>First seen: '+fmtDateTime(d.firstSeen)+' • Last seen: '+fmtDateTime(d.lastSeen)+' ('+fmtAgo(d.lastSeen)+')';
 

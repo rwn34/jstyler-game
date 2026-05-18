@@ -8,6 +8,7 @@ const ALLOWED_TYPES = new Set([
   'level_complete', 'level_death', 'purchase', 'ui_event', 'name_set'
 ]);
 const PID_REGEX = /^p_[a-z0-9]{6,30}$/;
+const NAME_REGEX = /^[A-Z0-9]{1,10}$/;
 const MAX_BODY = 50 * 1024;            // 50 KB
 const MAX_BATCH = 500;
 const TOKEN_TTL_MS = 60 * 60 * 1000;   // 1 hour
@@ -17,9 +18,16 @@ const ONLINE_WINDOW_MS = 5 * 60 * 1000;                    // 5 minutes
 const COMPLETE_DELTA_MIN_MS = -1000;   // claimed time can't exceed real elapsed by > 1s
 const COMPLETE_DELTA_MAX_MS = 30000;   // allow up to 30s pause/lag
 
+// === Rate limiting ===
+const RATE_LIMIT_IP_WINDOW_MS = 5 * 60 * 1000;   // 5 minutes
+const RATE_LIMIT_IP_MAX = 600;                   // 600 req per 5 min per IP
+const RATE_LIMIT_PID_WINDOW_MS = 5 * 60 * 1000;  // 5 minutes
+const RATE_LIMIT_PID_MAX = 300;                  // 300 req per 5 min per pid
+const RATE_LIMIT_SESSION_IP_MAX = 10;            // 10 session creates per 5 min per IP
+
 // === Helpers ===
 
-function corsHeaders() {
+function publicCorsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -27,15 +35,72 @@ function corsHeaders() {
   };
 }
 
-function jsonResponse(body, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...corsHeaders() },
-  });
+function securityHeaders() {
+  return {
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+  };
 }
 
-function errResponse(error, status = 400) {
-  return jsonResponse({ ok: false, error }, status);
+function jsonResponse(body, status = 200, usePublicCors = false) {
+  const headers = { 'Content-Type': 'application/json', ...securityHeaders() };
+  if (usePublicCors) Object.assign(headers, publicCorsHeaders());
+  return new Response(JSON.stringify(body), { status, headers });
+}
+
+function errResponse(error, status = 400, usePublicCors = false) {
+  return jsonResponse({ ok: false, error }, status, usePublicCors);
+}
+
+function sanitizeName(name) {
+  if (!name || typeof name !== 'string') return null;
+  const cleaned = name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+  return cleaned || null;
+}
+
+// === Rate limiting (in-memory per-isolate) ===
+const _rateLimit = new Map();
+
+function getClientIp(request) {
+  return request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
+}
+
+function isRateLimited(key, windowMs, maxRequests) {
+  const now = Date.now();
+  const timestamps = _rateLimit.get(key) || [];
+  const valid = timestamps.filter(t => now - t < windowMs);
+  if (valid.length >= maxRequests) {
+    _rateLimit.set(key, valid);
+    return true;
+  }
+  valid.push(now);
+  _rateLimit.set(key, valid);
+  if (_rateLimit.size > 5000) {
+    const oldest = Array.from(_rateLimit.entries()).sort((a, b) => {
+      const aMin = a[1].length ? a[1][0] : now;
+      const bMin = b[1].length ? b[1][0] : now;
+      return aMin - bMin;
+    })[0];
+    if (oldest) _rateLimit.delete(oldest[0]);
+  }
+  return false;
+}
+
+function rateLimitCheck(request, pid, isSession = false) {
+  const ip = getClientIp(request);
+  const ipKey = `ip:${ip}`;
+  const ipMax = isSession ? RATE_LIMIT_SESSION_IP_MAX : RATE_LIMIT_IP_MAX;
+  if (isRateLimited(ipKey, RATE_LIMIT_IP_WINDOW_MS, ipMax)) {
+    return { limited: true, retryAfter: Math.ceil(RATE_LIMIT_IP_WINDOW_MS / 1000) };
+  }
+  if (pid) {
+    const pidKey = `pid:${pid}`;
+    if (isRateLimited(pidKey, RATE_LIMIT_PID_WINDOW_MS, RATE_LIMIT_PID_MAX)) {
+      return { limited: true, retryAfter: Math.ceil(RATE_LIMIT_PID_WINDOW_MS / 1000) };
+    }
+  }
+  return { limited: false };
 }
 
 async function hmacSHA256(key, message) {
@@ -90,7 +155,7 @@ async function verifyAuthCookie(value, secret) {
 
 async function isAuthed(request, env) {
   const key = env.DASHBOARD_KEY;
-  if (!key) return true; // no key configured = open access (fail-open for misconfig)
+  if (!key) return false; // fail-closed: no key = no access
   const cookies = parseCookies(request);
   return await verifyAuthCookie(cookies[AUTH_COOKIE], key);
 }
@@ -110,7 +175,7 @@ async function handleAuth(request, env) {
     headers: {
       'Content-Type': 'application/json',
       'Set-Cookie': `${AUTH_COOKIE}=${cookieVal}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Strict`,
-      ...corsHeaders(),
+      ...securityHeaders(),
     },
   });
 }
@@ -154,12 +219,20 @@ async function cachedJson(key, freshFn, force) {
 async function handleSession(request, env) {
   const body = await readJsonBody(request);
   const { pid, ts } = body;
-  if (!pid || !PID_REGEX.test(pid)) return errResponse('invalid pid');
-  if (typeof ts !== 'number') return errResponse('invalid ts');
+  if (!pid || !PID_REGEX.test(pid)) return errResponse('invalid pid', 400, true);
+  if (typeof ts !== 'number') return errResponse('invalid ts', 400, true);
+
+  const rl = rateLimitCheck(request, pid, true);
+  if (rl.limited) {
+    return new Response(JSON.stringify({ ok: false, error: 'rate limit exceeded' }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json', 'Retry-After': String(rl.retryAfter), ...publicCorsHeaders() },
+    });
+  }
 
   const serverTs = Date.now();
   if (Math.abs(serverTs - ts) > SESSION_CLOCK_TOLERANCE_MS) {
-    return errResponse('clock skew too large');
+    return errResponse('clock skew too large', 400, true);
   }
 
   const token = generateToken();
@@ -169,7 +242,7 @@ async function handleSession(request, env) {
     'INSERT INTO sessions (token, pid, created_ts, expires_ts) VALUES (?, ?, ?, ?)'
   ).bind(token, pid, serverTs, expiresAt).run();
 
-  return jsonResponse({ ok: true, token, expiresAt, serverTs });
+  return jsonResponse({ ok: true, token, expiresAt, serverTs }, 200, true);
 }
 
 async function validateAndInsertEvent(env, e, isOffline, request) {
@@ -243,7 +316,7 @@ async function validateAndInsertEvent(env, e, isOffline, request) {
     'INSERT INTO events (pid, name, type, level, data, client_ts, server_ts, offline, verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     pid,
-    name || null,
+    sanitizeName(name),
     type,
     level,
     JSON.stringify(augmented),
@@ -256,15 +329,31 @@ async function validateAndInsertEvent(env, e, isOffline, request) {
 
 async function handleEvent(request, env) {
   const e = await readJsonBody(request);
+  const rl = rateLimitCheck(request, e && e.pid);
+  if (rl.limited) {
+    return new Response(JSON.stringify({ ok: false, error: 'rate limit exceeded' }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json', 'Retry-After': String(rl.retryAfter), ...publicCorsHeaders() },
+    });
+  }
   await validateAndInsertEvent(env, e, false, request);
-  return jsonResponse({ ok: true });
+  return jsonResponse({ ok: true }, 200, true);
 }
 
 async function handleEventsBatch(request, env) {
   const body = await readJsonBody(request);
   const events = body.events || [];
-  if (!Array.isArray(events) || events.length === 0) return errResponse('no events');
-  if (events.length > MAX_BATCH) return errResponse('batch too large');
+  if (!Array.isArray(events) || events.length === 0) return errResponse('no events', 400, true);
+  if (events.length > MAX_BATCH) return errResponse('batch too large', 400, true);
+
+  // Rate limit batch by IP (generous)
+  const rl = rateLimitCheck(request, null);
+  if (rl.limited) {
+    return new Response(JSON.stringify({ ok: false, error: 'rate limit exceeded' }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json', 'Retry-After': String(rl.retryAfter), ...publicCorsHeaders() },
+    });
+  }
 
   for (const e of events) {
     try {
@@ -273,7 +362,7 @@ async function handleEventsBatch(request, env) {
       // Skip malformed events
     }
   }
-  return jsonResponse({ ok: true });
+  return jsonResponse({ ok: true }, 200, true);
 }
 
 async function handleStats(env, range, force) {
@@ -715,6 +804,55 @@ async function handleStatsEconomy(env, range, force) {
   }, force);
 }
 
+// === Daily Stage stats ===
+async function handleStatsDailyStage(env, range, force) {
+  const cacheKey = 'dailystage:' + range;
+  return cachedJson(cacheKey, async () => {
+    const startTs = rangeStartTs(range);
+    const [
+      startsRow, startPlayersRow,
+      completesRow, completePlayersRow,
+      deathsRow,
+      avgTimeRow, bestTimeRow, avgDeathsRow,
+      deathCauses, byDay, byDiff,
+    ] = await Promise.all([
+      env.DB.prepare("SELECT COUNT(*) as c FROM events WHERE type='level_start' AND JSON_EXTRACT(data,'$.isDaily')=1 AND server_ts > ?").bind(startTs).first(),
+      env.DB.prepare("SELECT COUNT(DISTINCT pid) as c FROM events WHERE type='level_start' AND JSON_EXTRACT(data,'$.isDaily')=1 AND server_ts > ?").bind(startTs).first(),
+      env.DB.prepare("SELECT COUNT(*) as c FROM events WHERE type='level_complete' AND JSON_EXTRACT(data,'$.isDaily')=1 AND server_ts > ?").bind(startTs).first(),
+      env.DB.prepare("SELECT COUNT(DISTINCT pid) as c FROM events WHERE type='level_complete' AND JSON_EXTRACT(data,'$.isDaily')=1 AND server_ts > ?").bind(startTs).first(),
+      env.DB.prepare("SELECT COUNT(*) as c FROM events WHERE type='level_death' AND JSON_EXTRACT(data,'$.isDaily')=1 AND server_ts > ?").bind(startTs).first(),
+      env.DB.prepare("SELECT AVG(CAST(JSON_EXTRACT(data,'$.time') AS REAL)) as v FROM events WHERE type='level_complete' AND JSON_EXTRACT(data,'$.isDaily')=1 AND verified=1 AND CAST(JSON_EXTRACT(data,'$.time') AS REAL) >= 5000 AND server_ts > ?").bind(startTs).first(),
+      env.DB.prepare("SELECT MIN(CAST(JSON_EXTRACT(data,'$.time') AS REAL)) as v FROM events WHERE type='level_complete' AND JSON_EXTRACT(data,'$.isDaily')=1 AND verified=1 AND CAST(JSON_EXTRACT(data,'$.time') AS REAL) >= 5000 AND server_ts > ?").bind(startTs).first(),
+      env.DB.prepare("SELECT AVG(CAST(JSON_EXTRACT(data,'$.deaths') AS REAL)) as v FROM events WHERE type='level_complete' AND JSON_EXTRACT(data,'$.isDaily')=1 AND server_ts > ?").bind(startTs).first(),
+      env.DB.prepare("SELECT JSON_EXTRACT(data,'$.cause') as cause, COUNT(*) as c FROM events WHERE type='level_death' AND JSON_EXTRACT(data,'$.isDaily')=1 AND server_ts > ? GROUP BY cause ORDER BY c DESC").bind(startTs).all(),
+      env.DB.prepare("SELECT CAST((server_ts - ?) / 86400000 AS INTEGER) as day, COUNT(*) as starts, SUM(CASE WHEN type='level_complete' THEN 1 ELSE 0 END) as completes, COUNT(DISTINCT pid) as players FROM events WHERE JSON_EXTRACT(data,'$.isDaily')=1 AND server_ts > ? GROUP BY day ORDER BY day").bind(startTs, startTs).all(),
+      env.DB.prepare("SELECT JSON_EXTRACT(data,'$.diff') as diff, COUNT(*) as starts, SUM(CASE WHEN type='level_complete' THEN 1 ELSE 0 END) as completes FROM events WHERE type='level_start' AND JSON_EXTRACT(data,'$.isDaily')=1 AND server_ts > ? GROUP BY diff").bind(startTs).all(),
+    ]);
+
+    const starts = startsRow ? startsRow.c : 0;
+    const completes = completesRow ? completesRow.c : 0;
+    return {
+      ok: true,
+      data: {
+        range,
+        starts,
+        startPlayers: startPlayersRow ? startPlayersRow.c : 0,
+        completes,
+        completePlayers: completePlayersRow ? completePlayersRow.c : 0,
+        deaths: deathsRow ? deathsRow.c : 0,
+        completionRate: starts > 0 ? Math.round((completes / starts) * 1000) / 10 : 0,
+        avgTime: avgTimeRow && avgTimeRow.v ? Math.round(avgTimeRow.v) : 0,
+        bestTime: bestTimeRow && bestTimeRow.v ? Math.round(bestTimeRow.v) : 0,
+        avgDeaths: avgDeathsRow && avgDeathsRow.v ? Math.round(avgDeathsRow.v * 10) / 10 : 0,
+        deathCauses: (deathCauses && deathCauses.results) || [],
+        byDay: (byDay && byDay.results) || [],
+        byDiff: (byDiff && byDiff.results) || [],
+        generatedAt: Date.now(),
+      },
+    };
+  }, force);
+}
+
 // === Recent events feed (last 100) + summary ===
 async function handleStatsFeed(env, force) {
   return cachedJson('feed:latest', async () => {
@@ -862,7 +1000,6 @@ async function handleStatsPlayer(env, pid) {
       countryHistory: (countryRow && countryRow.results) || [],
       screen: screenRow ? screenRow.scr : null,
       language: langRow ? langRow.lang : null,
-      ua: langRow ? langRow.ua : null,
       eventsByType: ((byTypeRows && byTypeRows.results) || []).reduce((m, r) => { m[r.type] = r.c; return m; }, {}),
       perLevel: levelArr,
       favoriteStage: favStage,
@@ -917,7 +1054,7 @@ async function handleCron(env) {
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders() });
+      return new Response(null, { headers: { ...publicCorsHeaders(), ...securityHeaders() } });
     }
 
     const url = new URL(request.url);
@@ -970,6 +1107,9 @@ export default {
       if (path === '/stats/economy' && request.method === 'GET') {
         return jsonResponse(await handleStatsEconomy(env, range, force));
       }
+      if (path === '/stats/dailystage' && request.method === 'GET') {
+        return jsonResponse(await handleStatsDailyStage(env, range, force));
+      }
       if (path === '/stats/feed' && request.method === 'GET') {
         return jsonResponse(await handleStatsFeed(env, force));
       }
@@ -981,7 +1121,8 @@ export default {
         return new Response(dashboardHtml, {
           headers: {
             'Content-Type': 'text/html;charset=UTF-8',
-            'Cache-Control': 'public, max-age=300',
+            'Cache-Control': 'no-store',
+            ...securityHeaders(),
           },
         });
       }
