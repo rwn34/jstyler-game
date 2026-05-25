@@ -67,7 +67,10 @@ function buildDailyTheme(seed1, seed2, seed3){
         grav: feel.grav, jmp: feel.jmp, fric: feel.fric,
         weather: feel.weather,
         bg: mood.bg,
-        inverted: true
+        inverted: true,
+        moodName: mood.name,
+        energyName: energy.name,
+        feelName: feel.name
     };
 }
 

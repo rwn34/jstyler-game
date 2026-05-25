@@ -1,5 +1,339 @@
 # Changelog
 
+## v1.2.51 — May 25, 2026
+
+### Changed
+- Build
+## v1.2.50 — May 25, 2026
+
+### Added
+- 🔑 Forgot PIN reset — registered users can reset their PIN from the **Manage** tab without needing the old PIN
+  - Verifies identity via username + MMYY birthday stored locally
+  - Clears all linked devices on reset
+  - Rate limited to 3 attempts per minute per IP
+
+### Fixed (Worker)
+- `sync_lookup` table now properly maintained across all PIN-change paths
+  - `handleSyncChangePin` — deletes old lookup row, inserts new one
+  - `handleSyncForgotPin` — deletes old lookup row, inserts new one
+  - `handleAdminSyncResetPin` — deletes old lookup row, inserts new one
+  - Without this fix, forgot-PIN lookup would break after any PIN change
+## v1.2.49 — May 25, 2026
+
+### Added
+- 🔗 Link Device entry points — added "Link device" hyperlinks in:
+  - First-time onboarding modal (below the name input)
+  - Name-change prompt overlay (below the input field)
+  - Clicking opens Cloud Sync panel focused on the **Link Device** tab
+  - Onboarding/overlay temporarily hidden while sync panel is open, restored on close
+## v1.2.48 — May 26, 2026
+
+### Fixed (Worker)
+- **CRITICAL: Server-side deep merge bug** — `handleSyncSave` was using shallow spread `mergedData = { ...parsed, ...data }` which caused entire sub-objects (`scores`, `times`, `stats`, `chips`, etc.) to be overwritten when a device sent partial data. Now iterates ALL keys from BOTH cloud and incoming data, applying per-key rules (max/min/union/OR) so no data is lost across devices.
+- **`deviceIds` now returned in load response** — `handleSyncLoad` includes `deviceIds` array so client can verify multi-device state.
+- **Rate limiting added to PIN change** — `handleSyncChangePin` now has IP-based rate limiting (same window as save).
+
+### Fixed (Client)
+- **PWA banner dismissal not persisted** — `dismissPwaBanner()` saved `pwaBannerDismissed=true` but `showPwaInstallBanner()` never checked it, causing the banner to reappear every time the player returned to stage select.
+- **PWA banner hidden on iOS** — The banner required `deferredPrompt` to be truthy, but iOS Safari never fires `beforeinstallprompt`. Removed the `deferredPrompt` gate from banner visibility so iOS users see the install helper too.
+
+### Added
+- **🔗 Link Device entry points** — Added "Link device" hyperlink in:
+  - First-time onboarding modal (below the name input)
+  - Name-change prompt overlay (below the input field)
+  - Clicking it opens the Cloud Sync panel focused on the **Link Device** tab
+  - Onboarding/overlay is temporarily hidden while the sync panel is open, then restored on close
+
+## v1.2.47 — May 25, 2026
+
+### Added
+- 🔗 Link Device full-replace mode — linking a device now completely replaces local progress with cloud data (instead of merging)
+- ⚠️ Confirmation dialog warns before overwriting existing local progress
+- `replaceSyncData()` client helper for full-replace sync load
+## v1.2.46 — May 25, 2026
+
+### Fixed
+- PWA install banner no longer blocked by aggressive CSS `!important` rule
+- PIN and birthday inputs now use `inputmode="numeric"` for mobile numeric keypad
+## v1.2.45 — May 25, 2026
+
+### Fixed
+- Client-worker compatibility — sync load response now handles both old and new field names
+- Cloud Sync status text now updates correctly when opening Settings panel
+## v1.2.44 — May 25, 2026
+
+### Added
+- ☁️ Cloud Sync — multi-device save synchronization
+  - Identity: username + MMYY birthday + 6-digit PIN → HMAC-SHA256 key hash
+  - AES-256-GCM encryption for all sync data stored in D1
+  - Auto-sync triggers after: level complete, purchases, daily chest, settings save, name change, PWA reward, champion ceremony
+  - Device limit: max 3 devices per account
+  - PIN change with automatic device ID reset
+  - Server-side purchase validation against canonical earned-vs-spent balance
+  - Rejected purchases trigger client-side refund
+  - Brute-force protection: 10 failed loads = 1-hour lockout
+  - Rate limiting: 5 saves/min, 10 loads/min per IP
+  - Daily reward deduplication via `rewardsLog` JSON
+- 🔗 Link Device on fresh devices — new phone can link an existing cloud account directly from the sync panel
+  - Full replacement mode: local progress is completely replaced with cloud data (not merged)
+  - Confirmation dialog warns before overwriting existing local progress
+- `APP_VERSION` tracking — every metric event now tags build version (`data._v`)
+- Build script (`zipgame.ps1`) auto-bumps `APP_VERSION` in `03-save.js`
+
+### Fixed
+- Cloud Sync status text now updates correctly when opening Settings panel
+- PWA install banner no longer blocked by aggressive CSS `!important` rule
+- PIN and birthday inputs now use `inputmode="numeric"` for mobile numeric keypad
+
+### Worker
+- New endpoints: `POST /sync/save`, `POST /sync/load`, `POST /sync/change-pin`
+- New dashboard endpoints: `GET /stats/appversion`, `GET /stats/feedback`, `GET /stats/sync`
+- Dashboard tabs: App Version (adoption chart), Feedback (recent messages), Cloud Sync (accounts & devices)
+- Admin endpoint: `POST /admin/sync/reset-pin` (dashboard auth required)
+- D1 tables: `sync_states`, `sync_history`, `sync_attempts`
+
+## v1.2.40–v1.2.43 — May 23–25, 2026
+
+### Added
+- 📝 Send Feedback panel in Settings — POSTs to `/feedback` worker endpoint with rate limiting
+- ✉️ Contact Us button — mailto:xterzd@gmail.com
+
+### Changed
+- Stage completion screen redesigned
+  - Shows best score alongside current score
+  - Shows time improvement `(-X.XXs)` in green when new best
+  - Removed inaccurate "FIRST TRY!" text
+  - `st.first` flag no longer set on completion
+## v1.2.39 — May 23, 2026
+
+### Changed
+- Build
+## v1.2.38 — May 23, 2026
+
+### Changed
+- Build
+## v1.2.37 — May 23, 2026
+
+### Changed
+- Build
+## v1.2.36 — May 22, 2026
+
+### Fixed
+- PWA install button now shows fallback message when `beforeinstallprompt` isn't available (Android non-Chrome)
+- PWA banner/button visibility now correctly tied to viewport mode — only one shows at a time
+- Streak display consistency: `updateLsStreakBtn()` now uses same visual streak calculation as calendar
+- HUD vertical alignment: `hudCenter`, `hudLeft`, and `hudRight` all now at `top: 64px`
+
+## v1.2.35 — May 22, 2026
+
+### Changed
+- iOS PWA reward now requires 60+ seconds of play after tapping install (anti-gaming)
+- Landscape narrow mode: install button moved from floating banner to under `lsGlobalStats` in right column, centered
+
+## v1.2.34 — May 22, 2026
+
+### Added
+- PWA install incentive banner on stage select — "📲 INSTALL APP — 100♦" appears when PWA is supported and not yet installed
+- iOS users must play 60+ seconds after tapping install to claim reward; Android users get reward only after accepting install
+- Dismissible banner (✕) with persistent state
+- Stage-select random tip — same `homeTooltip` style/behavior as in-game tips, shows for 3s when opening stage select
+
+## v1.2.33 — May 22, 2026
+
+### Fixed
+- PWA install button was hidden on iOS because Safari doesn't fire `beforeinstallprompt`
+- iOS users now see "📱 ADD TO HOME SCREEN" button with step-by-step Safari instructions
+- Android/Chrome behavior unchanged: button appears when `beforeinstallprompt` fires
+
+## v1.2.32 — May 22, 2026
+
+### Changed
+- In-game tooltip (`homeTooltip`) lowered 20px (60px → 80px) to avoid HUD overlap
+- Stage-select hint tags (`btnHints`) lowered 20px (56px → 76px)
+- Boot screen now shows a random tip from the 50-tip pool during loading
+
+## v1.2.31 — May 22, 2026
+
+### Added
+- Day rollover detection via `visibilitychange` — streak, daily stage, and chest UI refresh automatically when app becomes visible after 5 AM UTC+7
+
+### Changed
+- Control layout independence — jump button now has separate position (`jumpX`/`jumpY`) and size (`jumpSize`) from movement controls
+- Streak calendar visuals — active streak days in yellow/orange, frozen days in ice blue, missing days hollow
+- Streak time tracking now accumulates across retries (`sessionRunTime`) — dying and retrying multiple times still counts toward the 60s play threshold
+
+## v1.2.30 — May 22, 2026
+
+### Changed
+- HUD transparency halved (rgba 0.1 → 0.05) on all three panels
+- In-game changelog consolidated: v1.2.12–v1.2.29 merged into single v1.2.30 entry
+- Past dailies are collectible badge grid (no replay)
+- Build pipeline restored: always auto-bump
+
+## v1.2.29 — May 22, 2026
+
+### Changed
+- Build script restored: default is always auto-bump (no change → don't run zipgame)
+- Past dailies displayed as collectible badge grid instead of replay list
+- Removed daily replay feature — past dailies are badges only
+## v1.2.28 — May 22, 2026
+
+### Changed
+- Build script default changed: no-bump on plain build, use `-Bump` to release
+- Past daily stages now shown as badge grid (date only, no replay)
+- Removed daily replay feature entirely — past dailies are collectible badges only
+- Daily replay race condition fixes from v1.2.26–v1.2.27
+## v1.2.27 — May 22, 2026
+
+### Fixed
+- Daily replay now actually starts the game — `replayDailyStage` was referencing `$('hud')` which doesn't exist in the HTML, causing a `TypeError` that halted execution before `startLvl()` could run
+## v1.2.26 — May 22, 2026
+
+### Fixed
+- Daily replay race condition: stale `setTimeout(showWin,1000)` from a previous win no longer fires during a new daily replay, which was causing the replay complete screen to appear immediately instead of letting the player actually play
+## v1.2.25 — May 22, 2026
+
+### Changed
+- Removed `body.force-landscape` CSS — stage select now follows natural device orientation (portrait layout in portrait, landscape in landscape)
+- Gameplay still locks to landscape via `attemptFullscreenAndLock()` when Play is tapped
+## v1.2.23 — May 22, 2026
+
+### Changed
+- Settings orientation option restored — portrait choice is back, boot still defaults to landscape
+- `force-landscape` CSS class now follows saved orientation preference instead of always-on
+- `currentLayoutKey()` restored to actual device-dimension logic
+- Build script auto-changelog fixed: uses `[regex]::Replace` with count=1, no more duplicate insertions
+
+## v1.2.17 — May 21, 2026 — Portrait Removed & Fullscreen Button Fixed
+
+### Fixed
+- Fullscreen button no longer overlaps settings gear in compact landscape (now uses dedicated `.fs-btn` class)
+
+### Changed
+- **Portrait mode completely removed** — game is now landscape-only. Orientation setting reduced to "Landscape" only
+- `currentLayoutKey()` always returns `'landscape'`
+- `attemptFullscreenAndLock()` always locks to `'landscape'` regardless of previous setting
+- `body.force-landscape` always applied for CSS fallback when browser can't lock orientation
+
+## v1.2.16 — May 21, 2026 — Build Pipeline Verification
+
+### Changed
+- Build pipeline verified: auto-bump working correctly from v1.2.15 to v1.2.16
+
+## v1.2.15 — May 21, 2026 — Build System Verified
+
+### Changed
+- Build pipeline verified: auto-bump working correctly, service worker cache updates with each build
+
+## v1.2.14 — May 21, 2026 — Landscape Default, Viewport Fix & Fullscreen Button
+
+### Fixed
+- Game canvas now sizes to `visualViewport` (actual visible area) instead of `window.innerHeight`, preventing scroll when browser address bar / notification bar is present
+- `window.visualViewport` resize listener added so canvas updates when browser chrome shows/hides
+
+### Changed
+- **Landscape is now enforced by default** — even first-time users see onboarding, home screen, and stage select in landscape layout. Only users who explicitly set "Portrait" in settings get portrait mode
+- `currentLayoutKey()` now always returns `'landscape'` when `orient !== 'portrait'`
+- Body class `.force-landscape` added when landscape is enforced; CSS overrides apply landscape stage-select layout even if device is physically held in portrait
+- **Fullscreen button added to home screen** — ⛶ icon below the settings gear toggles fullscreen mode
+
+## v1.2.13 — May 21, 2026 — HUD Polish & Build Pipeline Fix
+
+### Fixed
+- Service worker cache name now correctly bumps with each build, preventing stale cached HTML
+- In-game HUD background transparency actually works: `backdrop-filter: blur(10px)` + `rgba(0,0,0,0.1)` on all panels
+
+### Changed
+- **HUD backgrounds**: `hudLeft`, `hudCenter`, `hudRight` all changed to `rgba(0,0,0,0.1)` with blur kept
+- **Ghost button removed from `hudCenter`**: redundant since ghost status is already shown in `hudLeft` skill icons
+- **Ghost rival replay button** moved inside stage thumbnail (`cardWrap`) at bottom center
+- **Stage select tooltips**: `lsTags` shows level details on click; `lsBottomBar` shows progress + champion rewards
+
+## v1.2.12 — May 20, 2026 — Stage Select & Store UI Polish
+
+### Fixed
+- Store portrait in landscape mode now sized 90×60 px with 5 px top margin (was 120×80 px at 44 px top) to avoid crowding header row
+- Stage select tooltip now uses DOM-based `showStageTooltip()` instead of canvas `addFloat()`, which failed because the game draw loop isn't active in stage select
+
+### Changed
+- **Stage select portrait layout**: Reduced top padding, moved logo/header up to eliminate large empty gaps; `lsName` centered; `lsBottomBar` height set to 6 px
+- **Landscape narrow stage select**: `cardWrap` vertically centered via `margin: auto 0`, height `70vh` / `max-height: 380px`; `lsDetails` gap loosened; global stats pills compacted
+- **`lsGlobalStats` redesign**: Replaced pill tags with two clean inline rows (`gs-row`) of `emoji value label` triplets. No backgrounds/borders. Emoji gets colored `drop-shadow`. Hover: `opacity: 0.7`
+- **Store header compact**: Single row layout — gems left, `★ STORE` center, `🤖` icon + index + `▶` + inline tip right
+- **Shopkeeper message orientation**: Portrait shows full tip centered below header; landscape narrow shows truncated tip inline next to the `🤖` icon
+- **Store item spacing**: Landscape `.store-item` padding reduced `12px` → `8px`, margin-bottom `8px` → `4px`
+
+## v1.2.11 — May 20, 2026 — Daily Stage Fixes & UI Polish
+
+### Fixed
+- Daily stage canvas no longer renders at ~1/10 size on first play — `startDailyStage()` and `replayDailyStage()` were missing `resize()` / `initStars()` / `applyJoySettings()` / `applyBtnSize()` calls that `startGame()` has
+- `generateDailyLevel()` `mdy` date parameter was corrupted: `today.slice(2, 4)` grabbed the last-two digits of the year instead of the day, producing `05262026` instead of `05202026` for mmddyyyy seed
+- Daily stage platform layout was not rank-dependent — `genLvl()` used `getGameDayKey() + 'layout'` without rank, so players of different ranks on the same day got identical platform positions. Now uses `(dateKey || getGameDayKey()) + 'layout' + rankIdx`
+- Ghost rival recording, button, and rendering now disabled during daily stages and daily replays (ghost skill passive still works)
+- `dailyCollection` defensive check: `Array.isArray()` guard before push/iterate to prevent crashes on corrupted save data
+
+### Added
+- **Past Dailies in preview** — `#dailyPreview` now shows up to 5 previous completed daily stages with replay buttons, so users can browse collection without completing today's stage first
+- **Date + theme mix display** in daily preview — shows current game date and the mood/energy/feel theme names to surface daily variety
+- **Stage select progress bar** — animated cyan bar above global stats strip showing cleared count / 20 stages
+- `dateKey` and `rankIdx` stored on `dailyLevelObj` so replayed dailies use the exact original layout seed
+
+### Changed
+- Profile page (`#profile`) redesigned as 2-column grid: left = RANK tiers + progress, right = GLOBAL STATS + HAZARD BREAKDOWN. Container widened from 360px to 560px
+- Streak calendar (`#streakCalendar`) redesigned as 2-column grid: left = streak count + freeze controls, right = week calendar grid. Container widened from 380px to 560px
+- Daily stage button (`#lsDailyBtn`) now shows "DAILY STAGE" text label alongside icon instead of just the icon
+- `buildDailyTheme()` now returns `moodName`, `energyName`, `feelName` for UI display
+
+## v1.2.10 — May 19, 2026 — Stage Badge & Portrait Cleanup
+
+### Changed
+- Difficulty badge (`#lsTags`) now displays gravity, friction, weather, and ghost rival status in a single compact line
+- Removed separate `#lsPhysics` descriptor row — all stage conditions merged into the badge
+- Character portrait animation hidden for layout testing (canvas set to `display: none`)
+
+## v1.2.9 — May 19, 2026 — Stage Select Layout Rework
+
+### Changed
+- Dot navigation moved inside stage thumbnail bottom edge, scaled to fit within card bounds
+- Stage records (best time, matches, gems, silver) consolidated into thumbnail overlay; removed separate stat card row below stage info
+- Character preview is now a transparent floating avatar positioned beside player info (rank / name / gems) — no card border or background
+- Streak, Daily Stage, and Daily Chest buttons stacked vertically below the Settings button, aligned to the right edge in both portrait and landscape
+- Landscape info panel narrowed (48vw → 40vw) to prevent overlap with the vertical resource button stack
+
+## v1.2.8 — May 18, 2026 — UI/UX Polish (Round 2)
+
+### Fixed
+- Landscape stage title missing: `updateCarousel()` now resets `scrollTop` so `#lsName` is never scrolled out of view
+- Resource buttons no longer overlap level card in landscape (raised from 48px to 38px, levelSelect padding increased to 86px)
+- Avatar no longer visually collides with card in landscape (10px gap via padding)
+- Breakdown text no longer wraps awkwardly in portrait (`white-space: nowrap` + ellipsis)
+- Time stat stays on single line in both orientations (`white-space: nowrap`)
+- Level number "1" no longer clipped by card corner (`left: 18px` instead of 14px)
+- Username badge has more horizontal padding (4px 6px → 4px 10px)
+- "watch replay" is now a standalone button below physics text, not inline with bullets
+- Stage badge simplified to difficulty only (removed redundant stage name)
+- Progress bar locked segments more visible (0.08 → 0.12 alpha)
+- Card mini-stats have more bottom/side padding (12px → 14px/16px)
+- Global stats use consistent `space-between` padding in both orientations
+
+## v1.2.2 — May 18, 2026 — UI/UX Polish
+
+### Changed
+- Stage select visual overhaul: dot navigation replaced with thin segmented progress bar
+- Top bar consolidated: store button is now icon-only, resource buttons centered below logo
+- Thumbnail stats now have clear labels (Matches, Clears, Gems, Silver)
+- Timer displayed in readable pill badge
+- Stat grid uses tabular numerals for consistent visual weight
+- Global stats icons and values enlarged for readability
+- "LOG »" renamed to "💀 BREAKDOWN"
+- Ghost replay link styled as a proper secondary button
+- Landscape layout: avatar is compact (60px) instead of sidebar, info panel widened to 48vw
+- Avatar is always a small top-left badge in both orientations
+- Cross-orientation consistency for resource buttons and global stats layout
+- In-game grid lines visibility increased (alpha 0.08 → 0.18)
+- "CLEAR" weather label rendered in cyan to avoid clashing with title glow
+- Terminology: "gold chip" → "gold gem" in champion ceremony text
+
 ## v1.2.0 — May 18, 2026 — Daily Stage, Collection, Share Cards & More
 
 ### Added

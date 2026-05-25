@@ -13,7 +13,7 @@ $('hudLeft').style.display='flex';
 if(ctrlMode==='analog'){$('jZone').classList.add('active');$('jBtn').classList.add('active');$('arrowControls').classList.remove('active');}
 else{$('jZone').classList.remove('active');$('jBtn').classList.add('active');$('arrowControls').classList.add('active');}
 
-applyJoySettings();applyBtnSize();
+applyJoySettings();applyBtnSize();applyJumpBtnSize();
 
 save('lastPlayed', lvl);
 lastPlayed = lvl;
@@ -39,11 +39,12 @@ function startReplay(lvl){
     $('jBtn').classList.remove('active');
     $('arrowControls').classList.remove('active');
     $('freezeBtn').style.display='none';
-    $('ghostBtn').style.display='none';
     resize();initStars();startLvl(lvl);
     $('hudLvl').textContent='\ud83c\udfac REPLAY: '+LEVELS[lvl].name;
 }
 function exitReplay(){
+    if(_winTimer){clearTimeout(_winTimer);_winTimer=null;}
+    if(_dieTimer){clearTimeout(_dieTimer);_dieTimer=null;}
     replayMode=false;
     _replayEnded=false;
     gameRunning=false;
@@ -55,7 +56,18 @@ function exitReplay(){
     initLevelSelect();
 }
 
-function resize(){canvas.width=W.innerWidth;canvas.height=W.innerHeight;wCanvas.width=W.innerWidth;wCanvas.height=W.innerHeight;}
+function resize(){
+    var vw=W.visualViewport||{width:W.innerWidth,height:W.innerHeight,offsetLeft:0,offsetTop:0};
+    canvas.width=vw.width;canvas.height=vw.height;
+    wCanvas.width=vw.width;wCanvas.height=vw.height;
+    // Adjust canvas CSS position to account for visual viewport offset (browser chrome scroll)
+    canvas.style.position='fixed';
+    canvas.style.left=vw.offsetLeft+'px';
+    canvas.style.top=vw.offsetTop+'px';
+    wCanvas.style.position='fixed';
+    wCanvas.style.left=vw.offsetLeft+'px';
+    wCanvas.style.top=vw.offsetTop+'px';
+}
 
 function initStars(){stars=[];var n=Math.max(10,Math.floor(120*qStarMult));for(var i=0;i<n;i++)stars.push({x:r(0,3000),y:r(0,1500),s:r(.5,2.5),sp:r(.1,.4),a:r(.2,1)});}
 
@@ -145,6 +157,8 @@ if(qBgMult<1){var keepN=Math.max(5,Math.floor(bgShapes.length*qBgMult));bgShapes
 }
 
 function startLvl(lvl){
+if(_winTimer){clearTimeout(_winTimer);_winTimer=null;}
+if(_dieTimer){clearTimeout(_dieTimer);_dieTimer=null;}
 var lv=(lvl===-1&&typeof dailyLevelObj!=='undefined'&&dailyLevelObj)?dailyLevelObj:LEVELS[lvl];
 theme=(lv.theme===-1&&lv.customTheme)?lv.customTheme:THEMES[lv.theme];
 if(wCtx&&wCanvas)wCtx.clearRect(0,0,wCanvas.width,wCanvas.height);
@@ -158,6 +172,8 @@ wTimer=0;flash=0; deathFlash=0;gemFlash=0;hudDistDisplay=0;resurrectFlash=0;
 fpsBuf=[];fpsBufI=0;curFps=0;lowFpsAccum=0;
 coyoteT=0;jumpBuf=0; frameCount=0;bounceLockT=0;jumpOriginX=150;
 var _carryRun=(sessionStage===lvl);
+if(_carryRun){sessionRunTime+=runTime;}
+else{sessionRunTime=0;}
 if(!_carryRun){runGold=0; runSilver=0;}
 stylePoints=0;comboCount=0;comboTimer=0;floatTexts=[];
 shieldUsed=false;shieldHits=shieldHits||0;airDashUsed=false;lastPlatPos={x:150,y:400};tripleJumpCD=0;runScore=0;timeFrozen=0;freezeCD=0;ghostFrames=[];ghostIdx=0;currentGhost=null;runUsedResurrect=false;
@@ -207,9 +223,9 @@ var shEl=$('hudShield');if(shEl){if(shieldHits>0){shEl.style.display='block';shE
 var resEl=$('hudResurrect');if(resEl&&hasSkill('resurrect')){resEl.style.display='block';var resCDms=120000-(Date.now()-lastResurrectTime);if(resCDms<=0)resEl.textContent='\u2764 RESURRECT \u2713 READY';else{var resMin=Math.floor(resCDms/60000),resSec=Math.floor((resCDms%60000)/1000);resEl.textContent='\u2764 RESURRECT '+resMin+'m'+resSec+'s';}}
 else if(shieldHits>0)$('hudConsumable').textContent='\ud83d\udee1 DOUBLE SHIELD';
 else $('hudConsumable').textContent='';
-var skillIcons='';if(hasSkill('ghost'))skillIcons+='\ud83d\udc7b';if(hasSkill('phasedash'))skillIcons+=phaseDashUsed?'\u26ab':'\ud83c\udf00';if(hasSkill('airdash'))skillIcons+='\ud83d\udca8';if(hasSkill('reflexdash'))skillIcons+='\u26a1';if(hasSkill('resurrect'))skillIcons+='\u2764';if(hasSkill('coyote'))skillIcons+='\ud83d\udc3e';if(hasSkill('magnet'))skillIcons+='\ud83e\uddf2';if(hasSkill('wallslide'))skillIcons+='\ud83e\udea9';if(hasSkill('slowfall'))skillIcons+='\ud83e\ude82';if(consumableTimefreeze)skillIcons+='\u23f8';$('hudSkills').textContent=skillIcons;
+_isDailyRun=(typeof isDailyStage!=='undefined'&&isDailyStage);
+var skillIcons='';if(hasSkill('ghost')&&!_isDailyRun)skillIcons+='\ud83d\udc7b';if(hasSkill('phasedash'))skillIcons+=phaseDashUsed?'\u26ab':'\ud83c\udf00';if(hasSkill('airdash'))skillIcons+='\ud83d\udca8';if(hasSkill('reflexdash'))skillIcons+='\u26a1';if(hasSkill('resurrect'))skillIcons+='\u2764';if(hasSkill('coyote'))skillIcons+='\ud83d\udc3e';if(hasSkill('magnet'))skillIcons+='\ud83e\uddf2';if(hasSkill('wallslide'))skillIcons+='\ud83e\udea9';if(hasSkill('slowfall'))skillIcons+='\ud83e\ude82';if(consumableTimefreeze)skillIcons+='\u23f8';$('hudSkills').textContent=skillIcons;
 $('freezeBtn').style.display=consumableTimefreeze?'flex':'none';
-var gb=$('ghostBtn');if(gb)gb.style.display=(ghostsEnabled&&hasSkill('ghost'))?'flex':'none';
 $('hudFx').innerHTML=(theme.weather!=='clear'?theme.weather.toUpperCase()+'<br>':'')+(theme.grav<=0.55?'LOW G':theme.grav>=0.65?'HEAVY G':'NORMAL G')+'<br>'+(theme.fric<=0.8?'SLIPPERY':theme.fric>=0.88?'GRIPPY':'NORMAL FRIC');
 gameRunning=true;lastFrameTime=0;if(animId)cancelAnimationFrame(animId);loop();
 }
@@ -217,8 +233,10 @@ gameRunning=true;lastFrameTime=0;if(animId)cancelAnimationFrame(animId);loop();
 function genLvl(lv){
 var sc=lv.sc,px=0,py=450,cnt=lv.plats,seed=lv.theme*997+lv.plats*31;
 var isDaily = (typeof isDailyStage!=='undefined' && isDailyStage);
-var isReplay = (typeof isDailyReplay!=='undefined' && isDailyReplay);
-if(lv.theme===-1) seed = hashString(getGameDayKey() + 'layout') % 233280;
+if(lv.theme===-1) {
+    var _dailyRank = (typeof lv.rankIdx !== 'undefined') ? lv.rankIdx : getPlayerRankInfo().index;
+    seed = hashString((lv.dateKey || getGameDayKey()) + 'layout' + _dailyRank) % 233280;
+}
 platforms.push({x:0,y:450,w:400*sc,h:40,t:'s',ox:0,oy:0,sp:0,amp:0});
 var lastX=400*sc;
 var goldChipOrdinal=0; // ordinal index for gold chips, used for bestChips persistence
@@ -278,11 +296,10 @@ for(var i=0;i<cnt;i++){
         
         if(i>2 && i%3===0 && !isMove) {
             // No gold gems in daily stages or replay mode
-            if(!isDaily && !isReplay){
+            if(!isDaily){
                 chips.push({x: px+pw/2, y: py-60, col: false, goldIdx: goldChipOrdinal++});
             }
-            // No silver gems in replay mode either
-            if(!isReplay && i>1 && i<cnt-1 && gap>80){
+            if(i>1 && i<cnt-1 && gap>80){
                 var arcMid=px-gap/2,arcTop=py-80;
                 for(var ci=0;ci<3;ci++){
                     var dsIdx = dailySilverOrdinal++;
@@ -367,8 +384,10 @@ ov.classList.add('active');
 }
 function goHome(){
 if(typeof _autoRetryTimer!=='undefined'&&_autoRetryTimer){clearTimeout(_autoRetryTimer);_autoRetryTimer=null;}
+if(_winTimer){clearTimeout(_winTimer);_winTimer=null;}
+if(_dieTimer){clearTimeout(_dieTimer);_dieTimer=null;}
 isPaused=false;
-isDailyStage=false; isDailyReplay=false; dailyLevelObj=null;
+isDailyStage=false; dailyLevelObj=null;
 var _wasReplay=replayMode;
 replayMode=false;
 // Block all leaked touch/click events globally during the home transition
@@ -386,7 +405,10 @@ if(gameRunning && !_wasReplay && !player.dead && !player.won) {
     if(elapsed > 0 && elapsed < 86400000) {
         globalData.timePlayed += elapsed;
         st.timePlayed = (st.timePlayed || 0) + elapsed;
+        todayPlayTime += elapsed; save('todayPlayTime', todayPlayTime);
     }
+    if(sessionRunTime + elapsed >= 60000) recordPlayDay();
+    checkPwaReward();
     levelStats[curLvl]=st; save('stats',levelStats);
     save('globalData', globalData);
 }
@@ -403,7 +425,7 @@ $('gameCanvas').classList.remove('grey');$('gameCanvas').classList.remove('shake
 $('gameTitleHUD').classList.remove('active');
 $('hudCenter').classList.remove('active');
 $('hudRight').classList.remove('active');
-$('hudLeft').style.display='none';$('freezeBtn').style.display='none';$('ghostBtn').style.display='none';
+$('hudLeft').style.display='none';$('freezeBtn').style.display='none';
 $('jZone').classList.remove('active');
 $('jBtn').classList.remove('active');
 $('arrowControls').classList.remove('active');
@@ -627,7 +649,7 @@ if(jumpBuf>0)jumpBuf-=dt;
 
 runTime = Date.now() - startTime;
 $('hudTime').textContent = (runTime/1000).toFixed(2);
-if(ghostsEnabled&&!replayMode&&!player.dead&&!player.won&&frameCount%5===0&&ghostFrames.length<4000&&!(typeof isDailyReplay!=='undefined'&&isDailyReplay)){var _gf={x:Math.round(player.x),y:Math.round(player.y),f:player.face,og:player.og,ph:player.at};if(player.djU)_gf.dj=1;if(_ghostTeleportFlag){_gf.tp=true;_ghostTeleportFlag=false;}ghostFrames.push(_gf);}
+if(ghostsEnabled&&!replayMode&&!player.dead&&!player.won&&frameCount%5===0&&ghostFrames.length<4000&&!_isDailyRun){var _gf={x:Math.round(player.x),y:Math.round(player.y),f:player.face,og:player.og,ph:player.at};if(player.djU)_gf.dj=1;if(_ghostTeleportFlag){_gf.tp=true;_ghostTeleportFlag=false;}ghostFrames.push(_gf);}
 var bt=bestTimes[curLvl];
 if(bt){
     var pct=Math.min(1,player.x/goalX);
@@ -722,7 +744,7 @@ if(p.t==='f'){player.won=true;finalizeRunConsumables();playSfx('win');vib([50,50
         particles.push({x:cx+Math.cos(ang)*dist,y:cy+Math.sin(ang)*dist,vx:-Math.cos(ang)*r(3,8),vy:-Math.sin(ang)*r(3,8),life:1,decay:0.015,color:theme.acc,size:r(3,6),type:'dot'});
     }
     particles.push({x:cx,y:cy,vx:0,vy:0,life:1,decay:0.02,color:theme.acc,type:'ring',size:80,grow:-3});
-    setTimeout(showWin,1000);
+    _winTimer=setTimeout(showWin,1000);
 }
 }
 }
@@ -846,11 +868,7 @@ for(var i=0;i<chips.length;i++){
     if(!c.col && player.x+player.w>c.x-12 && player.x<c.x+12 && player.y+player.h>c.y-12 && player.y<c.y+12){
         c.col=true;
         if(sessionCollectedChips.indexOf(i)<0)sessionCollectedChips.push(i);
-        // In daily replay mode: collect nothing, no effects, no score
-        if(typeof isDailyReplay!=='undefined'&&isDailyReplay){
-            $('hudChips').innerHTML='<span style="color:#ffd700">★ '+runGold+'</span> &nbsp; <span style="color:#ccc">♦ '+runSilver+'</span>';
-            continue;
-        }
+
         
         var cArr = bestChips[curLvl] || [];
         var isGold = !c.isArc && !c.kind && c.goldIdx!=null && !cArr[c.goldIdx];
@@ -977,12 +995,8 @@ if(replayMode){
     exitReplay();
     return;
 }
-// Daily replay completion: simple overlay, no rewards, no stats
-if(typeof isDailyReplay!=='undefined'&&isDailyReplay){
-    showDailyReplayWin();
-    return;
-}
-recordPlayDay();
+
+recordPlayDay();checkPwaReward();
 if(typeof isDailyStage!=='undefined'&&isDailyStage){
     showDailyWin();
     return;
@@ -996,14 +1010,12 @@ if(curLvl===0||curLvl===1){
     var _prev1=levelStats[1]&&levelStats[1].completions>0;
     var _wasLocked=!(_prev0&&_prev1);
     st.completions++;
-    if(!st.first&&deaths===0)st.first=true;
     st.silver = (st.silver || 0) + runSilver;
     st.contentVersion = STAGE_CONTENT_VERSION;
     levelStats[curLvl]=st;save('stats',levelStats);
     if(_wasLocked && isGhostUnlocked())_ghostJustUnlocked=true;
 }else{
     st.completions++;
-    if(!st.first&&deaths===0)st.first=true;
     st.silver = (st.silver || 0) + runSilver;
     st.contentVersion = STAGE_CONTENT_VERSION;
     levelStats[curLvl]=st;save('stats',levelStats);

@@ -1,17 +1,39 @@
 // === PWA LOGIC (Installable App) ===
 let deferredPrompt;
+var _isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredPrompt = e;
-  $('btnInstall').style.display = 'block';
+  var bi=$('btnInstall'); if(bi) bi.style.display='block';
+  if(typeof showPwaInstallBanner==='function') showPwaInstallBanner();
 });
+// iOS: show install button immediately (Safari doesn't support beforeinstallprompt)
+if(_isIOS){
+  var btn=$('btnInstall');
+  if(btn){btn.style.display='block';btn.textContent='📱 ADD TO HOME SCREEN';}
+}
 function installPWA() {
-  if (deferredPrompt) {
-    deferredPrompt.prompt();
-    deferredPrompt.userChoice.then(() => {
-      deferredPrompt = null;
-      $('btnInstall').style.display = 'none';
-    });
+  if(_isIOS && typeof showIOSInstallHelp==='function'){save('pwaRewardPending',true);showIOSInstallHelp();return;}
+  if(deferredPrompt){
+    try{
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then((c)=>{
+        if(c.outcome==='accepted'){claimPwaReward();}
+        deferredPrompt=null;
+        var bi=$('btnInstall'); if(bi) bi.style.display='none';
+        hidePwaBanner();
+      }).catch(function(e){
+        console.warn('PWA prompt error:',e);
+        deferredPrompt=null;
+        addFloat(W.innerWidth/2,W.innerHeight/2,'Install failed. Try again.','#f80');
+      });
+    }catch(e){
+      console.warn('PWA prompt exception:',e);
+      deferredPrompt=null;
+      addFloat(W.innerWidth/2,W.innerHeight/2,'Install not available.','#f80');
+    }
+  }else if(!_isIOS){
+    addFloat(W.innerWidth/2,W.innerHeight/2,'Install not available. Try Chrome/Android.','#f80');
   }
 }
 function initPWA() {
@@ -123,6 +145,12 @@ function resizeBootCanvas(){
     if(bootPCanvas){bootPCanvas.width=window.innerWidth;bootPCanvas.height=window.innerHeight;}
 }
 resizeBootCanvas();
+// Show a random tip on boot screen
+var bootTipsEl=document.getElementById('bootTips');
+if(bootTipsEl&&typeof TIPS!=='undefined'&&TIPS.length>0){
+    bootTipsEl.textContent='💡 '+TIPS[Math.floor(Math.random()*TIPS.length)];
+    setTimeout(function(){if(bootTipsEl)bootTipsEl.style.opacity='1';},400);
+}
 var bootParts=[];
 function bootBurst(){
     var cx=window.innerWidth/2,cy=window.innerHeight/2;

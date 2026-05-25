@@ -11,9 +11,9 @@ var lastDeathType='fall';
 var runGold=0, runSilver=0, earnedSilver=0, lastRunSilver=0;
 var stylePoints=0,comboCount=0,comboTimer=0,floatTexts=[];
 var shieldUsed=false,shieldHits=0,dblshieldActivated=false,dblshieldUsed=false,shieldInvuln=0,airDashUsed=false,lastPlatPos={x:150,y:400},activeConsumable=null,triplejumpActivated=false,tripleJumpCD=0,runScore=0,timeFrozen=0,freezeCD=0,consumableTimefreeze=false,timefreezeUsed=false,phaseDashUsed=false;
-var sessionCollectedChips=[],sessionStage=-1;
-var ghostFrames=[],ghostIdx=0,ghostVisible=true,currentGhost=null,runUsedResurrect=false,_ghostTeleportFlag=false,replayMode=false,_replayEnded=false,_isFreshStageEntry=false;
-var isDailyReplay=false;var replayDailyDate='';var replayDailyRank=0;
+var sessionCollectedChips=[],sessionStage=-1,sessionRunTime=0;
+var ghostFrames=[],ghostIdx=0,ghostVisible=true,currentGhost=null,runUsedResurrect=false,_ghostTeleportFlag=false,replayMode=false,_replayEnded=false,_isFreshStageEntry=false,_isDailyRun=false;
+var _winTimer=null,_dieTimer=null;
 var startTime=0, runTime=0;
 var camX=0,camY=0,stars=[],bgShapes=[],atmosParts=[],dayNightStart=0,lightningStrikes=[],nextLightningT=0;
 var player={x:150,y:300,w:22,h:48,vx:0,vy:0,og:false,face:1,at:0,dead:false,won:false,djU:false,djCD:0,djMax:180};
@@ -23,6 +23,19 @@ var platforms=[],spikes=[],chips=[],lasers=[],ziplines=[],particles=[];
 var wParts=[],wTimer=0,flash=0,deathFlash=0,gemFlash=0;
 var hudDistDisplay=0;
 var joy={a:false,sx:0,sy:0,cx:0,cy:0,dx:0,dy:0,mr:48};
+
+function showStageTooltip(text,color){
+    var existing=$('stageTooltip');
+    if(existing) existing.remove();
+    var el=document.createElement('div');
+    el.id='stageTooltip';
+    el.style.cssText='position:fixed;left:50%;bottom:22%;transform:translateX(-50%);z-index:300;background:rgba(0,0,0,0.92);border:1px solid '+color+';color:#fff;font-size:0.75rem;font-family:monospace;padding:10px 18px;border-radius:10px;backdrop-filter:blur(8px);box-shadow:0 4px 24px rgba(0,0,0,0.6);pointer-events:none;opacity:0;transition:opacity 0.3s;max-width:90vw;text-align:center;line-height:1.5;white-space:pre-line;';
+    el.textContent=text;
+    document.body.appendChild(el);
+    el.offsetHeight;
+    el.style.opacity='1';
+    setTimeout(function(){el.style.opacity='0';setTimeout(function(){if(el.parentNode)el.remove();},300);},2800);
+}
 var jumpP=false,jumpWP=false,jumpBuf=0;
 var arrLeftP=false,arrRightP=false;
 var theme=THEMES[0];
@@ -70,23 +83,33 @@ function scrambleText(id, finalTxt, color) {
 }
 
 // === ORIENTATION ===
+function toggleFullscreen(){
+    var el=document.documentElement;
+    if(document.fullscreenElement||document.webkitFullscreenElement||document.mozFullScreenElement||document.msFullscreenElement){
+        if(document.exitFullscreen)document.exitFullscreen().catch(function(){});
+        else if(document.webkitExitFullscreen)document.webkitExitFullscreen();
+        else if(document.mozCancelFullScreen)document.mozCancelFullScreen();
+        else if(document.msExitFullscreen)document.msExitFullscreen();
+    }else{
+        var rfs=el.requestFullscreen||el.webkitRequestFullScreen||el.mozRequestFullScreen||el.msRequestFullscreen;
+        if(rfs)rfs.call(el).catch(function(){});
+    }
+}
 function attemptFullscreenAndLock() {
     var el = document.documentElement;
     // Try lock without fullscreen first (works in standalone PWA on Android)
-    if(orient !== 'off' && screen.orientation && screen.orientation.lock){
+    if(screen.orientation && screen.orientation.lock){
         try{
-            screen.orientation.lock(orient).catch(function(){
-                // If direct lock failed, try entering fullscreen first then lock
+            screen.orientation.lock('landscape').catch(function(){
                 var rfs = el.requestFullscreen || el.webkitRequestFullScreen || el.mozRequestFullScreen || el.msRequestFullscreen;
                 if(rfs){
                     rfs.call(el).then(function(){
-                        screen.orientation.lock(orient).catch(function(e){console.log('Orientation lock failed:',e);});
+                        screen.orientation.lock('landscape').catch(function(e){console.log('Orientation lock failed:',e);});
                     }).catch(function(err){console.log('Fullscreen failed:',err);});
                 }
             });
         }catch(e){console.log('Lock threw:',e);}
     } else {
-        // Fallback: just request fullscreen for visual
         var rfs = el.requestFullscreen || el.webkitRequestFullScreen || el.mozRequestFullScreen || el.msRequestFullscreen;
         if(rfs)rfs.call(el).catch(function(){});
     }
@@ -94,30 +117,29 @@ function attemptFullscreenAndLock() {
 function checkOrient(){
     if(!bootFinished){
         bootFinished = true;
+        // Stage select follows natural device orientation; gameplay locks to landscape via attemptFullscreenAndLock()
         initLevelSelect();
         // Backfill: if all stages already cleared but ceremony not shown
         if(checkChampionStatus() && !championStatus.ceremonyShown){
             setTimeout(showChampionCeremony, 800);
         }
-        // Try lock orientation immediately (works in PWA standalone mode on Android Chrome)
-        if(orient !== 'off' && screen.orientation && screen.orientation.lock){
-            try{screen.orientation.lock(orient).catch(function(){});}catch(e){}
+        // Always lock to landscape immediately
+        if(screen.orientation && screen.orientation.lock){
+            try{screen.orientation.lock('landscape').catch(function(){});}catch(e){}
         }
-        // Lock orientation on first user gesture (so menus stay locked too, browser tab fallback)
-        if(orient !== 'off'){
-            var lockOnce = function(){
-                document.removeEventListener('pointerdown', lockOnce, true);
-                document.removeEventListener('keydown', lockOnce, true);
-                attemptFullscreenAndLock();
-            };
-            document.addEventListener('pointerdown', lockOnce, true);
-            document.addEventListener('keydown', lockOnce, true);
-        }
+        // Also lock on first user gesture (browser tab fallback)
+        var lockOnce = function(){
+            document.removeEventListener('pointerdown', lockOnce, true);
+            document.removeEventListener('keydown', lockOnce, true);
+            attemptFullscreenAndLock();
+        };
+        document.addEventListener('pointerdown', lockOnce, true);
+        document.addEventListener('keydown', lockOnce, true);
     }
 }
 
 var _lastLayoutKey = currentLayoutKey();
-W.addEventListener('resize',function(){
+function onViewportResize(){
     resize();
     if(bootFinished)checkOrient();
     var nk = currentLayoutKey();
@@ -126,6 +148,27 @@ W.addEventListener('resize',function(){
         loadCurrentCtrlLayout();
         applyJoySettings();
         if(typeof applyBtnSize==='function')applyBtnSize();
+        if(typeof applyJumpBtnSize==='function')applyJumpBtnSize();
+    }
+}
+W.addEventListener('resize',onViewportResize);
+if(W.visualViewport)W.visualViewport.addEventListener('resize',onViewportResize);
+
+// Day rollover detection: refresh day-dependent UI when app becomes visible after 5 AM UTC+7
+var _lastCheckedDay = getGameDayShort();
+document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState !== 'visible') return;
+    var today = getGameDayShort();
+    if(today !== _lastCheckedDay){
+        _lastCheckedDay = today;
+        if(bootFinished){
+            updateLsStreakBtn();
+            updateLsDailyBtn();
+            updateLsChestBtn();
+            if($('streakCalendar').classList.contains('active')){
+                renderStreakCalendar();
+            }
+        }
     }
 });
 
@@ -149,6 +192,18 @@ function initLevelSelect(){
         else{gb.style.display='block';gb.innerHTML='\ud83d\udc7b '+done+'/2 completed \u2014 clear Stage 1 & 2 to unlock <b style="color:#0ff;">Ghost Rival</b> for free!';}
     }
     if(hintsSeen<3){var bh=$('btnHints');if(bh){bh.classList.add('active');bh.classList.remove('fading');hintsSeen++;save('hintsSeen',hintsSeen);setTimeout(function(){bh.classList.add('fading');},5000);setTimeout(function(){bh.classList.remove('active');bh.classList.remove('fading');},6000);}}
+    // PWA install banner (show if not installed and reward not claimed)
+    showPwaInstallBanner();
+    // Stage-select random tip (same style/timing as gameplay tooltip)
+    var onboardActive=$('onboard')&&$('onboard').classList.contains('active');
+    var tt=$('homeTooltip');
+    if(tt&&!onboardActive&&typeof TIPS!=='undefined'&&TIPS.length>0){
+        var tip=TIPS[Math.floor(Math.random()*TIPS.length)];
+        tt.innerHTML='<b style="color:#0ff;font-size:1rem;line-height:1;">💡</b> '+tip;
+        tt.classList.add('active');
+        if(W.tooltipTimeout)clearTimeout(W.tooltipTimeout);
+        W.tooltipTimeout=setTimeout(function(){tt.classList.remove('active');},3000);
+    }
     $('levelSelect').classList.add('entering');
     setTimeout(function(){ $('levelSelect').classList.remove('entering'); }, 500);
     cancelThumbAnimations();
@@ -157,16 +212,15 @@ function initLevelSelect(){
     else activeIdx = 0;
     if(!unlocked.includes(activeIdx)) activeIdx = unlocked.reduce(function(a,b){return Math.max(a,b);},0);
     
-    // Build dot nav
+    // Build segmented progress nav
     var dotNav = $('dotNav');
     dotNav.innerHTML = '';
     for(var i=0; i<LEVELS.length; i++) {
-        var dot = document.createElement('button');
-        dot.className = 'dot' + (unlocked.includes(i) ? ' unlocked' : ' locked');
-        dot.type = 'button';
-        dot.style.setProperty('--dot-color', THEMES[LEVELS[i].theme].acc);
-        dot.onclick = (function(idx){ return function(){ activeIdx=idx; updateCarousel(); }; })(i);
-        dotNav.appendChild(dot);
+        var seg = document.createElement('div');
+        seg.className = 'seg' + (unlocked.includes(i) ? ' unlocked' : ' locked');
+        seg.style.setProperty('--seg-color', THEMES[LEVELS[i].theme].acc);
+        seg.onclick = (function(idx){ return function(){ activeIdx=idx; updateCarousel(); }; })(i);
+        dotNav.appendChild(seg);
     }
     
     // Init single thumbnail
@@ -177,11 +231,55 @@ function initLevelSelect(){
     setupSwipe();
 }
 
+function showPwaInstallBanner(){
+    var banner=$('pwaBanner');
+    var lsBtn=$('lsInstallBtn');
+    var pwaSupported=('serviceWorker' in navigator);
+    var installedAt=parseInt(load('pwaInstalledAt',0),10)||0;
+    var rewardClaimed=load('pwaRewardClaimed',false);
+    var inStandalone=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true;
+    var bannerDismissed=load('pwaBannerDismissed',false);
+    var shouldShow=pwaSupported&&!inStandalone&&installedAt===0&&!rewardClaimed&&!bannerDismissed;
+    var isLandscapeNarrow=(W.matchMedia&&W.matchMedia('(orientation: landscape) and (max-height: 600px)').matches);
+    if(banner)banner.style.display=(shouldShow&&!isLandscapeNarrow)?'flex':'none';
+    if(lsBtn)lsBtn.style.display=(shouldShow&&isLandscapeNarrow)?'inline-block':'none';
+}
+function hidePwaBanner(){
+    var banner=$('pwaBanner');
+    var lsBtn=$('lsInstallBtn');
+    if(banner)banner.style.display='none';
+    if(lsBtn)lsBtn.style.display='none';
+}
+function dismissPwaBanner(){
+    hidePwaBanner();
+    save('pwaBannerDismissed',true);
+}
+function handlePwaBannerClick(){
+    installPWA();
+}
+function claimPwaReward(){
+    if(load('pwaRewardClaimed',false))return;
+    silverWallet+=100;
+    save('silver',silverWallet);
+    save('pwaRewardClaimed',true);
+    save('pwaRewardPending',false);
+    queueSync();
+    hidePwaBanner();
+    addFloat(W.innerWidth/2,W.innerHeight-60,'+100 ♦','#ffd700');
+    vib(10);
+    if($('lsTopSilver'))$('lsTopSilver').textContent=silverWallet;
+}
+function checkPwaReward(){
+    if(!load('pwaRewardPending',false))return;
+    claimPwaReward();
+}
+
 function updateCarousel() {
     var details = $('lsDetails');
     details.classList.remove('entering');
     void details.offsetWidth;
     details.classList.add('entering');
+    details.scrollTop = 0;
     var lv = LEVELS[activeIdx];
     var th = THEMES[lv.theme];
     var isUn = unlocked.includes(activeIdx);
@@ -202,7 +300,7 @@ function updateCarousel() {
     wrap.className = (isUn ? '' : 'locked') + sw;
     // Character portrait: match thumbnail border theme
     var port = $('lsCharPortrait');
-    if(port){port.style.borderColor = isUn ? th.acc : '#333'; port.style.boxShadow = isUn ? '0 0 18px ' + accHex + '30' : 'none';}
+    if(port){port.style.filter = isUn ? 'drop-shadow(0 0 8px ' + accHex + '60)' : 'none';}
     
     // Card number and lock
     $('cardNum').textContent = activeIdx + 1;
@@ -214,22 +312,16 @@ function updateCarousel() {
     var bChipsCount = 0;
     for(var j=0; j<bChipsArr.length; j++) if(bChipsArr[j]) bChipsCount++;
     
-    var tMin = Math.floor((st.timePlayed || 0) / 60000);
-    var hm = Math.floor(tMin / 60);
-    var mm = tMin % 60;
-    var timeStr = hm > 0 ? (hm + 'h ' + mm + 'm') : (mm + 'm');
-    if((st.timePlayed || 0) > 0 && tMin === 0) timeStr = '<1m';
-    if((st.timePlayed || 0) === 0) timeStr = '0m';
-    
     var ghostIcon=isUn?(ghostData[activeIdx]&&ghostData[activeIdx].length>0?'  \ud83d\udc7b':'  \ud83d\udeab'):'';
-    $('cardStatTR').textContent = isUn ? '\u23f1\ufe0f ' + timeStr + ghostIcon : '';
+    var bestTimeStr = bTime ? (bTime/1000).toFixed(2)+'s' : '--';
+    $('cardStatTR').innerHTML = isUn ? '<span style="background:rgba(0,0,0,0.5);padding:2px 8px;border-radius:10px;">\u23f1\ufe0f Best: ' + bestTimeStr + ghostIcon + '</span>' : '';
     $('cardStatBL').textContent = isUn ? '\ud83c\udfae ' + st.attempts + '  \ud83d\udea9 ' + st.completions : '';
-    $('cardStatBR').textContent = isUn ? '\u2605 ' + bChipsCount + '/' + cMax + '  \u2666 ' + (st.silver||0) : '';
+    $('cardStatBR').textContent = isUn ? '\u2b50 ' + bChipsCount + '/' + cMax + '  \ud83d\udc8e ' + (st.silver||0) : '';
     
-    // Dot nav update
-    var dots = $('dotNav').children;
-    for(var i=0; i<dots.length; i++) {
-        dots[i].className = 'dot' + (unlocked.includes(i) ? ' unlocked' : ' locked') + (i === activeIdx ? ' active' : '');
+    // Segmented nav update
+    var segs = $('dotNav').children;
+    for(var i=0; i<segs.length; i++) {
+        segs[i].className = 'seg' + (unlocked.includes(i) ? ' unlocked' : ' locked') + (i === activeIdx ? ' active' : '');
     }
     
     // Reinit thumbnail for new level
@@ -248,14 +340,40 @@ function updateCarousel() {
     $('lsPlayerName').textContent = getDisplayName();
     $('lsTopGold').textContent = getGoldBalance();
     $('lsTopSilver').textContent = silverWallet;
-    $('gMatches').textContent = globalData.matches;
+    
+    // Compact global stats strip
     var totalMin = Math.floor(globalData.timePlayed / 60000);
+    $('gMatches').textContent = globalData.matches;
     $('gTime').textContent = Math.floor(totalMin/60) > 0 ? Math.floor(totalMin/60) + 'h ' + (totalMin%60) + 'm' : (totalMin%60) + 'm';
-    $('gClear').textContent = clearPct + '%';
+    var todayMin = Math.floor((todayPlayTime||0) / 60000);
+    $('gToday').textContent = (todayMin > 0 ? (Math.floor(todayMin/60) > 0 ? Math.floor(todayMin/60) + 'h ' : '') + (todayMin%60) + 'm' : '<1m');
+    $('gClear').textContent = levelsCleared + '/' + LEVELS.length;
+    var lsBottomFill=$('lsBottomFill'); if(lsBottomFill) lsBottomFill.style.width=clearPct+'%';
+    var maxGoldGems = 0;
+    for(var gi=0; gi<LEVELS.length; gi++) maxGoldGems += getMaxChips(gi);
+    $('gGems').textContent = totalGold + '/' + maxGoldGems;
     $('gDeaths').textContent = globalData.deadFall + globalData.deadSpike + globalData.deadLaser;
-    $('gDeadFall').textContent = globalData.deadFall;
-    $('gDeadSpike').textContent = globalData.deadSpike;
-    $('gDeadLaser').textContent = globalData.deadLaser;
+    
+    // Tooltip click handlers for global stats
+    var _gstats=$('lsGlobalStats').querySelectorAll('.gs-stat');
+    if(_gstats.length>=6){
+        _gstats[0].onclick=function(){showStageTooltip('🎮 Total matches played: '+globalData.matches,'#0ff');};
+        _gstats[1].onclick=function(){showStageTooltip('⏱️ Total play time: '+$('gTime').textContent,'#0ff');};
+        _gstats[2].onclick=function(){showStageTooltip('📅 Play time today: '+$('gToday').textContent,'#0ff');};
+        _gstats[3].onclick=function(){showStageTooltip('🚩 Stages cleared: '+levelsCleared+' / '+LEVELS.length+' ('+clearPct+'%)','#0ff');};
+        _gstats[4].onclick=function(){showStageTooltip('⭐ Gold gems: '+totalGold+' / '+maxGoldGems,'#ffd700');};
+        _gstats[5].onclick=function(){showStageTooltip('💀 Deaths — Falls: '+globalData.deadFall+' | Spikes: '+globalData.deadSpike+' | Lasers: '+globalData.deadLaser,'#f44');};
+    }
+    
+    // Ghost replay availability (must compute BEFORE watch button check)
+    var hasGhostReplay=ghostsEnabled&&isUn&&ghostData[activeIdx]&&ghostData[activeIdx].length>0;
+    
+    // Ghost rival watch button (inside card thumbnail)
+    var cgb=$('cardGhostBtn');
+    if(cgb)cgb.style.display=(hasSkill('ghost')&&hasGhostReplay)?'flex':'none';
+    // Hide old outside-card row
+    var gwr=$('lsGhostRow');
+    if(gwr)gwr.style.display='none';
     
     var rankInfo = getPlayerRankInfo();
     var ltr=$('lsTopRank');
@@ -267,12 +385,54 @@ function updateCarousel() {
     $('lsTags').className = 'tag ' + (isUn ? diffClass : '');
     var stCv=(st&&st.contentVersion)||0;
     var isUpdated=isUn&&st.completions>0&&activeIdx>=STAGE_CONTENT_AFFECTS_FROM_LVL&&stCv<STAGE_CONTENT_VERSION;
-    scrambleText('lsTags', lv.diff + ' | ' + th.name + (isUpdated?' | \ud83d\udd04 UPDATED':''), null);
-    var pe=$('lsPhysics');if(pe){var th2=THEMES[lv.theme];var hasGhostReplay=ghostsEnabled&&isUn&&ghostData[activeIdx]&&ghostData[activeIdx].length>0;var baseTxt=gravLabel(th2.grav)+' \u2022 '+fricLabel(th2.fric)+' \u2022 '+(th2.weather!=='clear'?th2.weather.toUpperCase():'CLEAR');if(hasSkill('ghost')&&hasGhostReplay){pe.innerHTML=baseTxt+' \u2022 \ud83d\udc7b <span id="lsGhostWatch" style="cursor:pointer;text-decoration:underline;color:#a0f;" role="button" tabindex="0">watch replay \u25b6</span>';var gw=$('lsGhostWatch');if(gw)gw.onclick=function(e){e.stopPropagation();startReplay(activeIdx);};}else if(hasSkill('ghost')){pe.innerHTML=baseTxt+' \u2022 <span style="color:#888;">\ud83d\udc7b \ud83d\udeab</span>';}else{pe.textContent=baseTxt;}}
-    scrambleText('lsTime', bTime ? (bTime/1000).toFixed(2)+'s' : '--', bTime ? '#0f8' : '#aaa');
-    scrambleText('lsChips', st.completions > 0 ? bChipsCount+'/'+cMax : '0/'+cMax);
-    scrambleText('lsAtt', st.attempts + '');
-    scrambleText('lsScore', (bestScores[activeIdx]||0)+'');
+    var th2=THEMES[lv.theme];
+    var weatherTxt=th2.weather!=='clear'?th2.weather.toUpperCase():'CLEAR';
+    var ghostTxt='';
+    if(hasSkill('ghost')) ghostTxt=hasGhostReplay?' • \ud83d\udc7b':' • \ud83d\udc7b\ud83d\udeab';
+    $('lsTags').innerHTML=lv.diff+(isUpdated?' | \ud83d\udd04 UPDATED':'')+' • '+gravLabel(th2.grav)+' • '+fricLabel(th2.fric)+' • '+weatherTxt+ghostTxt;
+    // stat cards removed — stats now shown in thumbnail overlay only
+    
+    // Tag tooltip — level details
+    var tagsEl=$('lsTags');
+    if(tagsEl){
+        tagsEl.style.cursor='pointer';
+        tagsEl.onclick=function(){
+            var themeName=THEMES[lv.theme]?THEMES[lv.theme].name:'Unknown';
+            var tip=(activeIdx+1)+'. '+lv.name+' — '+lv.diff+
+                    '\n🎨 Theme: '+themeName+
+                    '\n⚖️ '+gravLabel(th2.grav)+
+                    '\n🧊 '+fricLabel(th2.fric)+
+                    '\n🌦️ Weather: '+weatherTxt+
+                    (hasSkill('ghost')?(hasGhostReplay?'\n👻 Ghost rival: recorded & ready':'\n👻🚫 Ghost rival: not recorded yet'):'')+
+                    (isUpdated?'\n🔄 Recently updated — replay to clear badge':'');
+            showStageTooltip(tip, th.acc);
+        };
+    }
+    
+    // Bottom bar tooltip — progress & champion info
+    var barEl=$('lsBottomBar');
+    if(barEl){
+        barEl.onclick=function(){
+            var tip='🚩 Progress: '+levelsCleared+' / '+LEVELS.length+' stages cleared ('+clearPct+'%)';
+            if(championStatus.unlocked){
+                tip+='\n\n★ You are a Champion! ★'+
+                     '\n⚡ Reflex Dash (no slot needed)'+
+                     '\n✨ Champion\'s Aura cosmetic'+
+                     '\n💎 1.5× Silver multiplier'+
+                     '\n🏅 MASTER badge on your name'+
+                     '\n🔮 Hidden Master Gems (+2 gold each stage)';
+            }else{
+                tip+='\n\nClear all '+LEVELS.length+' stages to become Champion!'+
+                     '\nRewards unlocked:'+
+                     '\n⚡ Reflex Dash — dash without double-jump'+
+                     '\n✨ Champion\'s Aura — exclusive glow cosmetic'+
+                     '\n💎 1.5× Silver on every gem pickup'+
+                     '\n🏅 MASTER badge next to your name'+
+                     '\n🔮 Hidden Master Gems in every stage';
+            }
+            showStageTooltip(tip, '#0ff');
+        };
+    }
     
     var btn = $('lsPlayBtn');
     if(isUn) {
@@ -320,7 +480,7 @@ sendMetric('ui_event',{action:'play_clicked',meta:String(activeIdx)});
         flash.style.opacity = '1';
         
         setTimeout(function() {
-            if(orient !== 'off') attemptFullscreenAndLock();
+            attemptFullscreenAndLock();
             activeConsumable=null;consumableTimefreeze=false;dblshieldActivated=false;dblshieldUsed=false;timefreezeUsed=false;triplejumpActivated=false;shieldInvuln=0;
             if(consumableInv.dblshield>0){shieldHits=2;dblshieldActivated=true;}
             if(consumableInv.triplejump>0){activeConsumable='triplejump';triplejumpActivated=true;}
@@ -543,7 +703,7 @@ html+='<div style="display:flex;justify-content:space-between;align-items:center
 }
 el.innerHTML=html;
 }
-function buyPauseCon(id){var c=CONSUMABLES.find(function(x){return x.id===id;});if(!c||silverWallet<c.cost)return;silverWallet-=c.cost;save('silver',silverWallet);var activated=false;if(gameRunning&&!player.dead&&!player.won){if(id==='triplejump'&&activeConsumable!=='triplejump'){activeConsumable='triplejump';tripleJumpCD=0;activated=true;}else if(id==='dblshield'&&!dblshieldActivated){shieldHits=2;dblshieldActivated=true;dblshieldUsed=true;activated=true;}else if(id==='timefreeze'&&!consumableTimefreeze){consumableTimefreeze=true;timefreezeUsed=true;freezeCD=0;activated=true;}}if(activated){addFloat(player.x+player.w/2,player.y-20,'ACTIVATED!','#0f8');vib([10,20,30]);}else{consumableInv[id]=(consumableInv[id]||0)+1;save('consumableInv',consumableInv);vib(10);}renderPauseShop();}
+function buyPauseCon(id){var c=CONSUMABLES.find(function(x){return x.id===id;});if(!c||silverWallet<c.cost)return;silverWallet-=c.cost;save('silver',silverWallet);var activated=false;if(gameRunning&&!player.dead&&!player.won){if(id==='triplejump'&&activeConsumable!=='triplejump'){activeConsumable='triplejump';tripleJumpCD=0;activated=true;}else if(id==='dblshield'&&!dblshieldActivated){shieldHits=2;dblshieldActivated=true;dblshieldUsed=true;activated=true;}else if(id==='timefreeze'&&!consumableTimefreeze){consumableTimefreeze=true;timefreezeUsed=true;freezeCD=0;activated=true;}}if(activated){addFloat(player.x+player.w/2,player.y-20,'ACTIVATED!','#0f8');vib([10,20,30]);}else{consumableInv[id]=(consumableInv[id]||0)+1;save('consumableInv',consumableInv);vib(10);}renderPauseShop();queueSync();}
 
 function finalizeRunConsumables(){
     // dblshield: only consume from inventory if it was actually used
@@ -578,12 +738,14 @@ showFps=$('setShowFps').value==='1';save('showFps',showFps);
 save('sfx',sfxOn);save('mus',musOn);
 ctrlMode=$('setCtrl').value;
 vibrateOn=$('setVibrate').value==='1';
-if($('setOrient')){var _newOrient=$('setOrient').value;if(_newOrient!==orient){orient=_newOrient;save('orient',orient);if(screen.orientation&&screen.orientation.lock)screen.orientation.lock(orient).catch(function(){});}}
+
 save('ctrl',ctrlMode);save('vibrate',vibrateOn);
+if($('setOrient')){orient=$('setOrient').value;save('orient',orient);}
 if($('setAutoRetry')){autoRetryDelay=$('setAutoRetry').value;save('autoRetryDelay',autoRetryDelay);}
 
 if(!musOn) stopMusic();
 $('settings').classList.remove('active');
+queueSync();
 }
 
 function openChangelog(){$('settings').classList.remove('active');$('changelog').classList.add('active');}
@@ -599,7 +761,74 @@ function restartGame(){
 }
 function closeChangelog(){$('changelog').classList.remove('active');$('settings').classList.add('active');}
 
+// === PROFILE ===
+function openProfile(){
+    $('profile').classList.add('active');
+    renderProfile();
+}
+function closeProfile(){$('profile').classList.remove('active');}
+function renderProfile(){
+    var rankInfo=getPlayerRankInfo();
+    $('pfRank').textContent=rankInfo.current.name;
+    $('pfRank').style.color=rankInfo.current.color;
+    $('pfRank').style.borderColor=rankInfo.current.color;
+    $('pfName').textContent=getDisplayName();
+    $('pfGold').textContent=getGoldBalance();
+    $('pfSilver').textContent=silverWallet;
+    $('pfMatches').textContent=globalData.matches;
+    updateSyncStatusText();
+    var totalMin=Math.floor(globalData.timePlayed/60000);
+    $('pfTime').textContent=Math.floor(totalMin/60)>0?Math.floor(totalMin/60)+'h '+(totalMin%60)+'m':(totalMin%60)+'m';
+    var levelsCleared=0;
+    for(var i=0;i<LEVELS.length;i++)if(levelStats[i]&&levelStats[i].completions>0)levelsCleared++;
+    $('pfClear').textContent=Math.floor((levelsCleared/LEVELS.length)*100)+'%';
+    $('pfDeaths').textContent=globalData.deadFall+globalData.deadSpike+globalData.deadLaser;
+    $('pfDeadFall').textContent=globalData.deadFall;
+    $('pfDeadSpike').textContent=globalData.deadSpike;
+    $('pfDeadLaser').textContent=globalData.deadLaser;
+    renderProfileRank();
+}
+function renderProfileRank(){
+    var info=getPlayerRankInfo();
+    var html='<div style="font-size:1.1rem;font-weight:900;color:'+info.current.color+';text-shadow:0 0 8px '+info.current.color+';text-transform:uppercase;margin-bottom:8px;text-align:center;">'+info.current.name+'</div>';
+    html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">';
+    html+='<div><div style="font-size:0.65rem;color:#888;margin-bottom:6px;border-bottom:1px solid #333;padding-bottom:4px;">TIERS</div>';
+    for(var i=0;i<RANKS.length;i++){var r=RANKS[i],isCur=r.name===info.current.name,opac=info.score>=r.min?1:0.3;
+    html+='<div style="display:flex;justify-content:space-between;margin-bottom:4px;opacity:'+opac+';font-size:0.7rem;"><span style="color:'+(isCur?r.color:'#ccc')+';font-weight:'+(isCur?'bold':'normal')+';">'+(isCur?'▶ ':'')+r.name+'</span><span style="font-family:monospace;color:#888;">'+r.min+'pt</span></div>';}
+    if(info.next){var pct=Math.max(0,Math.min(100,Math.floor((info.score-info.current.min)/(info.next.min-info.current.min)*100)));
+    html+='<div style="margin-top:8px;"><div style="font-size:0.55rem;color:#888;margin-bottom:2px;display:flex;justify-content:space-between;"><span>TO '+info.next.name+'</span><span style="font-family:monospace;">'+info.score+'/'+info.next.min+'</span></div><div style="width:100%;background:#222;height:4px;border-radius:2px;overflow:hidden;"><div style="width:'+pct+'%;background:'+info.next.color+';height:100%;"></div></div></div>';
+    }else{html+='<div style="margin-top:8px;text-align:center;color:#0f8;font-weight:bold;font-size:0.7rem;">MAX RANK!</div>';}
+    html+='</div>';
+    html+='<div><div style="font-size:0.65rem;color:#888;margin-bottom:6px;border-bottom:1px solid #333;padding-bottom:4px;">EARN POINTS</div><div style="font-size:0.65rem;color:#aaa;line-height:1.6;">';
+    html+='<div style="display:flex;justify-content:space-between;"><span>★ Gold Gem</span><span style="color:#ffd700;font-family:monospace;">+50</span></div>';
+    html+='<div style="display:flex;justify-content:space-between;"><span>♦ Silver</span><span style="color:#c0c0c0;font-family:monospace;">+5</span></div>';
+    html+='<div style="display:flex;justify-content:space-between;"><span>🚩 Clear</span><span style="color:#0f8;font-family:monospace;">+50</span></div>';
+    html+='<div style="display:flex;justify-content:space-between;"><span>🎮 Match</span><span style="color:#0af;font-family:monospace;">+2</span></div>';
+    html+='</div></div></div>';
+    $('pfRankSection').innerHTML=html;
+}
+
 // === STREAK CALENDAR ===
+function getVisualStreak(){
+    var days=getCalendarDays();
+    var todayIdx=-1;
+    for(var ti=0;ti<days.length;ti++){if(days[ti].isToday){todayIdx=ti;break;}}
+    var streakChain={};
+    var chainStarted=false;
+    for(var i=todayIdx;i>=0;i--){
+        var d=days[i];
+        if(d.isFuture)continue;
+        if(d.isPlayed||d.isFrozen){
+            streakChain[d.day]=true;
+            chainStarted=true;
+        }else if(chainStarted){
+            break;
+        }
+    }
+    var count=0;
+    for(var k in streakChain){if(streakChain.hasOwnProperty(k))count++;}
+    return count;
+}
 function openStreakCalendar(){
     renderStreakCalendar();
     $('streakCalendar').classList.add('active');
@@ -609,6 +838,24 @@ function renderStreakCalendar(){
     var strip=$('streakStrip');
     if(!strip)return;
     var days=getCalendarDays();
+    var today=getGameDayShort();
+    var todayIdx=-1;
+    for(var ti=0;ti<days.length;ti++){if(days[ti].isToday){todayIdx=ti;break;}}
+    // Build visual streak chain: consecutive played/frozen days ending at today (or most recent before today)
+    var streakChain={};
+    var chainStarted=false;
+    for(var i=todayIdx;i>=0;i--){
+        var d=days[i];
+        if(d.isFuture)continue;
+        if(d.isPlayed||d.isFrozen){
+            streakChain[d.day]=true;
+            chainStarted=true;
+        }else if(chainStarted){
+            break;
+        }
+    }
+    var visStreak=0;
+    for(var k in streakChain){if(streakChain.hasOwnProperty(k))visStreak++;}
     var html='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px 4px;max-width:320px;margin:0 auto;">';
     var weekLabels=['M','T','W','T','F','S','S'];
     for(var wi=0;wi<7;wi++){
@@ -616,16 +863,23 @@ function renderStreakCalendar(){
     }
     for(var i=0;i<days.length;i++){
         var d=days[i];
+        var inChain=streakChain[d.day];
         var circleStyle='width:22px;height:22px;border-radius:50%;border:2px solid;margin:0 auto;';
-        if(d.isPlayed){
-            circleStyle+='background:#0ff;border-color:#0ff;box-shadow:0 0 6px rgba(0,255,255,0.4);';
+        if(d.isToday){
+            circleStyle+='background:#fff;border-color:#fff;box-shadow:0 0 8px rgba(255,255,255,0.6);';
         }else if(d.isFuture){
-            circleStyle+='border-color:rgba(255,255,255,0.15);background:transparent;';
+            circleStyle+='border-color:rgba(255,255,255,0.12);background:transparent;';
+        }else if(inChain){
+            if(d.isFrozen){
+                circleStyle+='background:#0af;border-color:#0af;box-shadow:0 0 6px rgba(0,170,255,0.4);';
+            }else{
+                circleStyle+='background:#f90;border-color:#f90;box-shadow:0 0 6px rgba(255,153,0,0.4);';
+            }
         }else{
-            circleStyle+='border-color:rgba(255,255,255,0.25);background:transparent;';
+            circleStyle+='border-color:rgba(255,255,255,0.2);background:transparent;';
         }
         if(d.isToday) circleStyle+='transform:scale(1.2);';
-        var labelColor=d.isToday?'#0ff':d.isFuture?'#444':'#666';
+        var labelColor=d.isToday?'#fff':d.isFuture?'#444':'#666';
         html+='<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">';
         html+='<div style="'+circleStyle+'"></div>';
         html+='<div style="font-size:0.5rem;color:'+labelColor+';font-weight:'+(d.isToday?'700':'400')+';">'+d.label+'</div>';
@@ -634,7 +888,7 @@ function renderStreakCalendar(){
     html+='</div>';
     strip.innerHTML=html;
     var sb=$('streakBig');
-    if(sb) sb.textContent=dailyStreak;
+    if(sb) sb.textContent=visStreak;
     var sfInv=$('sfInv');
     if(sfInv) sfInv.textContent=streakFreezes+' / '+maxStreakFreezes;
     var sfBtn=$('sfBuyBtn');
@@ -664,10 +918,48 @@ function openDailyPreview(){
     var dpDiff=$('dpDiff');
     var dpStreak=$('dpStreak');
     var dpBest=$('dpBest');
+    var dpDate=$('dpDate');
+    var dpTheme=$('dpTheme');
+    var dpCollection=$('dpCollection');
     if(dpDiff){dpDiff.textContent=lv.diff;dpDiff.style.color=lv.diff==='HARD'?'#f44':lv.diff==='MODERATE'?'#fa0':'#0f8';}
     if(dpStreak) dpStreak.textContent='🔥 Streak: '+dailyStreak+' days';
     var stats=getDailyStats();
     if(dpBest) dpBest.textContent=stats.bestTime?'Best today: '+(stats.bestTime/1000).toFixed(2)+'s':'Best today: --';
+    if(dpDate){
+        var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        var todayShort=getGameDayShort();
+        var dStr=parseInt(todayShort.slice(6,8),10)+' '+months[parseInt(todayShort.slice(4,6),10)-1]+' '+todayShort.slice(0,4);
+        dpDate.textContent='📅 '+dStr;
+    }
+    if(dpTheme){
+        var ct=lv.customTheme;
+        dpTheme.innerHTML='<span style="color:#888">Mood:</span> '+(ct&&ct.moodName?ct.moodName:'--')+' <span style="color:#888">Energy:</span> '+(ct&&ct.energyName?ct.energyName:'--')+' <span style="color:#888">Feel:</span> '+(ct&&ct.feelName?ct.feelName:'--');
+    }
+    if(dpCollection){
+        if(!Array.isArray(dailyCollection)) dailyCollection=[];
+        if(dailyCollection.length>0){
+            var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            var html='<div style="font-size:0.55rem;color:#888;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:4px;">🏅 DAILY BADGES ('+dailyCollection.length+')</div>'+
+                '<div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;">';
+            for(var cj=0;cj<dailyCollection.length;cj++){
+                var ce=dailyCollection[cj];
+                var d=parseInt(ce.date.slice(6,8),10);
+                var m=months[parseInt(ce.date.slice(4,6),10)-1];
+                var y=ce.date.slice(2,4);
+                html+='<div style="width:42px;height:42px;border-radius:8px;background:linear-gradient(135deg,#0ff,#08f);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:monospace;box-shadow:0 2px 8px rgba(0,255,255,0.2);">'+
+                    '<span style="font-size:0.55rem;font-weight:700;color:#fff;line-height:1;">'+d+'</span>'+
+                    '<span style="font-size:0.4rem;color:rgba(255,255,255,0.8);line-height:1;">'+m+'</span>'+
+                    '<span style="font-size:0.35rem;color:rgba(255,255,255,0.6);line-height:1;">'+y+'</span>'+
+                    '</div>';
+            }
+            html+='</div>';
+            dpCollection.innerHTML=html;
+            dpCollection.style.display='block';
+        }else{
+            dpCollection.innerHTML='<div style="font-size:0.6rem;color:#666;text-align:center;padding:4px 0;">No daily badges yet.</div>';
+            dpCollection.style.display='block';
+        }
+    }
     $('dailyPreview').classList.add('active');
 }
 function closeDailyPreview(){$('dailyPreview').classList.remove('active');}
@@ -693,7 +985,7 @@ if(orient!==_prevOrient && screen.orientation && screen.orientation.lock){screen
 
 if(ctrlMode==='analog'){$('jZone').classList.add('active');$('jBtn').classList.add('active');$('arrowControls').classList.remove('active');}
 else{$('jZone').classList.remove('active');$('jBtn').classList.add('active');$('arrowControls').classList.add('active');}
-applyJoySettings();applyBtnSize();
+applyJoySettings();applyBtnSize();applyJumpBtnSize();
 resumeGame();
 }
 
@@ -818,7 +1110,27 @@ function shareGame(){
     $('ovBtnCancel').onclick=function(){ov.classList.remove('active');};
     ov.classList.add('active');
 }
-function closeStore(){$('store').classList.remove('active');}
+function showIOSInstallHelp(){
+    var ov=$('overlay');
+    $('ovTitle').textContent='📱 Install on iOS';
+    $('ovTitle').style.color='#0ff';
+    $('ovMsg').innerHTML=
+        '<div style="font-size:0.75rem;color:#fff;margin-bottom:12px;">Safari doesn\'t support automatic install. Follow these steps:</div>'+
+        '<div style="display:flex;flex-direction:column;gap:10px;text-align:left;font-size:0.7rem;color:#ccc;">'+
+        '<div><b style="color:#0ff;">1.</b> Tap the <b>Share</b> button in Safari\'s toolbar <span style="font-size:1rem;">⎋</span></div>'+
+        '<div><b style="color:#0ff;">2.</b> Scroll down and tap <b>Add to Home Screen</b></div>'+
+        '<div><b style="color:#0ff;">3.</b> Tap <b>Add</b> in the top-right corner</div>'+
+        '</div>';
+    $('ovBtn').style.display='inline-block';
+    $('ovBtn').textContent='GOT IT';
+    $('ovBtn').style.background='linear-gradient(135deg,#0f8,#0c8)';
+    $('ovBtn').onclick=function(){ov.classList.remove('active');};
+    $('ovBtnExtra').style.display='none';
+    if($('ovBtnReplay'))$('ovBtnReplay').style.display='none';
+    $('ovBtnCancel').style.display='none';
+    ov.classList.add('active');
+}
+function closeStore(){$('store').classList.remove('active');stopStorePortrait();}
 function canClaimChest(){return !lastChestClaim || getGameDayShort() !== getChestDayKey(lastChestClaim);}
 function getMsUntilNextChestReset(){
     var now = Date.now();
@@ -841,6 +1153,7 @@ vib(30);
 var btn=$('dailyChestBtn');if(btn){btn.style.transform='scale(1.3)';btn.style.transition='transform 0.3s';setTimeout(function(){btn.style.transform='scale(1)';},300);}
 var y=250;for(var ri=0;ri<rewards.length;ri++){setTimeout((function(txt,yy){return function(){addFloat(200,yy,txt,ri===0?(isGold?'#ffd700':'#ccc'):'#0f8');};})(rewards[ri],y),ri*400);y+=30;}
 setTimeout(function(){renderStore();updateChestBtn();},rewards.length*400+200);
+queueSync();
 }
 function updateChestBtn(){var btn=$('dailyChestBtn');if(!btn)return;if(canClaimChest()){btn.style.background='linear-gradient(135deg,#fa0,#f60)';btn.textContent='\uD83C\uDF81 DAILY';btn.style.opacity='1';}else{btn.style.background='#333';btn.textContent='\u2713 CLAIMED';btn.style.opacity='0.5';}}
 function updateLsChestBtn(){
@@ -870,12 +1183,12 @@ function updateLsDailyBtn(){
     btn.style.display='flex';
     var stats=getDailyStats();
     if(stats.completed){
-        btn.innerHTML='✓';
+        btn.innerHTML='<span style="font-size:0.9rem;">✓</span><span style="font-size:0.55rem;font-weight:700;letter-spacing:1px;">DAILY STAGE</span>';
         btn.style.opacity='0.5';
         btn.style.filter='grayscale(0.5)';
         btn.title='Daily Stage completed today';
     }else{
-        btn.innerHTML='💎';
+        btn.innerHTML='<span style="font-size:0.9rem;">💎</span><span style="font-size:0.55rem;font-weight:700;letter-spacing:1px;">DAILY STAGE</span>';
         btn.style.opacity='1';
         btn.style.filter='none';
         btn.title='Daily Stage ready!';
@@ -885,11 +1198,14 @@ function updateLsStreakBtn(){
     var btn=$('lsStreakBtn');
     if(!btn)return;
     btn.style.display='flex';
-    btn.innerHTML='🔥 '+dailyStreak;
-    if(dailyStreak>0){
+    var visStreak=getVisualStreak();
+    var sp=btn.querySelector('span');
+    if(sp)sp.textContent=visStreak;
+    else btn.innerHTML='🔥 '+visStreak;
+    if(visStreak>0){
         btn.style.opacity='1';
         btn.style.filter='none';
-        btn.title='Streak: '+dailyStreak+' days. Tap to view calendar.';
+        btn.title='Streak: '+visStreak+' days. Tap to view calendar.';
     }else{
         btn.style.opacity='0.5';
         btn.style.filter='grayscale(0.7)';
@@ -924,7 +1240,7 @@ function claimDailyChestFromHome(){
     $('ovBtnCancel').style.display='none';
     ov.classList.add('active');
 }
-function updateShopkeeper(){var el=$('shopkeeperMsg');if(!el)return;var i=Math.floor(Math.random()*TIPS.length);el.textContent=TIPS[i];var idx=$('shopkeeperIdx');if(idx)idx.textContent=(i+1)+' / '+TIPS.length;}
+function updateShopkeeper(){var el=$('shopkeeperMsg');var elInline=$('shopkeeperMsgInline');if(!el&&!elInline)return;var i=Math.floor(Math.random()*TIPS.length);var text=TIPS[i];if(el)el.textContent=text;if(elInline)elInline.textContent=text;var idx=$('shopkeeperIdx');if(idx)idx.textContent=(i+1)+' / '+TIPS.length;}
 
 var ITEM_RULES={
 ghost:{usage:'Always active when equipped',limit:'No usage limit',cooldown:'None',rules:'Records your fastest run on each level. The ghost replays alongside you on subsequent runs of the SAME level. Toggle visibility with the \ud83d\udc7b button bottom-left.'},
@@ -966,6 +1282,9 @@ storeTab=tab;
 var tabs=document.querySelectorAll('.stab');
 var names=['consumables','cosmetics','skills'];
 for(var i=0;i<tabs.length;i++)tabs[i].className='stab'+(names[i]===tab?' active':'');
+var spw=$('storePortraitWrap');
+if(spw)spw.style.display=(tab==='cosmetics')?'block':'none';
+if(tab==='cosmetics'&&$('storePortrait'))startStorePortrait();
 renderStore();
 }
 function renderStore(){
@@ -1023,7 +1342,7 @@ else if(!owned)btn='<button class="si-btn" style="background:'+(canBuy?'#0a6':'#
 else if(equipped)btn='<button class="si-btn" style="background:#a00" onclick="unequipCos(\''+c.id+'\',\''+c.cat+'\')">REMOVE</button>';
 else btn='<button class="si-btn" style="background:#08a" onclick="equipCos(\''+c.id+'\',\''+c.cat+'\')">EQUIP</button>';
 var costDisplay=isChampionLocked?'<span style="color:#fa0;font-size:0.65rem;">★ Master</span>':(c.champion?'<span style="color:#ffd700;font-size:0.65rem;">FREE</span>':c.cost+'\u2666');
-html+='<div class="'+cls+'" onclick="showCosPreview(\''+c.id+'\')"><canvas class="si-preview" id="sp_'+c.id+'" width="50" height="50"></canvas><div class="si-info"><div class="si-name">'+c.icon+' '+c.name+'</div><div class="si-desc">'+c.preview+'</div></div><div class="si-cost" style="color:#ccc">'+costDisplay+'</div><div onclick="event.stopPropagation()">'+btn+'</div></div>';}
+html+='<div class="'+cls+'" onclick="showCosPreview(\''+c.id+'\')" onmouseenter="previewCosmetic=\''+c.id+'\'" onmouseleave="previewCosmetic=null"><canvas class="si-preview" id="sp_'+c.id+'" width="50" height="50"></canvas><div class="si-info"><div class="si-name">'+c.icon+' '+c.name+'</div><div class="si-desc">'+c.preview+'</div></div><div class="si-cost" style="color:#ccc">'+costDisplay+'</div><div onclick="event.stopPropagation()">'+btn+'</div></div>';}
 }else{
 for(var i=0;i<CONSUMABLES.length;i++){var c=CONSUMABLES[i],qty=(c.id==='streakfreeze'?streakFreezes:(consumableInv[c.id]||0)),canBuy=silverWallet>=c.cost;
 var maxed=(c.id==='streakfreeze'&&qty>=maxStreakFreezes);
@@ -1032,8 +1351,8 @@ html+='<div class="store-item"><div class="si-info"><div class="si-name">'+c.ico
 $('storeContent').innerHTML=html;
 if(storeTab==='cosmetics')startCosPreview();
 }
-function buySkill(id){var s=SKILLS.find(function(x){return x.id===id;});if(!s||ownedSkills.indexOf(id)>=0||getGoldBalance()<s.cost)return;goldSpent+=s.cost;ownedSkills.push(id);save('goldSpent',goldSpent);save('ownedSkills',ownedSkills);if(equippedSkills.length<3){equippedSkills.push(id);save('equippedSkills',equippedSkills);}sendMetric('purchase',{kind:'skill',id:id,cost:s.cost,currency:'gold'});renderStore();}
-function sellSkill(id){var s=SKILLS.find(function(x){return x.id===id;});if(!s||ownedSkills.indexOf(id)<0)return;goldSpent-=s.cost;ownedSkills.splice(ownedSkills.indexOf(id),1);var ei=equippedSkills.indexOf(id);if(ei>=0)equippedSkills.splice(ei,1);save('goldSpent',goldSpent);save('ownedSkills',ownedSkills);save('equippedSkills',equippedSkills);if(id==='airdash'&&reflexDashEnabled){reflexDashEnabled=false;save('reflexDashEnabled',reflexDashEnabled);}renderStore();}
+function buySkill(id){var s=SKILLS.find(function(x){return x.id===id;});if(!s||ownedSkills.indexOf(id)>=0||getGoldBalance()<s.cost)return;goldSpent+=s.cost;ownedSkills.push(id);save('goldSpent',goldSpent);save('ownedSkills',ownedSkills);if(equippedSkills.length<3){equippedSkills.push(id);save('equippedSkills',equippedSkills);}sendMetric('purchase',{kind:'skill',id:id,cost:s.cost,currency:'gold'});renderStore();queueSync();}
+function sellSkill(id){var s=SKILLS.find(function(x){return x.id===id;});if(!s||ownedSkills.indexOf(id)<0)return;goldSpent-=s.cost;ownedSkills.splice(ownedSkills.indexOf(id),1);var ei=equippedSkills.indexOf(id);if(ei>=0)equippedSkills.splice(ei,1);save('goldSpent',goldSpent);save('ownedSkills',ownedSkills);save('equippedSkills',equippedSkills);if(id==='airdash'&&reflexDashEnabled){reflexDashEnabled=false;save('reflexDashEnabled',reflexDashEnabled);}renderStore();queueSync();}
 function equipSkill(id){if(equippedSkills.length>=3||equippedSkills.indexOf(id)>=0)return;equippedSkills.push(id);save('equippedSkills',equippedSkills);if(id==='airdash'&&reflexDashEnabled){reflexDashEnabled=false;save('reflexDashEnabled',reflexDashEnabled);}renderStore();}
 function unequipSkill(id){var ei=equippedSkills.indexOf(id);if(ei>=0)equippedSkills.splice(ei,1);save('equippedSkills',equippedSkills);renderStore();}
 function toggleReflexDash(){
@@ -1047,15 +1366,15 @@ function toggleReflexDash(){
     }
     renderStore();
 }
-function buyCos(id){var c=COSMETICS.find(function(x){return x.id===id;});if(!c||ownedCosmetics.indexOf(id)>=0||silverWallet<c.cost)return;if(c.champion&&!championStatus.unlocked)return;silverWallet-=c.cost;ownedCosmetics.push(id);equippedCosmetics[c.cat]=id;save('silver',silverWallet);save('ownedCosmetics',ownedCosmetics);save('equippedCosmetics',equippedCosmetics);sendMetric('purchase',{kind:'cosmetic',id:id,cat:c.cat,cost:c.cost,currency:'silver'});renderStore();}
+function buyCos(id){var c=COSMETICS.find(function(x){return x.id===id;});if(!c||ownedCosmetics.indexOf(id)>=0||silverWallet<c.cost)return;if(c.champion&&!championStatus.unlocked)return;silverWallet-=c.cost;ownedCosmetics.push(id);equippedCosmetics[c.cat]=id;save('silver',silverWallet);save('ownedCosmetics',ownedCosmetics);save('equippedCosmetics',equippedCosmetics);sendMetric('purchase',{kind:'cosmetic',id:id,cat:c.cat,cost:c.cost,currency:'silver'});renderStore();queueSync();}
 function equipCos(id,cat){equippedCosmetics[cat]=id;save('equippedCosmetics',equippedCosmetics);renderStore();}
 function unequipCos(id,cat){equippedCosmetics[cat]=null;save('equippedCosmetics',equippedCosmetics);renderStore();}
-function buyCon(id){var c=CONSUMABLES.find(function(x){return x.id===id;});if(!c||silverWallet<c.cost)return;if(id==='namechange'){silverWallet-=c.cost;save('silver',silverWallet);showNamePrompt(function(){renderStore();});sendMetric('purchase',{kind:'consumable',id:id,cost:c.cost,currency:'silver'});return;}if(id==='streakfreeze'){if(streakFreezes>=maxStreakFreezes){addFloat(canvas.width/2,300,'MAX 2 FREEZES','#f80');return;}silverWallet-=c.cost;streakFreezes++;save('silver',silverWallet);save('streakFreezes',streakFreezes);sendMetric('purchase',{kind:'consumable',id:id,cost:c.cost,currency:'silver'});renderStore();return;}silverWallet-=c.cost;consumableInv[id]=(consumableInv[id]||0)+1;save('silver',silverWallet);save('consumableInv',consumableInv);sendMetric('purchase',{kind:'consumable',id:id,cost:c.cost,currency:'silver'});renderStore();}
+function buyCon(id){var c=CONSUMABLES.find(function(x){return x.id===id;});if(!c||silverWallet<c.cost)return;if(id==='namechange'){silverWallet-=c.cost;save('silver',silverWallet);showNamePrompt(function(){renderStore();});sendMetric('purchase',{kind:'consumable',id:id,cost:c.cost,currency:'silver'});queueSync();return;}if(id==='streakfreeze'){if(streakFreezes>=maxStreakFreezes){addFloat(canvas.width/2,300,'MAX 2 FREEZES','#f80');return;}silverWallet-=c.cost;streakFreezes++;save('silver',silverWallet);save('streakFreezes',streakFreezes);sendMetric('purchase',{kind:'consumable',id:id,cost:c.cost,currency:'silver'});renderStore();queueSync();return;}silverWallet-=c.cost;consumableInv[id]=(consumableInv[id]||0)+1;save('silver',silverWallet);save('consumableInv',consumableInv);sendMetric('purchase',{kind:'consumable',id:id,cost:c.cost,currency:'silver'});renderStore();queueSync();}
 function showNamePrompt(cb){
 var ov=$('overlay');
 $('ovTitle').textContent='ENTER NAME';
 $('ovTitle').style.color='#0ff';
-$('ovMsg').innerHTML='<input id="nameInput" type="text" maxlength="10" placeholder="5-10 chars" value="'+String(playerName||'').replace(/"/g,'&quot;')+'" style="width:200px;padding:10px;font-size:1.2rem;font-family:monospace;text-align:center;background:#111;color:#0ff;border:2px solid #0ff;border-radius:8px;text-transform:uppercase;letter-spacing:2px;">';
+$('ovMsg').innerHTML='<input id="nameInput" type="text" maxlength="10" placeholder="5-10 chars" value="'+String(playerName||'').replace(/"/g,'&quot;')+'" style="width:200px;padding:10px;font-size:1.2rem;font-family:monospace;text-align:center;background:#111;color:#0ff;border:2px solid #0ff;border-radius:8px;text-transform:uppercase;letter-spacing:2px;"><div style="font-size:0.6rem;color:#888;text-align:center;margin-top:8px;">Already have a cloud account? <a href="#" onclick="openSyncLinkPanel();return false;" style="color:#0ff;text-decoration:underline;">Link device</a></div>';
 $('ovBtn').textContent='CONFIRM';$('ovBtn').style.display='inline-block';$('ovBtn').style.background='';
 $('ovBtnCancel').style.display='none';
 $('ovBtn').onclick=function(){
@@ -1064,6 +1383,7 @@ $('ovBtn').onclick=function(){
     playerName=v.toUpperCase();save('playerName',playerName);
     if(!_sessionStartSent) sendSessionStart();
     sendMetric('name_set',{name:playerName,first:false});
+    queueSync();
     ov.classList.remove('active');if(cb)cb();
 };
 ov.classList.add('active');
@@ -1089,7 +1409,8 @@ function startDailyStage(){
     $('hudLeft').style.display='flex';
     if(ctrlMode==='analog'){$('jZone').classList.add('active');$('jBtn').classList.add('active');$('arrowControls').classList.remove('active');}
     else{$('jZone').classList.remove('active');$('jBtn').classList.add('active');$('arrowControls').classList.add('active');}
-    startLvl(-1);
+    applyJoySettings();applyBtnSize();applyJumpBtnSize();
+    resize();initStars();startLvl(-1);
 }
 
 function showOnboard(cb){
@@ -1109,6 +1430,7 @@ ctrlMode=_onbCtrl;save('ctrl',ctrlMode);save('ctrlPicked',true);save('tutorialDo
 // Now that we have a name, fire deferred session_start (if not already) and a name_set event for funnel tracking
 if(!_sessionStartSent) sendSessionStart();
 sendMetric('name_set',{name:playerName,first:true});
+queueSync();
 $('onboard').classList.remove('active');
 if(W._onbCb)W._onbCb();
 }
@@ -1173,6 +1495,7 @@ function showDailyWin(){
     var streak = updateStreak();
     
     // Save to daily collection
+    if(!Array.isArray(dailyCollection)){dailyCollection=[];}
     var todayShort = getGameDayShort();
     var alreadyIdx = -1;
     for(var ci=0;ci<dailyCollection.length;ci++){if(dailyCollection[ci].date===todayShort){alreadyIdx=ci;break;}}
@@ -1188,23 +1511,28 @@ function showDailyWin(){
     
     // Metrics
     sendMetric('level_complete',{level:-1,name:'DAILY',time:_dt,deaths:_dd,gold:_dg,silver:_ds,style:_dsp,isDaily:true});
+    queueSync();
     
-    // Build collection list HTML
+    // Build badge grid HTML
     var collectionHtml = '';
     if(dailyCollection.length > 0){
         var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        collectionHtml = '<div style="margin-top:10px;max-height:90px;overflow-y:auto;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px;">'+
-            '<div style="font-size:0.6rem;color:#888;margin-bottom:4px;">📜 DAILY COLLECTION</div>';
+        collectionHtml = '<div style="margin-top:10px;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px;">'+
+            '<div style="font-size:0.6rem;color:#888;margin-bottom:6px;">🏅 DAILY BADGES ('+dailyCollection.length+')</div>'+
+            '<div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;">';
         for(var cj=0; cj<dailyCollection.length; cj++){
             var ce = dailyCollection[cj];
-            var dStr = parseInt(ce.date.slice(6,8),10) + months[parseInt(ce.date.slice(4,6),10)-1] + ce.date.slice(2,4);
+            var d = parseInt(ce.date.slice(6,8),10);
+            var m = months[parseInt(ce.date.slice(4,6),10)-1];
+            var y = ce.date.slice(2,4);
             var isToday = ce.date === todayShort;
-            collectionHtml += '<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;font-size:0.6rem;color:#ccc;">'+
-                '<span>'+(isToday?'🔹 ':'')+dStr+' — '+(ce.time?(ce.time/1000).toFixed(2)+'s':'--')+'</span>'+
-                (ce.date!==todayShort?'<button onclick="replayDailyStage(\''+ce.date+'\','+ce.rankIdx+')" style="padding:1px 6px;font-size:0.5rem;background:#111;border:1px solid #0ff;color:#0ff;border-radius:3px;cursor:pointer;">▶</button>':'<span style="color:#0ff;font-size:0.5rem;">TODAY</span>')+
+            collectionHtml += '<div style="width:38px;height:38px;border-radius:8px;background:linear-gradient(135deg,'+(isToday?'#ffd700,#fa0':'#0ff,#08f')+');display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:monospace;box-shadow:0 2px 8px rgba('+(isToday?'255,215,0':'0,255,255')+',0.2);">'+
+                '<span style="font-size:0.5rem;font-weight:700;color:#fff;line-height:1;">'+d+'</span>'+
+                '<span style="font-size:0.35rem;color:rgba(255,255,255,0.8);line-height:1;">'+m+'</span>'+
+                '<span style="font-size:0.3rem;color:rgba(255,255,255,0.6);line-height:1;">'+y+'</span>'+
                 '</div>';
         }
-        collectionHtml += '</div>';
+        collectionHtml += '</div></div>';
     }
     
     $('ovTitle').textContent = '★ DAILY COMPLETE!';
@@ -1259,56 +1587,7 @@ function showDailyDie(){
     ov.classList.add('active');
 }
 
-function showDailyReplayWin(){
-    gameRunning=false; stopMusic();
-    var ov=$('overlay');
-    ov.onclick=null;
-    $('homeTooltip').classList.remove('active');
-    var dStr = parseInt(replayDailyDate.slice(6,8),10)+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(replayDailyDate.slice(4,6),10)-1]+replayDailyDate.slice(2,4);
-    $('ovTitle').textContent = '✓ REPLAY COMPLETE';
-    $('ovTitle').style.color = '#0f8';
-    $('ovMsg').innerHTML =
-        '<div style="font-size:1rem;font-weight:700;color:#0ff;margin-bottom:8px;">'+dStr+' DAILY STAGE</div>'+
-        '<div style="font-size:0.85rem;color:#ccc;line-height:1.6;">'+
-        'Time: <b style="color:#0ff;">'+(runTime/1000).toFixed(2)+'s</b><br>'+
-        'No gems • No deaths • Practice run<br>'+
-        '</div>';
-    $('ovBtn').textContent = '🏠 STAGE SELECT';
-    $('ovBtn').style.display = 'inline-block';
-    $('ovBtn').style.background = '';
-    $('ovBtn').onclick = function(){ ov.classList.remove('active'); isDailyReplay=false; dailyLevelObj=null; endGame(); };
-    $('ovBtnExtra').style.display = 'inline-block';
-    $('ovBtnExtra').textContent = '🔁 REPLAY AGAIN';
-    $('ovBtnExtra').onclick = function(){ ov.classList.remove('active'); $('gameCanvas').classList.remove('grey'); $('gameCanvas').classList.remove('shake'); replayDailyStage(replayDailyDate,replayDailyRank); if(musOn) startMusic(); };
-    $('ovBtnReplay').style.display = 'none';
-    $('ovBtnCancel').style.display = 'none';
-    ov.classList.add('active');
-}
 
-function replayDailyStage(dateKey,rankIdx){
-    isDailyReplay=true;
-    replayDailyDate=dateKey;
-    replayDailyRank=rankIdx;
-    dailyLevelObj=generateDailyLevel(dateKey,rankIdx);
-    curLvl=-1; deaths=0; replayMode=false; _isFreshStageEntry=true; sessionStage=-2;
-    $('levelSelect').classList.remove('active');
-    $('gameCanvas').classList.add('active');
-    $('hud').style.display='flex';
-    $('hudLvl').style.display='block';
-    $('hudTime').style.display='block';
-    $('hudDist').style.display='block';
-    $('hudPct').style.display='block';
-    $('hudChips').style.display='block';
-    $('hudDeath').style.display='block';
-    $('hudConsumable').style.display='block';
-    $('homeBtn').style.display='block';
-    $('ovTitle').textContent='';
-    $('ovMsg').innerHTML='';
-    startLvl(-1);
-    gameRunning=true;
-    startTime=Date.now();
-    if(musOn) startMusic();
-}
 
 function shareDailyResult(){
     var dstats = getDailyStats();
@@ -1509,6 +1788,41 @@ function animPortrait(){
     portraitAnim=requestAnimationFrame(animPortrait);
 }
 function startPortrait(){if(!portraitAnim)animPortrait();}
+
+var storePortraitAnim=0;
+var previewCosmetic=null;
+function animStorePortrait(){
+    var cv=$('storePortrait');
+    if(!cv||!$('store')||!$('store').classList.contains('active')||storeTab!=='cosmetics'){storePortraitAnim=0;return;}
+    var cx=cv.getContext('2d');
+    var w=cv.clientWidth,h=cv.clientHeight;
+    if(w>0&&h>0&&(cv.width!==w||cv.height!==h)){cv.width=w;cv.height=h;}
+    cx.clearRect(0,0,cv.width,cv.height);
+    var t=Date.now()*0.001;
+    var scale=Math.min(cv.width/20,cv.height/34);
+    var charY=cv.height*0.55;
+    cx.strokeStyle='rgba(255,255,255,0.18)';cx.lineWidth=1;
+    var groundY=charY+11*scale;
+    var streakOff=(t*100)%12;
+    for(var si=0;si<3;si++){
+        var sx=cv.width*0.15+si*35+(streakOff*0.5);
+        cx.beginPath();cx.moveTo(sx,groundY);cx.lineTo(sx-10,groundY);cx.stroke();
+    }
+    // Save equipped cosmetics
+    var origEquipped={};
+    for(var k in equippedCosmetics)origEquipped[k]=equippedCosmetics[k];
+    // Apply preview if any
+    if(previewCosmetic){
+        var pc=COSMETICS.find(function(x){return x.id===previewCosmetic;});
+        if(pc)equippedCosmetics[pc.cat]=pc.id;
+    }
+    drawCharOnCtx(cx,cv.width/2,charY,scale,t);
+    // Restore
+    for(var k2 in origEquipped)equippedCosmetics[k2]=origEquipped[k2];
+    storePortraitAnim=requestAnimationFrame(animStorePortrait);
+}
+function startStorePortrait(){if(!storePortraitAnim)animStorePortrait();}
+function stopStorePortrait(){if(storePortraitAnim){cancelAnimationFrame(storePortraitAnim);storePortraitAnim=0;}}
 
 var cosFullPreviewId=0,cosFullPreviewItem=null;
 function showCosPreview(id){
@@ -1798,19 +2112,22 @@ cosFullPreviewId=requestAnimationFrame(animCosFullPreview);
 
 var adjusting=false;
 var btnSize=80;
+var jumpX=20,jumpY=20,jumpSize=80;
 loadCurrentCtrlLayout();
 function enterAdjustMode(){
 $('gameSettings').classList.remove('active');
 $('adjustOverlay').classList.add('active');
 $('adjustDone').style.display='block';
 $('adjustPanel').style.display='flex';
-$('adjSize').value=btnSize;
-$('adjSizeVal').textContent=btnSize+'px';
+$('adjMoveSize').value=btnSize;
+$('adjMoveSizeVal').textContent=btnSize+'px';
+$('adjJumpSize').value=jumpSize;
+$('adjJumpSizeVal').textContent=jumpSize+'px';
 document.body.classList.add('adjust-mode');
 adjusting=true;
 if(ctrlMode==='analog'){$('jZone').classList.add('active');$('jBtn').classList.add('active');$('arrowControls').classList.remove('active');}
 else{$('jZone').classList.remove('active');$('jBtn').classList.add('active');$('arrowControls').classList.add('active');}
-applyJoySettings();
+applyJoySettings();applyBtnSize();applyJumpBtnSize();
 initAdjustDrag();
 }
 function exitAdjustMode(){
@@ -1820,43 +2137,60 @@ $('adjustDone').style.display='none';
 $('adjustPanel').style.display='none';
 document.body.classList.remove('adjust-mode');
 save('padX',padX);save('padY',padY);save('jSize',jSize);save('btnSize',btnSize);
+save('jumpX',jumpX);save('jumpY',jumpY);save('jumpSize',jumpSize);
 saveCurrentCtrlLayout();
 applyJoySettings();
 if(!gameRunning){$('jZone').classList.remove('active');$('jBtn').classList.remove('active');$('arrowControls').classList.remove('active');}
 $('gameSettings').classList.add('active');
 }
-function applyAdjustSize(v){
+function applyMoveSize(v){
 btnSize=parseInt(v);
-$('adjSizeVal').textContent=btnSize+'px';
+$('adjMoveSizeVal').textContent=btnSize+'px';
 applyBtnSize();
 }
+function applyJumpSize(v){
+jumpSize=parseInt(v);
+$('adjJumpSizeVal').textContent=jumpSize+'px';
+applyJumpBtnSize();
+}
 function applyBtnSize(){
-$('jBtn').style.width=btnSize+'px';$('jBtn').style.height=btnSize+'px';
 var btns=document.querySelectorAll('.arr-btn');
 for(var i=0;i<btns.length;i++){btns[i].style.width=btnSize+'px';btns[i].style.height=btnSize+'px';}
 }
+function applyJumpBtnSize(){
+$('jBtn').style.width=jumpSize+'px';$('jBtn').style.height=jumpSize+'px';
+}
 function resetAdjustDefaults(){
-padX=20;padY=20;jSize=150;btnSize=80;
-$('adjSize').value=80;$('adjSizeVal').textContent='80px';
-applyJoySettings();applyBtnSize();
+padX=20;padY=20;jSize=150;btnSize=80;jumpX=20;jumpY=20;jumpSize=80;
+$('adjMoveSize').value=80;$('adjMoveSizeVal').textContent='80px';
+$('adjJumpSize').value=80;$('adjJumpSizeVal').textContent='80px';
+applyJoySettings();applyBtnSize();applyJumpBtnSize();
 }
 var adjustDragInit=false;
 function initAdjustDrag(){
 if(adjustDragInit)return;
 adjustDragInit=true;
-var overlay=$('adjustOverlay'),startX,startY,startPadX,startPadY;
+var overlay=$('adjustOverlay'),dragTarget='pad',startX,startY,startPadX,startPadY,startJumpX,startJumpY;
 function onStart(e){
 if(!adjusting)return;
 var t=e.touches?e.touches[0]:e;
-startX=t.clientX;startY=t.clientY;startPadX=padX;startPadY=padY;
+startX=t.clientX;startY=t.clientY;
+dragTarget = t.clientX < W.innerWidth/2 ? 'pad' : 'jump';
+startPadX=padX;startPadY=padY;
+startJumpX=jumpX;startJumpY=jumpY;
 }
 function onMove(e){
 if(!adjusting)return;
 e.preventDefault();
 var t=e.touches?e.touches[0]:e;
 var dx=t.clientX-startX,dy=t.clientY-startY;
+if(dragTarget==='pad'){
 padX=clamp(startPadX+dx,-W.innerWidth/3,W.innerWidth/3);
 padY=clamp(startPadY-dy,0,W.innerHeight/2);
+}else{
+jumpX=clamp(startJumpX-dx,0,W.innerWidth/2);
+jumpY=clamp(startJumpY-dy,0,W.innerHeight/2);
+}
 applyJoySettings();
 }
 overlay.addEventListener('touchstart',onStart,{passive:false});
@@ -1887,10 +2221,10 @@ function applyJoySettings() {
     var knobSize = size * 0.36;
     var safePadX = clamp(Math.max(0, padX), 0, Math.max(0, W.innerWidth - size - 16));
     var safePadY = clamp(padY, 0, Math.max(0, W.innerHeight - size - 16));
-    var buttonSize = btnSize || 80;
-    var safeButtonX = clamp(Math.max(0, padX), 0, Math.max(0, W.innerWidth - buttonSize - 16));
-    var safeButtonY = clamp(padY, 0, Math.max(0, W.innerHeight - buttonSize - 16));
-    var safeArrowY = clamp(padY, 0, Math.max(0, W.innerHeight - buttonSize - 16));
+    var arrowSize = btnSize || 80;
+    var jumpSz = jumpSize || 80;
+    var safeJumpX = clamp(Math.max(0, jumpX), 0, Math.max(0, W.innerWidth - jumpSz - 16));
+    var safeJumpY = clamp(Math.max(0, jumpY), 0, Math.max(0, W.innerHeight - jumpSz - 16));
     var z = $('jZone'), k = $('jKnob');
     z.style.width = size + 'px';
     z.style.height = size + 'px';
@@ -1902,10 +2236,10 @@ function applyJoySettings() {
     k.style.top = (size/2 - knobSize/2) + 'px';
     k.style.left = (size/2 - knobSize/2) + 'px';
     joy.mr = size * 0.42;
-    $('jBtn').style.right = safeButtonX + 'px';
-    $('jBtn').style.bottom = (safePadY + (size - buttonSize) / 2) + 'px';
+    $('jBtn').style.right = safeJumpX + 'px';
+    $('jBtn').style.bottom = safeJumpY + 'px';
     $('arrowControls').style.left = safePadX + 'px';
-    $('arrowControls').style.bottom = (safePadY + (size - buttonSize) / 2) + 'px';
+    $('arrowControls').style.bottom = (safePadY + (size - arrowSize) / 2) + 'px';
 }
 
 function confirmReset() {
@@ -2014,8 +2348,6 @@ $('freezeBtn').style.opacity='0.3';
 }
 function toggleGhost(){
     ghostVisible=!ghostVisible;
-    var btn=$('ghostBtn');
-    if(btn)btn.style.opacity=ghostVisible?'0.8':'0.3';
     if(ghostVisible){
         if(!currentGhost||currentGhost.length===0){
             addFloat(player.x+player.w/2,player.y-30,'No ghost yet \u2014 finish to record','#fa0');
@@ -2038,6 +2370,284 @@ function togglePause() {
     pauseTime = Date.now();
     if(ac && ac.state === 'running') ac.suspend();
     openGameSettings();
+}
+
+function openContactUs(){
+    window.location.href='mailto:xterzd@gmail.com?subject=N3ON%20DashJ%20Contact&body=Hi%20N3ON%20DashJ%20team%2C%0A%0A';
+}
+function openFeedbackPanel(){
+    $('settings').classList.remove('active');
+    var panel=$('feedbackPanel');
+    if(panel){
+        $('fbPlayerId').textContent=(typeof playerId!=='undefined'&&playerId)?playerId:'—';
+        $('fbPlayerName').textContent=(typeof playerName!=='undefined'&&playerName)?playerName:'—';
+        $('fbSubject').value='';
+        $('fbEmail').value='';
+        $('fbContent').value='';
+        $('fbStatus').textContent='';
+        panel.style.display='flex';
+    }
+}
+function closeFeedbackPanel(){
+    var panel=$('feedbackPanel');
+    if(panel) panel.style.display='none';
+}
+function submitFeedback(){
+    var subject=$('fbSubject').value.trim();
+    var email=$('fbEmail').value.trim();
+    var content=$('fbContent').value.trim();
+    var status=$('fbStatus');
+    if(!content){status.textContent='Please enter a message.';status.style.color='#f80';return;}
+    if(content.length<3){status.textContent='Message too short.';status.style.color='#f80';return;}
+    status.textContent='Sending...';
+    status.style.color='#0ff';
+    var payload={
+        pid:(typeof playerId!=='undefined'&&playerId)?playerId:null,
+        name:(typeof playerName!=='undefined'&&playerName)?playerName:null,
+        subject:subject,
+        email:email,
+        content:content,
+        ts:Date.now()
+    };
+    fetch(METRIC_URL+'/feedback',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload),
+        keepalive:true
+    }).then(function(r){return r.json();}).then(function(d){
+        if(d&&d.ok){
+            status.textContent='Feedback sent! Thank you.';
+            status.style.color='#0f8';
+            setTimeout(closeFeedbackPanel,1500);
+        }else{
+            status.textContent=(d&&d.error)||'Failed to send. Please try again.';
+            status.style.color='#f80';
+        }
+    }).catch(function(){
+        status.textContent='Network error. Please try again.';
+        status.style.color='#f80';
+    });
+}
+
+function openSyncPanel(){
+    $('settings').classList.remove('active');
+    var panel=$('syncPanel');
+    if(!panel)return;
+    panel.style.display='flex';
+    var status=$('syncStatus');
+    if(status)status.textContent='';
+    // Update UI based on registration state
+    var usernameEl=$('syncUsername');
+    if(usernameEl)usernameEl.textContent=(typeof playerName!=='undefined'&&playerName)?playerName:'—';
+    // Manage tab identity display
+    var manageUser=$('syncManageUsername');
+    if(manageUser)manageUser.textContent=(typeof playerName!=='undefined'&&playerName)?playerName:'—';
+    var manageMmyy=$('syncManageMmyy');
+    if(manageMmyy)manageMmyy.textContent=(typeof playerMmyy!=='undefined'&&playerMmyy)?playerMmyy:'—';
+    var manageDev=$('syncManageDeviceId');
+    if(manageDev)manageDev.textContent=(typeof syncDeviceId!=='undefined'&&syncDeviceId)?syncDeviceId:'—';
+    if(typeof syncRegistered!=='undefined'&&syncRegistered){
+        $('syncTabRegister').style.display='none';
+        $('syncTabManage').style.display='block';
+        $('syncTabLink').style.display='none';
+        var autoBtn=$('syncAutoToggle');
+        if(autoBtn){
+            autoBtn.textContent=(typeof syncAuto!=='undefined'&&syncAuto)?'ON':'OFF';
+            autoBtn.style.background=(typeof syncAuto!=='undefined'&&syncAuto)?'#0f8':'#555';
+        }
+    }else{
+        // Fresh device: show both Register and Link Device tabs
+        $('syncTabRegister').style.display='block';
+        $('syncTabManage').style.display='none';
+        $('syncTabLink').style.display='block';
+    }
+}
+function openSyncLinkPanel(){
+    // Temporarily hide onboarding/overlay so sync panel (z-500) is visible
+    var onboard=$('onboard');
+    if(onboard&&onboard.classList.contains('active')){
+        onboard.classList.remove('active');
+        W._onboardWasActive=true;
+    }
+    var ov=$('overlay');
+    if(ov&&ov.classList.contains('active')){
+        ov.classList.remove('active');
+        W._overlayWasActive=true;
+    }
+    var panel=$('syncPanel');
+    if(!panel)return;
+    panel.style.display='flex';
+    var status=$('syncStatus');
+    if(status)status.textContent='';
+    // Force Link tab, hide others
+    $('syncTabRegister').style.display='none';
+    $('syncTabManage').style.display='none';
+    $('syncTabLink').style.display='block';
+}
+function closeSyncPanel(){
+    var panel=$('syncPanel');
+    if(panel)panel.style.display='none';
+    // Restore onboard if it was hidden for sync
+    if(W._onboardWasActive){
+        W._onboardWasActive=false;
+        var onboard=$('onboard');
+        if(onboard)onboard.classList.add('active');
+    }
+    // Restore overlay if it was hidden for sync
+    if(W._overlayWasActive){
+        W._overlayWasActive=false;
+        var ov=$('overlay');
+        if(ov)ov.classList.add('active');
+    }
+}
+function showSyncLinkTab(){
+    $('syncTabManage').style.display='none';
+    $('syncTabLink').style.display='block';
+}
+function toggleSyncAuto(){
+    syncAuto=!syncAuto;
+    save('syncAuto',syncAuto);
+    var autoBtn=$('syncAutoToggle');
+    if(autoBtn){
+        autoBtn.textContent=syncAuto?'ON':'OFF';
+        autoBtn.style.background=syncAuto?'#0f8':'#555';
+    }
+}
+function syncNow(){
+    var status=$('syncStatus');
+    if(status){status.textContent='Syncing...';status.style.color='#0ff';}
+    saveSync(buildSyncData(),[],pendingPurchases);
+    setTimeout(function(){if(status){status.textContent='Synced!';status.style.color='#0f8';}},2000);
+}
+function registerSync(){
+    var mmyy=$('syncMmyy').value.trim();
+    var pin=$('syncPinInput').value.trim();
+    var status=$('syncStatus');
+    if(!mmyy||mmyy.length!==4||!/^[0-9]{4}$/.test(mmyy)){status.textContent='Enter 4-digit MMYY birthday.';status.style.color='#f80';return;}
+    if(!pin||pin.length!==6||!/^[0-9]{6}$/.test(pin)){status.textContent='Enter 6-digit PIN.';status.style.color='#f80';return;}
+    if(!playerName){status.textContent='Set a player name first.';status.style.color='#f80';return;}
+    status.textContent='Registering...';
+    status.style.color='#0ff';
+    playerMmyy=mmyy;save('playerMmyy',playerMmyy);
+    syncPin=pin;save('syncPin',syncPin);
+    var payload={username:playerName,mmyy:mmyy,pin:pin,deviceId:syncDeviceId,data:buildSyncData(),rewards:[],pendingPurchases:[],ts:Date.now()};
+    fetch(METRIC_URL+'/sync/save',{
+        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),keepalive:true
+    }).then(function(r){return r.json();}).then(function(d){
+        if(d&&d.ok){
+            syncRegistered=true;save('syncRegistered',true);
+            status.textContent='Registered! Auto-sync enabled.';
+            status.style.color='#0f8';
+            updateSyncIdentityDisplay();
+            updateSyncStatusText();
+            setTimeout(function(){
+                $('syncTabRegister').style.display='none';
+                $('syncTabManage').style.display='block';
+            },1000);
+        }else{
+            status.textContent=(d&&d.error)||'Registration failed.';status.style.color='#f80';
+        }
+    }).catch(function(){status.textContent='Network error.';status.style.color='#f80';});
+}
+function verifySyncCredentialsUI(){
+    var username=$('syncLinkUsername').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,10);
+    var mmyy=$('syncLinkMmyy').value.trim();
+    var pin=$('syncLinkPin').value.trim();
+    var status=$('syncStatus');
+    if(!username||username.length<5){status.textContent='Enter username (5-10 chars).';status.style.color='#f80';return;}
+    if(!mmyy||mmyy.length!==4||!/^[0-9]{4}$/.test(mmyy)){status.textContent='Enter 4-digit MMYY.';status.style.color='#f80';return;}
+    if(!pin||pin.length!==6||!/^[0-9]{6}$/.test(pin)){status.textContent='Enter 6-digit PIN.';status.style.color='#f80';return;}
+    status.textContent='Verifying...';status.style.color='#0ff';
+    checkSyncCredentials(username,mmyy,pin,function(ok,d){
+        if(ok){
+            status.textContent='✅ Credentials verified! Account exists.';status.style.color='#0f8';
+        }else{
+            status.textContent='❌ '+(d&&d.error?d.error:'Verify failed. Check username, MMYY, and PIN.');status.style.color='#f80';
+        }
+    });
+}
+function linkDevice(){
+    var username=$('syncLinkUsername').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,10);
+    var mmyy=$('syncLinkMmyy').value.trim();
+    var pin=$('syncLinkPin').value.trim();
+    var status=$('syncStatus');
+    if(!username||username.length<5){status.textContent='Enter username (5-10 chars).';status.style.color='#f80';return;}
+    if(!mmyy||mmyy.length!==4||!/^[0-9]{4}$/.test(mmyy)){status.textContent='Enter 4-digit MMYY.';status.style.color='#f80';return;}
+    if(!pin||pin.length!==6||!/^[0-9]{6}$/.test(pin)){status.textContent='Enter 6-digit PIN.';status.style.color='#f80';return;}
+    // Check if there's existing local progress to warn about
+    var hasLocalProgress=(Object.keys(bestScores||{}).length>0)||(Object.keys(levelStats||{}).length>0)||(silverWallet>0)||(goldSpent>0);
+    if(hasLocalProgress&&!confirm('⚠️ LINKING WILL REPLACE your current local progress with the cloud account.\n\nThis cannot be undone.\n\nContinue?')){return;}
+    status.textContent='Linking...';status.style.color='#0ff';
+    loadSync(username,mmyy,pin,function(success,d){
+        if(success){
+            playerName=username;save('playerName',playerName);
+            playerMmyy=mmyy;save('playerMmyy',playerMmyy);
+            syncPin=pin;save('syncPin',syncPin);
+            syncRegistered=true;save('syncRegistered',true);
+            status.textContent='Device linked! Progress restored.';status.style.color='#0f8';
+            updateSyncIdentityDisplay();
+            updateSyncStatusText();
+            setTimeout(function(){
+                $('syncTabLink').style.display='none';
+                $('syncTabManage').style.display='block';
+            },1000);
+        }else{
+            status.textContent=(d&&d.error)||'Link failed. Check username, MMYY, and PIN.';status.style.color='#f80';
+        }
+    },true);
+}
+function changeSyncPinUI(){
+    var oldPin=$('syncOldPin').value.trim();
+    var newPin=$('syncNewPin').value.trim();
+    var status=$('syncStatus');
+    if(!oldPin||oldPin.length!==6||!/^[0-9]{6}$/.test(oldPin)){status.textContent='Enter current 6-digit PIN.';status.style.color='#f80';return;}
+    if(!newPin||newPin.length!==6||!/^[0-9]{6}$/.test(newPin)){status.textContent='Enter new 6-digit PIN.';status.style.color='#f80';return;}
+    status.textContent='Changing PIN...';status.style.color='#0ff';
+    changeSyncPin(oldPin,newPin,function(success,error){
+        if(success){
+            status.textContent='PIN changed! Other devices must re-link.';status.style.color='#0f8';
+            $('syncOldPin').value='';$('syncNewPin').value='';
+        }else{
+            status.textContent=error||'PIN change failed.';status.style.color='#f80';
+        }
+    });
+}
+function forgotSyncPinUI(){
+    var newPin=$('syncForgotNewPin').value.trim();
+    var status=$('syncStatus');
+    if(!newPin||newPin.length!==6||!/^[0-9]{6}$/.test(newPin)){status.textContent='Enter new 6-digit PIN.';status.style.color='#f80';return;}
+    if(!playerName||!playerMmyy){status.textContent='Not registered.';status.style.color='#f80';return;}
+    if(!confirm('⚠️ RESET PIN\n\nThis will reset your PIN and clear all linked devices.\n\nContinue?')){return;}
+    status.textContent='Resetting PIN...';status.style.color='#0ff';
+    forgotSyncPin(playerName,playerMmyy,newPin,function(success,error){
+        if(success){
+            status.textContent='PIN reset! Re-link your other devices.';status.style.color='#0f8';
+            $('syncForgotNewPin').value='';$('syncOldPin').value='';
+            updateSyncIdentityDisplay();
+            updateSyncStatusText();
+        }else{
+            status.textContent=error||'Reset failed.';status.style.color='#f80';
+        }
+    });
+}
+function updateSyncIdentityDisplay(){
+    var manageUser=$('syncManageUsername');
+    if(manageUser)manageUser.textContent=(typeof playerName!=='undefined'&&playerName)?playerName:'—';
+    var manageMmyy=$('syncManageMmyy');
+    if(manageMmyy)manageMmyy.textContent=(typeof playerMmyy!=='undefined'&&playerMmyy)?playerMmyy:'—';
+    var manageDev=$('syncManageDeviceId');
+    if(manageDev)manageDev.textContent=(typeof syncDeviceId!=='undefined'&&syncDeviceId)?syncDeviceId:'—';
+}
+function updateSyncStatusText(){
+    var el=$('pfSyncStatus');
+    if(!el)return;
+    if(typeof syncRegistered!=='undefined'&&syncRegistered){
+        el.textContent='☁️ Cloud Sync — Registered'+(syncAuto?' • Auto-sync ON':'');
+        el.style.color='#0f8';
+    }else{
+        el.textContent='☁️ Cloud Sync — Not Registered';
+        el.style.color='#888';
+    }
 }
 
 // === GAME CORE ===

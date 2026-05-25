@@ -20,14 +20,14 @@ for(var i=0; i<chips.length; i++) {
 }
 bestChips[curLvl] = cArr;
 save('chips', bestChips);
+var _oldBestTime = bestTimes[curLvl] || 0;
 var _newBest = !bestTimes[curLvl] || runTime < bestTimes[curLvl];
 if(_newBest) {
     bestTimes[curLvl] = runTime;
     save('times', bestTimes);
 }
 // Save ghost if new best OR no ghost data yet (first capture after migration/wipe)
-// Skip ghost saving in daily replay mode
-if(!(typeof isDailyReplay!=='undefined'&&isDailyReplay) && (_newBest || !ghostData[curLvl] || ghostData[curLvl].length === 0)) {
+if(_newBest || !ghostData[curLvl] || ghostData[curLvl].length === 0) {
     ghostData[curLvl]=ghostFrames;
     save('ghostData',ghostData);
 }
@@ -44,6 +44,7 @@ if (curLvl + 1 < LEVELS.length) {
     lastPlayed = curLvl + 1;
     save('lastPlayed', lastPlayed);
 }
+queueSync();
 
 var ov=$('overlay');
 ov.onclick=null;
@@ -51,7 +52,13 @@ $('ovTitle').textContent='SECTOR CLEARED!';
 $('ovTitle').style.color=theme.acc;
 var unlockHtml = newUnlockNames.length > 0 ? '<br><div style="margin-top:10px;padding:8px 16px;border-radius:8px;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.3);color:#0f8;font-weight:bold;">🔓 Unlocked: ' + newUnlockNames.join(', ') + '</div>' : '';
 if(_ghostJustUnlocked)unlockHtml += '<br><div style="margin-top:10px;padding:10px 16px;border-radius:8px;background:rgba(0,255,255,0.15);border:1px solid rgba(0,255,255,0.5);color:#0ff;font-weight:bold;font-size:0.95rem;">\ud83d\udc7b Ghost Rival unlocked! <span style="font-size:0.7rem;color:#aaa;display:block;font-weight:normal;margin-top:4px;">Free skill \u2014 always equipped, doesn\'t use slots</span></div>';
-$('ovMsg').innerHTML='Sector '+LEVELS[curLvl].name+' complete!<br>Score: <b style="color:#ffd700">'+runScore+'</b><br>Gold: '+runGold+' | Silver: '+earnedSilver+' | Style: '+stylePoints+'<br>Time: '+(runTime/1000).toFixed(2)+'s<br>Best: '+(bestTimes[curLvl]/1000).toFixed(2)+'s'+(st.first?' <br><b style="color:#0f8">FIRST TRY!</b>':'')+unlockHtml;
+var timeDiffStr='';
+if(_newBest && _oldBestTime>0){
+    var diff=_oldBestTime-runTime;
+    timeDiffStr=' <span style="color:#0f8">-'+(diff/1000).toFixed(2)+'s</span>';
+}
+var bestScore=bestScores[curLvl]||0;
+$('ovMsg').innerHTML='Sector '+LEVELS[curLvl].name+' complete!<br>Score: <b style="color:#ffd700">'+runScore+'</b> &nbsp; Best: <b style="color:#ffd700">'+bestScore+'</b><br>Gold: '+runGold+' | Silver: '+earnedSilver+' | Style: '+stylePoints+'<br>Time: '+(runTime/1000).toFixed(2)+'s'+timeDiffStr+'<br>Best Time: '+(bestTimes[curLvl]/1000).toFixed(2)+'s'+unlockHtml;
 $('ovBtn').textContent='NEXT LEVEL';
 $('ovBtn').style.background='';
 $('ovBtn').style.display='inline-block';
@@ -74,6 +81,7 @@ ov.classList.add('active');
 
 function showChampionCeremony(){
     championStatus.ceremonyShown=true;save('championStatus',championStatus);
+    queueSync();
     var ov=$('overlay');
     var totalCompletions=0,totalAttempts=0,totalDeaths=globalData.deadFall+globalData.deadSpike+globalData.deadLaser,totalTime=globalData.timePlayed;
     for(var i=0;i<LEVELS.length;i++){if(levelStats[i]){totalCompletions+=levelStats[i].completions||0;totalAttempts+=levelStats[i].attempts||0;}}
@@ -98,7 +106,7 @@ function showChampionCeremony(){
             '<div>Player: <b style="color:#ffd700;">'+getDisplayName()+'</b></div>'+
             '<div>Total clears: '+totalCompletions+' / Attempts: '+totalAttempts+'</div>'+
             '<div>Deaths: '+totalDeaths+' / Time played: '+timeStr+'</div>'+
-            '<div>Gold chips collected: '+totalChips+' / '+maxChips+'</div>'+
+            '<div>Gold gems collected: '+totalChips+' / '+maxChips+'</div>'+
         '</div>';
     $('ovBtn').style.display='inline-block';
     $('ovBtn').textContent='\u2728 CONTINUE';
@@ -297,10 +305,9 @@ function handleDeath(cause) {
         return;
     }
     player.dead=true;
-    // In daily replay: no stat tracking, no deaths, no metrics — just visuals
-    var isReplay = (typeof isDailyReplay!=='undefined'&&isDailyReplay);
-    if(!isReplay){
-        if(runTime >= 60000) recordPlayDay();
+    {
+        if(sessionRunTime + runTime >= 60000) recordPlayDay();
+        checkPwaReward();
         if(typeof isDailyStage!=='undefined'&&isDailyStage){
             bonusGold += runGold; save('bonusGold', bonusGold);
             silverWallet += runSilver; save('silver', silverWallet);
@@ -329,6 +336,7 @@ function handleDeath(cause) {
         var elapsed = runTime || (Date.now() - startTime);
         if(elapsed > 0 && elapsed < 86400000) {
             globalData.timePlayed += elapsed;
+            todayPlayTime += elapsed; save('todayPlayTime', todayPlayTime);
             if(!(typeof isDailyStage!=='undefined'&&isDailyStage)){
                 var st=normalizeLevelStat(levelStats[curLvl]);
                 st.timePlayed = (st.timePlayed || 0) + elapsed;
@@ -344,7 +352,7 @@ function handleDeath(cause) {
     playSfx('die');vib([30,30,60]);
     $('gameCanvas').classList.add('shake');
     setTimeout(function(){if(!gameRunning)return;$('gameCanvas').classList.add('grey');}, 800);
-    setTimeout(showDie, 1400); 
+    _dieTimer=setTimeout(showDie,1400); 
 }
 
 function shatterPlayer() {
@@ -580,7 +588,7 @@ function draw(){
         ctx.globalAlpha=1;
     }
 
-    ctx.strokeStyle=theme.grid;ctx.lineWidth=1;ctx.globalAlpha=.08;
+    ctx.strokeStyle=adjustHex(theme.grid,30);ctx.lineWidth=1;ctx.globalAlpha=.18;
     var go=-(camX*.5)%60;
     for(var gx=go;gx<canvas.width;gx+=60){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,canvas.height);ctx.stroke();}
     for(var gy=0;gy<canvas.height;gy+=60){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(canvas.width,gy);ctx.stroke();}
@@ -658,7 +666,7 @@ function draw(){
             continue;
         }
         if(c.kind==='daily'){
-            // Daily master chip — diamond shape, gold or cyan based on champion status
+            // Daily master gem — diamond shape, gold or cyan based on champion status
             var dailyCol=championStatus.unlocked?'#ffd700':'#0ff';
             var dailyGlow=championStatus.unlocked?'#ff8c00':'#08f';
             ctx.save();ctx.translate(sx,sy);ctx.rotate(Date.now()*.0025);
@@ -686,7 +694,8 @@ function draw(){
         ctx.restore(); ctx.shadowBlur=0;
     }
 
-    if(!replayMode&&ghostsEnabled&&hasSkill('ghost')&&ghostVisible&&currentGhost&&!player.dead){
+    var _isDailyRender=(typeof isDailyStage!=='undefined'&&isDailyStage);
+    if(!replayMode&&ghostsEnabled&&hasSkill('ghost')&&ghostVisible&&currentGhost&&!player.dead&&!_isDailyRender){
         // ghostIdx based on elapsed time so toggle on/off keeps correct sync; freeze during pause
         var gIdx=Math.floor(((isPaused?pauseTime:Date.now())-startTime)/83.33);
         if(gIdx<currentGhost.length){
@@ -1176,7 +1185,7 @@ function endGame(){
     $('gameTitleHUD').classList.remove('active');
     $('hudCenter').classList.remove('active');
     $('hudRight').classList.remove('active');
-    $('hudLeft').style.display='none';$('freezeBtn').style.display='none';$('ghostBtn').style.display='none';
+    $('hudLeft').style.display='none';$('freezeBtn').style.display='none';
     $('jZone').classList.remove('active');
     $('jBtn').classList.remove('active');
     $('arrowControls').classList.remove('active');

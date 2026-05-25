@@ -23,13 +23,6 @@ body{background:#050510;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;o
 @keyframes bootGlitch1{0%{transform:translateX(-2px)}100%{transform:translateX(2px)}}
 @keyframes bootGlitch2{0%{transform:translateX(2px) skewX(0deg)}100%{transform:translateX(-2px) skewX(-1deg)}}
 #boot .sub{font-size:.7rem;color:#666;letter-spacing:6px;text-transform:uppercase}
-#boot .ring-wrap{position:relative;width:100px;height:100px;margin-top:10px;}
-#boot .ring-wrap svg{width:100%;height:100%;transform:rotate(-90deg);}
-#boot .ring-wrap circle{fill:none;stroke-width:3;}
-#boot .ring-bg{stroke:rgba(255,255,255,0.08);}
-#boot .ring-fg{stroke:#0ff;stroke-linecap:round;stroke-dasharray:283;stroke-dashoffset:283;transition:stroke-dashoffset .1s linear,stroke .2s;}
-#boot .pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.9rem;font-family:monospace;color:#fff;font-weight:700;}
-@keyframes p{0%,100%{opacity:.6}50%{opacity:1}}
 
 /* Level Select & Ambient Glow */
 #levelSelect{position:fixed;inset:0;z-index:100;background-color:#050510;display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:16px 0;overflow-y:auto;overflow-x:hidden;touch-action:pan-y;transition:background-color 0.5s;}
@@ -40,16 +33,21 @@ body{background:#050510;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;o
 @keyframes fadeIn { from{opacity:0} to{opacity:1} }
 #cardWrap.switching { animation: cardSwitch 0.3s ease; }
 @keyframes cardSwitch { 0%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.97)} 100%{opacity:1;transform:scale(1)} }
-#dotNav .dot.active { animation: dotPulse 1.5s ease infinite; }
+#dotNav .seg.active { animation: segPulse 1.5s ease infinite; }
+@keyframes segPulse { 0%,100%{box-shadow:0 0 4px var(--seg-color,#0ff)} 50%{box-shadow:0 0 10px var(--seg-color,#0ff)} }
 @keyframes dotPulse { 0%,100%{box-shadow:0 0 8px var(--dot-color,#0ff)} 50%{box-shadow:0 0 16px var(--dot-color,#0ff)} }
 #lsDetails.entering { animation: slideUp 0.3s ease; }
 @keyframes slideUp { from{opacity:0.5;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
 
 /* Top-Left Gem Wallet */
-#lsTopStats { position: absolute; top: 16px; left: 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; background: transparent; padding: 4px 0; border: none; font-family: monospace; font-size: 0.85rem; font-weight: bold; z-index: 110; text-align: left; text-shadow: 0 1px 4px rgba(0,0,0,0.85), 0 0 8px rgba(0,0,0,0.6); }
+#lsHeaderRow { position: absolute; top: 16px; left: 16px; display: flex; align-items: flex-start; gap: 12px; z-index: 110; }
+#lsTopStats { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; background: transparent; padding: 4px 0; border: none; font-family: monospace; font-size: 0.85rem; font-weight: bold; text-align: left; text-shadow: 0 1px 4px rgba(0,0,0,0.85), 0 0 8px rgba(0,0,0,0.6); max-width: 160px; }
+#cardWrap #dotNav { position: absolute; bottom: 2px; left: 8px; right: 8px; height: 4px; margin-top: 0; max-width: none; border-radius: 2px; z-index: 5; }
+.t-stat.bl { bottom: 18px; left: 14px; }
+.t-stat.br { bottom: 18px; right: 14px; }
 
 /* Single Card Display */
-#cardWrap { position:relative; width:90vw; max-width:400px; height:clamp(140px, 25vh, 220px); margin-top:10px; border-radius:12px; overflow:hidden; border:2px solid rgba(0,229,255,0.4); box-shadow:0 0 30px rgba(0,229,255,0.2); transition:border-color 0.4s,box-shadow 0.4s; flex-shrink:0; aspect-ratio:2/1; }
+#cardWrap { position:relative; width:92vw; max-width:420px; height:clamp(140px, 25vh, 220px); margin-top:10px; border-radius:12px; overflow:hidden; border:2px solid rgba(0,229,255,0.4); box-shadow:0 0 30px rgba(0,229,255,0.2); transition:border-color 0.4s,box-shadow 0.4s; flex-shrink:0; aspect-ratio:2/1; }
 #cardWrap canvas { position:absolute; inset:0; width:100%; height:100%; }
 #cardWrap::after { content:''; position:absolute; inset:0; pointer-events:none; background:linear-gradient(transparent 50%,rgba(0,0,0,0.1) 50%); background-size:100% 4px; z-index:3; }
 #cardWrap .num { position:absolute; top:12px; left:14px; font-weight:900; color:rgba(255,255,255,0.9); z-index:4; font-size:1.4rem; text-shadow:0 2px 8px rgba(0,0,0,0.9); }
@@ -57,44 +55,46 @@ body{background:#050510;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;o
 #cardWrap.locked { filter:grayscale(1); opacity:0.4; border-color:#333; box-shadow:none; }
 
 /* Card Stats Overlay */
-#cardWrap .t-stat { position:absolute; font-family:monospace; font-size:0.55rem; color:rgba(255,255,255,0.7); z-index:4; display:flex; align-items:center; gap:4px; text-shadow:0 1px 3px rgba(0,0,0,0.8); }
+#cardWrap .t-stat { position:absolute; font-family:monospace; font-size:0.6rem; color:rgba(255,255,255,0.85); z-index:4; display:flex; align-items:center; gap:4px; text-shadow:0 1px 3px rgba(0,0,0,0.8); }
 .t-stat.tr { top:12px; right:14px; }
-.t-stat.bl { bottom:12px; left:14px; }
-.t-stat.br { bottom:12px; right:14px; }
+#cardWrap .t-stat.ghost-btn { bottom: 18px; left: 50%; transform: translateX(-50%); }
 
-/* Dot Navigation */
-#dotNav { display:flex; gap:6px; margin-top:14px; align-items:center; flex-wrap:wrap; justify-content:center; max-width:min(90vw,320px); padding:0 10px; }
-#dotNav .dot { width:10px; height:10px; border-radius:50%; border:1.5px solid rgba(255,255,255,0.3); background:transparent; cursor:pointer; transition:all 0.3s; padding:0; appearance:none; -webkit-appearance:none; }
-#dotNav .dot.unlocked { background:var(--dot-color,#0ff); border-color:var(--dot-color,#0ff); opacity:0.5; }
-#dotNav .dot.active { opacity:1; transform:scale(1.4); box-shadow:0 0 8px var(--dot-color,#0ff); }
-#dotNav .dot.locked { opacity:0.2; cursor:default; }
+/* Segmented Progress Navigation */
+#dotNav { display:flex; gap:2px; width:100%; height:6px; border-radius:3px; overflow:hidden; background:rgba(255,255,255,0.08); margin-top:14px; max-width:min(90vw,320px); }
+#dotNav .seg { flex:1; height:100%; background:transparent; cursor:pointer; transition:background 0.3s, box-shadow 0.3s; }
+#dotNav .seg.unlocked { background:rgba(255,255,255,0.25); }
+#dotNav .seg.active { background:var(--seg-color,#0ff); box-shadow:0 0 8px var(--seg-color,#0ff); }
+#dotNav .seg.locked { background:rgba(255,255,255,0.12); cursor:default; }
 
-
-.nav-btn { position:absolute; top:50%; transform:translateY(-50%); width:40px; height:40px; background:rgba(0,0,0,0.7); border:1px solid rgba(255,255,255,0.2); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.1rem; cursor:pointer; z-index:20; color:#fff; padding:0; font:inherit; appearance:none; -webkit-appearance:none; transition:all 0.2s; }
+.nav-btn { position:absolute; top:50%; transform:translateY(-50%); width:32px; height:32px; background:rgba(0,0,0,0.35); border:none; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.85rem; cursor:pointer; z-index:20; color:rgba(255,255,255,0.75); padding:0; font:inherit; appearance:none; -webkit-appearance:none; transition:all 0.2s; text-shadow:0 0 4px rgba(0,0,0,0.8); }
 .nav-btn:hover { border-color:#0ff; background:rgba(0,229,255,0.2); }
 #navLeft { left:8px; }
 #navRight { right:8px; }
 
 #lsDetails { display:flex; flex-direction:column; align-items:center; gap:6px; margin-top:10px; width:100%; max-width:400px; padding:0 20px; }
-#lsName { font-size: 1.6rem; font-weight: 800; letter-spacing: 2px; text-shadow: 0 0 10px currentColor; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;}
-#lsTags { font-size: 0.75rem; font-weight: bold; letter-spacing: 2px; padding: 4px 12px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-bottom: 5px; transition: color 0.3s;}
-.stats-row { display: flex; gap: 10px; width: 100%; justify-content: center; }
-.stat-box { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 5px; flex: 1; text-align: center; font-size: 0.50rem; color: #aaa; letter-spacing: 1px; }
-.stat-box b { display: block; font-size: 0.9rem; color: #fff; margin-top: 3px; font-family: monospace; transition: color 0.3s;}
-#hazardLog { font-size:0.6rem; color:#666; text-align:center; margin-top:8px; font-family:monospace; letter-spacing:1px; }
+#lsName { font-size: 1.6rem; font-weight: 800; letter-spacing: 2px; text-shadow: 0 0 4px currentColor; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; margin-top: 12px;}
+#lsTags { font-size: 0.65rem; font-weight: bold; letter-spacing: 1px; padding: 4px 12px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-bottom: 5px; transition: color 0.3s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+/* stat cards removed — stats now shown in thumbnail overlay only */
+#lsPhysics { display: none !important; }
 #lsPlayBtn { padding:14px 40px; font-size:1rem; font-weight:900; letter-spacing:3px; border:none; border-radius:8px; background:linear-gradient(90deg,#0ff,#08f); color:#000; cursor:pointer; box-shadow:0 0 20px rgba(0,229,255,0.3); margin-top:12px; transition:transform 0.2s,box-shadow 0.2s; width:100%; max-width:320px; }
 #lsPlayBtn:hover { transform:scale(1.03); box-shadow:0 0 30px rgba(0,229,255,0.5); }
 #lsPlayBtn:active { transform:scale(0.97); }
 #lsPlayBtn:disabled { background:#222!important; color:#555!important; box-shadow:none!important; cursor:not-allowed; transform:none; border:1px solid #333; }
-
-/* Global Stats */
-#globalStats { display:flex; gap:6px; width:100%; margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.06); justify-content:center; flex-wrap:wrap; }
-.g-stat { display:flex; flex-direction:column; align-items:center; padding:8px 12px; border-radius:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); min-width:60px; }
-.g-stat.full-row { width:100%; padding:10px; background:linear-gradient(180deg,rgba(255,255,255,0.04),transparent); }
-.g-stat.full-row .val { font-size:1.2rem; letter-spacing:2px; text-shadow:0 0 10px currentColor; text-transform:uppercase; }
-.g-stat .ico { font-size:1.2rem; margin-bottom:2px; }
-.g-stat .val { font-size:0.9rem; font-weight:900; color:#fff; font-family:monospace; }
-.g-stat .lbl { font-size:0.5rem; color:#888; text-transform:uppercase; letter-spacing:1px; margin-top:2px; }
+#lsDailyRow { display:flex; gap:8px; justify-content:center; margin-top:8px; width:100%; max-width:320px; }
+.daily-btn { width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:0.85rem; color:#fff; padding:0; transition:all 0.2s; }
+.daily-btn:hover { background:rgba(0,229,255,0.2); border-color:#0ff; }
+.daily-btn span { font-size:0.6rem; margin-left:2px; }
+#lsGlobalStats { display:flex; flex-direction:column; align-items:center; gap:8px; width:100%; max-width:360px; margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.06); }
+.gs-row { display:flex; justify-content:center; gap:20px; flex-wrap:wrap; }
+.gs-stat { display:flex; align-items:baseline; gap:5px; cursor:pointer; transition:opacity 0.2s; }
+.gs-stat:hover { opacity:0.7; }
+.gs-stat .gs-ico { font-size:0.85rem; filter:drop-shadow(0 0 3px var(--accent,#0ff)); }
+.gs-stat .gs-num { font-size:0.75rem; font-weight:700; color:#fff; font-family:monospace; }
+.gs-stat .gs-lbl { font-size:0.55rem; color:#888; text-transform:lowercase; }
+.pf-stat { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:8px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:2px; }
+.pf-stat .pf-ico { font-size:1rem; }
+.pf-stat .pf-val { font-size:0.85rem; font-weight:700; color:#fff; font-family:monospace; }
+.pf-stat .pf-lbl { font-size:0.55rem; color:#888; }
 
 /* Game Canvas & FX */
 #gameCanvas{position:fixed;inset:0;z-index:50;display:none}
@@ -118,7 +118,7 @@ body{background:#050510;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;o
 #gameTitleHUD .txt-d { font-size: 0.6rem; font-weight: 800; letter-spacing: 4px; line-height: 1; margin-top: 2px; text-shadow: 0 0 5px #f0f; background:linear-gradient(90deg,#f0f,#a0f);-webkit-background-clip:text;-webkit-text-fill-color:transparent; }
 #homeBtnProg { position: absolute; bottom: 0; left: 0; height: 3px; background: #0ff; width: var(--p, 0%); transition: none; box-shadow: 0 0 8px #0ff; }
 
-#homeTooltip { position: fixed; top: 60px; left: 12px; z-index: 320; background: rgba(0,0,0,0.85); border: 1px solid rgba(0,229,255,0.5); color: #fff; font-size: 0.65rem; font-family: monospace; letter-spacing: 1px; padding: 6px 10px; border-radius: 6px; backdrop-filter: blur(6px); opacity: 0; pointer-events: none; transition: opacity 0.5s ease; display: flex; align-items: center; gap: 6px; max-width: calc(100vw - 24px); box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+#homeTooltip { position: fixed; top: 95px; left: 50%; transform: translateX(-50%); z-index: 320; background: rgba(0,0,0,0.85); border: 1px solid rgba(0,229,255,0.5); color: #fff; font-size: 0.65rem; font-family: monospace; letter-spacing: 1px; padding: 6px 10px; border-radius: 6px; backdrop-filter: blur(6px); opacity: 0; pointer-events: none; transition: opacity 0.5s ease; display: flex; align-items: center; gap: 6px; max-width: calc(100vw - 24px); box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
 #homeTooltip.active { opacity: 1; }
 #npcAdvice { position: fixed; top: 52px; left: 50%; transform: translateX(-50%); z-index: 199; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 5px 12px; max-width: 92vw; color: #aaa; font-size: 0.6rem; font-family: monospace; letter-spacing: 0.5px; line-height: 1.4; text-align: left; backdrop-filter: blur(4px); opacity: 0; pointer-events: none; transition: opacity 0.4s ease; display: none; }
 #npcAdvice.active { opacity: 1; display: flex; }
@@ -129,7 +129,7 @@ body{background:#050510;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;o
 #hudCenter {
     position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 200;
     display: none; flex-direction: column; align-items: center;
-    background: rgba(0,0,0,0.6); padding: 6px 20px; border-radius: 12px;
+    background: rgba(0,0,0,0.05); padding: 6px 20px; border-radius: 12px;
     border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px);
 }
 #hudCenter.active { display: flex; }
@@ -141,13 +141,12 @@ body{background:#050510;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;o
 #hudRight {
     position: fixed; top: 12px; right: 12px; z-index: 200;
     display: none; flex-direction: column; align-items: flex-end; gap: 4px;
-    background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 12px;
+    background: rgba(0,0,0,0.05); padding: 8px 12px; border-radius: 12px;
     border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); pointer-events: none;
 }
 #hudRight.active { display: flex; }
 #hudRight div { font-size: 0.65rem; font-family: monospace; color: #aaa; letter-spacing: 1px; }
 #hudRight b { color: #fff; font-size: 0.75rem; }
-
 
 /* Controls */
 #jZone{position:fixed;z-index:200;display:none; transition: width 0.2s, height 0.2s, left 0.2s, bottom 0.2s;}
@@ -206,9 +205,9 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 .tier-master{border:1px solid rgba(255,215,0,0.5) !important;background:linear-gradient(135deg,rgba(255,215,0,0.05),rgba(255,140,0,0.03)) !important}
 .confetti-piece{position:fixed;top:-20px;width:10px;height:14px;pointer-events:none;z-index:9998;animation:confettiFall linear forwards;will-change:transform,opacity}
 @keyframes confettiFall{0%{transform:translateY(0) rotate(0)}100%{transform:translateY(110vh) rotate(720deg);opacity:0.5}}
-#settings,#gameSettings,#changelog,#streakCalendar,#dailyPreview{position:fixed;inset:0;z-index:400;background:#020205;display:none;flex-direction:column;align-items:center;justify-content:flex-start;gap:18px;overflow-y:auto;padding:24px 16px;min-height:100vh}
-#settings.active,#gameSettings.active,#changelog.active,#streakCalendar.active,#dailyPreview.active{display:flex}
-#settings h2,#gameSettings h2,#changelog h2,#streakCalendar h2,#dailyPreview h2{font-size:1.4rem;margin-bottom:10px; color:#0ff;}
+#settings,#gameSettings,#changelog,#streakCalendar,#dailyPreview,#profile{position:fixed;inset:0;z-index:400;background:#020205;display:none;flex-direction:column;align-items:center;justify-content:flex-start;gap:18px;overflow-y:auto;padding:24px 16px;min-height:100vh}
+#settings.active,#gameSettings.active,#changelog.active,#streakCalendar.active,#dailyPreview.active,#profile.active{display:flex}
+#settings h2,#gameSettings h2,#changelog h2,#streakCalendar h2,#dailyPreview h2,#profile h2{font-size:1.4rem;margin-bottom:10px; color:#0ff;}
 #settings .row,#gameSettings .row{display:flex;gap:12px;align-items:center; width: 320px; justify-content: space-between;}
 #settings label,#gameSettings label{font-size:.8rem;color:#aaa;min-width:90px;}
 #settings input[type="range"],#gameSettings input[type="range"]{flex-grow: 1;}
@@ -219,8 +218,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 .btn-install { background: linear-gradient(135deg, #f0f, #a0f) !important; margin-top:0; display:none; }
 
 .gear{position:fixed;top:16px;right:16px;z-index:110;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;font-size:1rem;color:#fff;padding:0;appearance:none;-webkit-appearance:none}
-.store-btn{position:fixed;top:16px;right:60px;z-index:110;height:36px;padding:0 12px 0 10px;border-radius:18px;background:linear-gradient(135deg,rgba(0,255,255,0.15),rgba(255,0,255,0.1));border:1px solid rgba(0,255,255,0.4);display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;transition:all .2s;font-size:1rem;color:#fff;font-weight:700;letter-spacing:1px;font-family:inherit;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
-.store-btn span{font-size:0.65rem;color:#0ff;letter-spacing:1.5px;}
+.store-btn{position:fixed;top:16px;right:60px;z-index:110;width:36px;height:36px;padding:0;border-radius:50%;background:linear-gradient(135deg,rgba(0,255,255,0.15),rgba(255,0,255,0.1));border:1px solid rgba(0,255,255,0.4);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;font-size:1.1rem;color:#fff;font-family:inherit;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
 .store-btn:hover,.store-btn:focus{background:linear-gradient(135deg,rgba(0,255,255,0.3),rgba(255,0,255,0.2));border-color:rgba(0,255,255,0.7);}
 .chest-pulse{background:linear-gradient(135deg,rgba(255,170,0,0.7),rgba(255,102,0,0.5))!important;border-color:#fa0!important;animation:chestPulse 1.4s ease-in-out infinite;}
 @keyframes chestPulse{0%,100%{box-shadow:0 0 6px rgba(255,170,0,0.5),inset 0 0 4px rgba(255,170,0,0.3);transform:scale(1);}50%{box-shadow:0 0 18px rgba(255,170,0,0.9),inset 0 0 8px rgba(255,170,0,0.6);transform:scale(1.08);}}
@@ -246,12 +244,14 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 #onboard .onb-start{width:100%;max-width:320px;padding:14px;font-size:0.95rem;font-weight:900;letter-spacing:4px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ff,#f0f);color:#000;cursor:pointer;box-shadow:0 0 30px rgba(0,255,255,0.4);margin-top:6px;}
 #onboard .onb-start:disabled{opacity:0.4;cursor:not-allowed;box-shadow:none;}
 #onboard .onb-warn{font-size:0.65rem;color:#f80;text-align:center;min-height:14px;}
-#btnHints{position:fixed;top:56px;right:10px;z-index:115;display:none;flex-direction:column;gap:4px;align-items:flex-end;animation:fadeIn 0.5s ease;}
+#btnHints{position:fixed;top:76px;right:10px;z-index:115;display:none;flex-direction:column;gap:4px;align-items:flex-end;animation:fadeIn 0.5s ease;}
 #btnHints.active{display:flex}
 #btnHints .hint-tag{font-size:0.6rem;color:#fff;background:rgba(0,0,0,0.8);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:3px 8px;white-space:nowrap;backdrop-filter:blur(5px);}
 #btnHints.fading{animation:fadeOut 1s ease forwards;}
 @keyframes fadeOut{from{opacity:1}to{opacity:0}}
 .gear:hover{background:rgba(0,229,255,.2);border-color:#0ff;transform:rotate(30deg)}
+.fs-btn{position:fixed;top:56px;right:16px;z-index:110;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;font-size:.85rem;color:#fff;padding:0;appearance:none;-webkit-appearance:none}
+.fs-btn:hover{background:rgba(0,229,255,.2);border-color:#0ff}
 
 .weather{position:fixed;inset:0;pointer-events:none;z-index:60}
 
@@ -262,97 +262,61 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 }
 /* Landscape stage-select layout — for short-height landscape phones (e.g., Z Fold cover, low-end devices) */
 @media (orientation: landscape) and (max-height: 600px) {
-  #lsLogo { top: 6px !important; }
-  #lsLogo > div:first-child { font-size: 1.2rem !important; letter-spacing: 3px !important; }
-  #lsLogo > div:nth-child(2) { font-size: 0.6rem !important; letter-spacing: 4px !important; margin-top: 0 !important; }
+  #lsLogo { top: 14px !important; }
+  #lsLogo > div:first-child { font-size: 1.45rem !important; letter-spacing: 3px !important; }
+  #lsLogo > div:nth-child(2) { font-size: 0.72rem !important; letter-spacing: 4px !important; margin-top: 0 !important; }
   #ghostBanner { top: 28px !important; font-size: 0.55rem !important; padding: 3px 10px !important; max-width: 65vw !important; }
-  #lsTopStats { top: 8px !important; right: auto !important; left: 8px !important; transform: none !important; font-size: 0.65rem !important; gap: 6px !important; padding: 4px 8px !important; flex-direction: row !important; flex-wrap: wrap !important; max-width: 50vw !important; }
+  #lsHeaderRow { top: 10px !important; left: 16px !important; gap: 8px !important; }
+  #lsTopStats { font-size: 0.65rem !important; gap: 6px !important; padding: 4px 8px !important; flex-direction: row !important; flex-wrap: wrap !important; max-width: 50vw !important; align-items: center !important; }
+  #lsCharPortrait { display: none !important; }
   /* Compact top buttons in landscape */
   .gear { width: 30px !important; height: 30px !important; font-size: 0.85rem !important; top: 8px !important; }
-  .store-btn { height: 30px !important; padding: 0 8px 0 6px !important; top: 8px !important; gap: 4px !important; font-size: 0.85rem !important; }
-  .store-btn span { font-size: 0.55rem !important; }
+  .store-btn { width: 30px !important; height: 30px !important; padding: 0 !important; top: 8px !important; font-size: 0.85rem !important; }
+  .fs-btn { width: 30px !important; height: 30px !important; font-size: 0.75rem !important; top: 44px !important; right: 16px !important; }
   #levelSelect {
     flex-direction: row !important;
     align-items: center !important;
     justify-content: center !important;
     gap: 14px !important;
-    padding: 44px 16px 12px 16px !important;
+    padding: 86px 16px 12px 16px !important;
   }
   #cardWrap {
     width: auto !important;
     flex: 1.1 !important;
     max-width: 44vw !important;
-    height: 76vh !important;
-    max-height: 420px !important;
+    height: 70vh !important;
+    max-height: 380px !important;
     aspect-ratio: auto !important;
-    margin-top: 0 !important;
+    margin: auto 0 !important;
+    background: radial-gradient(circle at center, rgba(255,255,255,0.03) 0%, transparent 70%) !important;
   }
   /* Character portrait: inline before card, narrower flex */
-  #lsCharPortrait {
-    position: relative !important;
-    top: auto !important;
-    left: auto !important;
-    width: auto !important;
-    flex: 0 0 80px !important;
-    max-width: 80px !important;
-    height: 76vh !important;
-    max-height: 420px !important;
-    border-radius: 12px !important;
-    background: #0a0a18 !important;
-    z-index: auto !important;
-  }
+  /* lsCharPortrait styles now handled via #lsHeaderRow */
   #lsDetails {
     flex: 1 !important;
-    max-width: 42vw !important;
+    max-width: 40vw !important;
     margin-top: 0 !important;
-    padding: 0 4px !important;
+    padding: 0 8px !important;
     align-items: stretch !important;
     overflow-y: auto !important;
     max-height: 76vh !important;
-    gap: 4px !important;
+    gap: 6px !important;
   }
-  #lsDetails h2 { font-size: 1rem !important; margin: 0 !important; }
+  #lsGlobalStats { gap: 6px !important; margin-top: 6px !important; padding-top: 6px !important; }
+  .gs-row { gap: 14px !important; }
+  .gs-stat .gs-ico { font-size: 0.75rem !important; }
+  .gs-stat .gs-num { font-size: 0.65rem !important; }
+  .gs-stat .gs-lbl { font-size: 0.5rem !important; }
+  #lsDetails h2 { font-size: 1.1rem !important; margin: 0 0 4px 0 !important; text-align: center !important; }
   #lsDetails .tag { font-size: 0.6rem !important; padding: 2px 6px !important; }
   #lsPhysics { font-size: 0.55rem !important; line-height: 1.3 !important; }
-  #lsDetails .stats-row { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 4px !important; width: 100% !important; }
-  #lsDetails .stat-box { padding: 4px 6px !important; font-size: 0.55rem !important; }
-  #lsDetails .stat-box b { font-size: 0.85rem !important; }
-  #hazardLog { font-size: 0.5rem !important; padding: 2px 6px !important; }
-  #lsPlayBtn { padding: 8px 18px !important; font-size: 0.8rem !important; margin-top: 4px !important; }
-  #dotNav { width: 100% !important; max-width: 100% !important; margin-top: 6px !important; flex-wrap: wrap !important; }
-  #dotNav .dot { width: 6px !important; height: 6px !important; }
-  /* globalStats sits inside lsDetails column (after Play DashJ), stuck to bottom */
-  #globalStats { 
-    position: static !important; 
-    width: 100% !important; 
-    max-width: 100% !important; 
-    padding: 6px 10px !important; 
-    margin: auto 0 0 0 !important; /* push to bottom of flex column */
-    background: rgba(0,0,0,0.4) !important;
-    border: 1px solid rgba(0,255,255,0.2) !important;
-    border-radius: 8px !important;
-    backdrop-filter: blur(6px) !important;
-    z-index: 50 !important;
-    display: flex !important;
-    flex-direction: row !important;
-    grid-template-columns: none !important;
-    gap: 10px !important;
-    justify-content: space-around !important;
-    align-self: stretch !important;
-  }
-  #globalStats .g-stat { 
-    padding: 0 !important; 
-    background: transparent !important; 
-    border: none !important; 
-    flex-direction: row !important;
-    align-items: center !important;
-    gap: 4px !important;
-    font-size: 0.55rem !important;
-  }
-  #globalStats .g-stat .ico { font-size: 0.75rem !important; margin: 0 !important; }
-  #globalStats .g-stat .val { font-size: 0.7rem !important; font-weight: 700 !important; }
-  #globalStats .g-stat .lbl { display: none !important; }
+  /* stat cards removed in landscape too */
+  #lsPlayBtn { padding: 8px 18px !important; font-size: 0.8rem !important; margin-top: 4px !important; min-width: 160px !important; align-self: center !important; }
+  #cardWrap #dotNav { height: 5px !important; }
   #btnHints { display: none !important; }
+  /* pwaBanner hidden by default inline; JS controls show/hide in showPwaInstallBanner() */
+  /* lsInstallBtn visibility is controlled by JS in showPwaInstallBanner() */
+  /* daily buttons now inside lsDetails below Play DashJ */
   /* Compact store/settings panels in low-height landscape */
   #store, #settings, #gameSettings, #changelog {
     padding: 6px 16px !important;
@@ -361,6 +325,26 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
   }
+  .sk-inline { display: inline !important; flex: 1 !important; min-width: 0 !important; }
+  .sk-block { display: none !important; }
+  #storePortraitWrap {
+    position: absolute !important;
+    top: 5px !important;
+    left: 16px !important;
+    width: 90px !important;
+    height: 60px !important;
+    margin: 0 !important;
+    z-index: 10 !important;
+  }
+  #storePortraitWrap #storePortrait {
+    position: static !important;
+    transform: none !important;
+    left: auto !important;
+    width: 90px !important;
+    height: 60px !important;
+  }
+  .store-item { padding: 8px !important; margin-bottom: 4px !important; }
+  #store > div:first-child { max-width: 520px !important; }
   /* Settings/gameSettings grid in compact landscape — tighter padding, max-height to enable scroll */
   #settings.active, #gameSettings.active {
     padding: 6px 16px !important;
@@ -404,44 +388,31 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 @media (orientation: portrait), (orientation: landscape) and (min-height: 601px) {
   /* Reserve top header zone (char/stats/logo) so content can't scroll under logo */
   #levelSelect {
-    padding-top: 130px !important;
+    padding-top: 75px !important;
     padding-bottom: 16px !important;
   }
-  #lsCharPortrait {
-    top: 8px !important;
-    left: 8px !important;
-    width: 56px !important;
-    height: 68px !important;
-    z-index: 111 !important;
-  }
+  #lsHeaderRow { top: 4px !important; left: 8px !important; gap: 8px !important; }
   #lsTopStats {
-    top: 8px !important;
-    right: auto !important;
-    left: 70px !important;
     max-width: 110px !important;
-    transform: none !important;
     font-size: 0.6rem !important;
-    gap: 3px !important;
-    padding: 6px 8px !important;
+    gap: 5px !important;
+    padding: 0 !important;
     flex-direction: column !important;
     flex-wrap: nowrap !important;
     align-items: flex-start !important;
-    height: 68px !important;
+    height: auto !important;
     justify-content: center !important;
-    background: rgba(0,0,0,0.35) !important;
-    border-radius: 8px !important;
-    border: 1px solid rgba(255,255,255,0.08) !important;
-    overflow: hidden !important;
+    background: transparent !important;
+    border: none !important;
+    overflow: visible !important;
   }
-  #lsTopRank { display: block !important; width: 100% !important; box-sizing: border-box !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; max-width: 100% !important; font-size: 0.55rem !important; padding: 4px 6px !important; line-height: 1.4 !important; text-align: center !important; }
+  #lsCharPortrait { display: none !important; }
+  #lsTopRank { display: block !important; width: 100% !important; box-sizing: border-box !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; max-width: 100% !important; font-size: 0.6rem !important; padding: 0 !important; line-height: 1.4 !important; text-align: left !important; background: transparent !important; }
   #lsPlayerName { font-size: 0.7rem !important; }
-  #lsGems { font-size: 0.6rem !important; }
-  /* Daily + Chest buttons: pushed to their own row well below logo */
-  #lsStreakBtn { top: 116px !important; right: 96px !important; }
-  #lsDailyBtn { top: 116px !important; right: 56px !important; }
-  #lsChestBtn { top: 116px !important; right: 16px !important; }
+  #lsGems { font-size: 0.7rem !important; gap: 10px !important; }
+  /* daily buttons now inside lsDetails below Play DashJ */
   /* Logo positioned below the header row, 25% bigger and clearly readable */
-  #lsLogo { top: 66px !important; }
+  #lsLogo { top: 60px !important; }
   #lsLogo > div:first-child { font-size: 1.5rem !important; letter-spacing: 2px !important; }
   #lsLogo > div:nth-child(2) { font-size: 0.75rem !important; letter-spacing: 4px !important; margin-top: 0 !important; }
   /* In-game HUD compact in portrait — prevent overlap of left/center/right */
@@ -449,12 +420,12 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     padding: 4px 8px !important;
     gap: 2px !important;
   }
-  #hudLeft { top: 110px !important; left: 8px !important; }
-  #hudRight { top: 8px !important; right: 8px !important; }
+  #hudLeft { top: 64px !important; left: 8px !important; }
+  #hudRight { top: 12px !important; right: 8px !important; }
   #hudLeft > div, #hudRight > div { font-size: 0.5rem !important; letter-spacing: 0.5px !important; }
   #hudLeft b, #hudRight b { font-size: 0.6rem !important; }
   #hudSplit { font-size: 0.45rem !important; }
-  #hudCenter { top: 64px !important; padding: 3px 12px !important; }
+  #hudCenter { top: 12px !important; padding: 3px 12px !important; }
   #hudCenter .sector-name { font-size: 0.6rem !important; margin-bottom: 2px !important; letter-spacing: 1px !important; }
   #hudCenter .prog-container { width: 110px !important; }
   /* Pause panel overflow protection — long text doesn't break button bounds */
@@ -580,6 +551,8 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 .diff-moderate{color:#fa0 !important;border-color:rgba(255,170,0,0.3) !important}
 #tutorial{position:fixed;inset:0;z-index:500;background:rgba(2,2,5,.97);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px}
 #tutorial.active{display:flex}
+
+
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
@@ -596,38 +569,38 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     <canvas id="bootParticles" style="position:absolute;inset:0;z-index:2;"></canvas>
     <h1 style="z-index:1;">N3ON DashJ<span class="glitch" data-text="N3ON DashJ"></span></h1>
     <span class="sub" style="z-index:1;">jstylr</span>
-    <span style="z-index:1;font-size:.55rem;color:#444;font-family:monospace;">v1.2.0</span>
-    <div class="ring-wrap" style="z-index:1;">
-        <svg viewBox="0 0 100 100"><circle class="ring-bg" cx="50" cy="50" r="45"/><circle class="ring-fg" id="bootRing" cx="50" cy="50" r="45"/></svg>
-        <div class="pct" id="bootPct">0%</div>
-    </div>
+    <span style="z-index:1;font-size:.55rem;color:#444;font-family:monospace;">v1.2.50</span>
+    <div id="bootTips" style="z-index:1;font-size:0.6rem;color:#888;font-family:monospace;max-width:80vw;text-align:center;line-height:1.4;opacity:0;transition:opacity 0.5s ease;margin-top:-8px;"></div>
 </div>
 
 <!-- Refactored Level Select -->
 <div id="levelSelect">
     <div id="ambientGlow"></div>
     <div id="lsLogo" class="ls-ui" style="position:absolute;top:60px;left:50%;transform:translateX(-50%);text-align:center;z-index:100;pointer-events:none;">
-        <div style="font-size:1.4rem;font-weight:900;letter-spacing:6px;background:linear-gradient(90deg,#0ff,#f0f);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:0 0 20px rgba(0,255,255,0.3);line-height:1;">N3ON</div>
-        <div style="font-size:0.7rem;font-weight:700;letter-spacing:8px;color:#0ff;margin-top:2px;">DashJ</div>
+        <div style="display:inline-flex;align-items:baseline;gap:4px;">
+            <div style="font-size:1.4rem;font-weight:900;letter-spacing:4px;background:linear-gradient(90deg,#0ff,#f0f);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:0 0 20px rgba(0,255,255,0.3);line-height:1;">N3ON</div>
+            <div style="font-size:0.7rem;font-weight:700;letter-spacing:4px;color:#0ff;line-height:1;">DashJ</div>
+        </div>
     </div>
     <div id="ghostBanner" style="display:none;position:absolute;top:120px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.7);border:1px solid rgba(0,255,255,0.4);border-radius:10px;padding:6px 14px;text-align:center;font-size:0.65rem;color:#aaa;backdrop-filter:blur(8px);z-index:100;pointer-events:none;max-width:90vw;"></div>
     
-    <div id="lsTopStats" class="ls-ui">
-        <span id="lsTopRank" onclick="showRankPopup()" style="color:#ffd700;font-weight:700;letter-spacing:0.5px;font-size:0.65rem;cursor:pointer;padding:2px 6px;border:1px solid rgba(255,215,0,0.4);border-radius:4px;">— ⓘ</span>
-        <span id="lsPlayerName" style="color:#0ff;font-weight:900;letter-spacing:1px;"></span>
-        <span id="lsGems" style="display:flex;gap:8px;align-items:center;">
-            <span style="color:#ffd700; filter:drop-shadow(0 0 5px rgba(255,215,0,0.5));">★ <span id="lsTopGold">0</span></span>
-            <span style="color:#ccc; filter:drop-shadow(0 0 5px rgba(255,255,255,0.5));">♦ <span id="lsTopSilver">0</span></span>
-        </span>
+    <div id="lsHeaderRow" class="ls-ui" style="position:absolute;top:16px;left:16px;z-index:110;display:flex;align-items:flex-start;gap:12px;">
+        <div id="lsTopStats">
+            <span id="lsPlayerName" onclick="openProfile()" style="color:#0ff;font-weight:900;letter-spacing:1px;cursor:pointer;" title="View Profile"></span>
+            <span id="lsTopRank" onclick="openProfile()" style="color:#ffd700;font-weight:700;letter-spacing:0.5px;font-size:0.65rem;cursor:pointer;">— ⓘ</span>
+            <span id="lsGems" style="display:flex;gap:12px;align-items:center;font-size:0.75rem;">
+                <span style="color:#ffd700; filter:drop-shadow(0 0 5px rgba(255,215,0,0.5));">★ <span id="lsTopGold">0</span></span>
+                <span style="color:#c0c0c0; filter:drop-shadow(0 0 5px rgba(192,192,192,0.5));">♦ <span id="lsTopSilver">0</span></span>
+            </span>
+        </div>
+        <canvas id="lsCharPortrait" width="60" height="72" style="background:transparent;border:none;z-index:111;"></canvas>
     </div>
-    <canvas id="lsCharPortrait" class="ls-ui" width="50" height="60" style="position:absolute;top:8px;left:8px;z-index:111;border-radius:8px;background:#0a0a18;border:2px solid #0ff;box-sizing:border-box;"></canvas>
     
     <button class="gear ls-ui" type="button" onclick="openSettings()" aria-label="Settings">⚙</button>
     <button class="gear ls-ui" type="button" onclick="shareGame()" aria-label="Share" style="right:60px;top:16px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></button>
-    <button class="store-btn ls-ui" type="button" onclick="openStore()" aria-label="Store" style="right:104px;top:16px;">🛒<span>STORE</span></button>
-    <button class="gear ls-ui" id="lsStreakBtn" type="button" onclick="openStreakCalendar()" aria-label="Streak" style="right:294px;top:16px;display:none;font-size:0.8rem;">🔥 0</button>
-    <button class="gear ls-ui" id="lsDailyBtn" type="button" onclick="openDailyPreview()" aria-label="Daily Stage" style="right:254px;top:16px;display:none;font-size:0.9rem;">💎</button>
-    <button class="gear ls-ui" id="lsChestBtn" type="button" onclick="claimDailyChestFromHome()" aria-label="Daily Chest" style="right:214px;top:16px;display:none;">🎁</button>
+    <button class="store-btn ls-ui" type="button" onclick="openStore()" aria-label="Store" title="Store" style="right:104px;top:16px;">🛒</button>
+    <button class="fs-btn ls-ui" type="button" onclick="toggleFullscreen()" aria-label="Fullscreen" title="Toggle Fullscreen">⛶</button>
+    <!-- daily buttons moved into lsDetails below Play DashJ -->
     <div id="btnHints">
         <div class="hint-tag">⚙ Settings — sound, controls, export</div>
         <div class="hint-tag">🛒 Store — skills, cosmetics</div>
@@ -642,29 +615,46 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
         <div class="t-stat tr" id="cardStatTR"></div>
         <div class="t-stat bl" id="cardStatBL"></div>
         <div class="t-stat br" id="cardStatBR"></div>
+        <div class="t-stat ghost-btn" id="cardGhostBtn" style="display:none;">
+            <button onclick="startReplay(activeIdx)" style="font-size:0.6rem;padding:3px 10px;border-radius:6px;border:1px solid rgba(170,0,255,0.4);background:rgba(170,0,255,0.15);color:#a0f;cursor:pointer;white-space:nowrap;font-family:inherit;letter-spacing:1px;">👻 WATCH</button>
+        </div>
+        <div id="dotNav"></div>
         <button id="navRight" class="nav-btn" type="button" onclick="moveCar(1)" aria-label="Next">&#10095;</button>
     </div>
     
     <div id="lsDetails" class="ls-ui">
         <h2 id="lsName">--</h2>
         <div id="lsTags" class="tag">--</div>
-        <div id="lsPhysics" style="font-size:0.65rem;color:#aaa;margin-top:4px;">--</div>
-        <div class="stats-row">
-            <div class="stat-box">BEST TIME<br><b id="lsTime">--</b></div>
-            <div class="stat-box">GEMS<br><b id="lsChips">--</b></div>
-            <div class="stat-box">MATCHES<br><b id="lsAtt">--</b></div>
-            <div class="stat-box">SCORE<br><b id="lsScore">--</b></div>
-        </div>
-        <div id="hazardLog">LOG » FALLS: <span id="gDeadFall">0</span> | SPIKES: <span id="gDeadSpike">0</span> | LASERS: <span id="gDeadLaser">0</span></div>
         <button id="lsPlayBtn" onclick="playSelected()">Play DashJ</button>
-        
-        <div id="globalStats">
-            <div class="g-stat"><div class="ico">🎮</div><div class="val" id="gMatches">0</div><div class="lbl">Matches</div></div>
-            <div class="g-stat"><div class="ico">⏱️</div><div class="val" id="gTime">0m</div><div class="lbl">Time</div></div>
-            <div class="g-stat"><div class="ico">🚩</div><div class="val" id="gClear">0%</div><div class="lbl">Cleared</div></div>
-            <div class="g-stat"><div class="ico">💀</div><div class="val" id="gDeaths">0</div><div class="lbl">Hazards</div></div>
+        <div id="lsDailyRow">
+            <button class="daily-btn" id="lsStreakBtn" type="button" onclick="openStreakCalendar()" aria-label="Streak" style="display:none;">🔥 <span>0</span></button>
+            <button class="daily-btn daily-wide" id="lsDailyBtn" type="button" onclick="openDailyPreview()" aria-label="Daily Stage" style="display:none;width:auto;padding:0 12px;border-radius:18px;gap:4px;"><span style="font-size:0.9rem;">💎</span><span style="font-size:0.6rem;font-weight:700;letter-spacing:1px;">DAILY</span></button>
+            <button class="daily-btn" id="lsChestBtn" type="button" onclick="claimDailyChestFromHome()" aria-label="Daily Chest" style="display:none;">🎁</button>
         </div>
-        <div id="dotNav"></div>
+        <div id="lsGhostRow" style="display:none;margin-top:4px;">
+            <button id="lsGhostWatch" onclick="startReplay(activeIdx)" style="font-size:0.65rem;padding:4px 12px;border-radius:6px;border:1px solid rgba(170,0,255,0.4);background:rgba(170,0,255,0.1);color:#a0f;cursor:pointer;white-space:nowrap;font-family:inherit;letter-spacing:1px;">👻 WATCH RIVAL</button>
+        </div>
+        <div id="lsGlobalStats">
+            <div class="gs-row">
+                <div class="gs-stat" style="--accent:#0ff;"><span class="gs-ico">🎮</span><span class="gs-num" id="gMatches">0</span><span class="gs-lbl">matches</span></div>
+                <div class="gs-stat" style="--accent:#0fa;"><span class="gs-ico">⏱️</span><span class="gs-num" id="gTime">0m</span><span class="gs-lbl">total</span></div>
+                <div class="gs-stat" style="--accent:#08f;"><span class="gs-ico">📅</span><span class="gs-num" id="gToday">0m</span><span class="gs-lbl">today</span></div>
+            </div>
+            <div class="gs-row">
+                <div class="gs-stat" style="--accent:#0f8;"><span class="gs-ico">🚩</span><span class="gs-num" id="gClear">0%</span><span class="gs-lbl">cleared</span></div>
+                <div class="gs-stat" style="--accent:#ffd700;"><span class="gs-ico">⭐</span><span class="gs-num" id="gGems">0/0</span><span class="gs-lbl">gems</span></div>
+                <div class="gs-stat" style="--accent:#f44;"><span class="gs-ico">💀</span><span class="gs-num" id="gDeaths">0</span><span class="gs-lbl">deaths</span></div>
+            </div>
+        </div>
+        <button id="lsInstallBtn" onclick="handlePwaBannerClick()" style="display:none;margin-top:8px;align-self:center;padding:6px 16px;font-size:0.6rem;font-weight:700;font-family:monospace;color:#fff;background:linear-gradient(135deg,#f0f,#a0f);border:none;border-radius:16px;cursor:pointer;letter-spacing:1px;white-space:nowrap;">📲 INSTALL APP — 100♦</button>
+    </div>
+    <div id="lsBottomBar" style="position:absolute;bottom:0;left:0;right:0;height:6px;background:rgba(255,255,255,0.06);z-index:5;cursor:pointer;">
+        <div id="lsBottomFill" style="height:100%;background:linear-gradient(90deg,#0ff,#0088ff);width:0%;transition:width 0.6s ease;"></div>
+    </div>
+    <div id="pwaBanner" style="position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:120;display:none;align-items:center;gap:8px;background:linear-gradient(135deg,#0a4,#0a8);border:1px solid rgba(0,255,136,0.4);border-radius:20px;padding:6px 14px;font-size:0.6rem;font-family:monospace;color:#fff;cursor:pointer;box-shadow:0 2px 12px rgba(0,255,136,0.2);white-space:nowrap;" onclick="handlePwaBannerClick()">
+        <span style="font-size:0.8rem;">📲</span>
+        <span>INSTALL APP — <b style="color:#ffd700;">100♦</b></span>
+        <span onclick="event.stopPropagation();dismissPwaBanner();" style="margin-left:4px;font-size:0.7rem;color:rgba(255,255,255,0.5);cursor:pointer;">✕</span>
     </div>
 </div>
 
@@ -687,14 +677,61 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
         <button onclick="showExport()" style="flex:1; padding: 10px 0; background:linear-gradient(135deg,#0aa,#055);">EXPORT SAVE</button>
         <button onclick="showImport()" style="flex:1; padding: 10px 0; background:linear-gradient(135deg,#fa0,#d80);">IMPORT SAVE</button>
     </div>
+    <div style="display:flex; gap:10px; margin-top:4px;">
+        <button onclick="openContactUs()" title="Contact Us" style="width:44px;height:40px;background:linear-gradient(135deg,#555,#333);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">✉️</button>
+        <button onclick="openFeedbackPanel()" style="flex:1;height:40px;background:linear-gradient(135deg,#0af,#08f);border:none;border-radius:8px;cursor:pointer;color:#000;font-weight:700;font-size:0.75rem;letter-spacing:1px;">📝 Send Feedback</button>
+    </div>
+    <!-- Cloud Sync moved to Profile panel -->
     <div style="text-align: center; margin-top: 15px; font-family: monospace;">
         <div style="display:flex;gap:6px;width:100%;">
-            <button onclick="openChangelog()" style="flex:1;padding:8px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#333,#222);border:1px solid rgba(255,255,255,0.15);color:#aaa;">📋 UPDATE LOG &nbsp; <span style='color:#666;font-size:0.6rem;'>v1.2.0</span></button>
+            <button onclick="openChangelog()" style="flex:1;padding:8px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#333,#222);border:1px solid rgba(255,255,255,0.15);color:#aaa;">📋 UPDATE LOG &nbsp; <span style='color:#666;font-size:0.6rem;'>v1.2.50</span></button>
             <button onclick="restartGame()" title="Restart the game to apply updates" style="flex:0 0 auto;padding:8px 14px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#0a4,#062);border:1px solid rgba(0,255,136,0.3);color:#0f8;">🔄 RESTART</button>
         </div>
         <button onclick="showPrivacyPolicy()" style="background:transparent; border:none; color:#444; font-size:0.6rem; font-weight:normal; text-decoration:underline; cursor:pointer; padding:5px; box-shadow:none; margin-top:2px;">🔒 Privacy Policy</button>
         <button onclick="confirmReset()" style="background:transparent; border:none; color:#444; font-size:0.6rem; font-weight:normal; text-decoration:underline; cursor:pointer; padding:5px; box-shadow:none; margin-top:2px;">Reset All Data</button>
     </div>
+</div>
+</div>
+
+<div id="profile">
+<div style="width:100%;max-width:560px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+  <h2 style="margin:0">📊 PROFILE</h2>
+  <button onclick="closeProfile()" style="background:rgba(255,68,68,0.2);border:1px solid #f44;color:#f44;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:monospace;font-weight:700;font-size:.65rem;letter-spacing:1px;">✕ CLOSE</button>
+</div>
+<div style="width:100%;max-width:560px;max-height:60vh;overflow-y:auto;text-align:left;padding:10px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.1);">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+    <span id="pfRank" style="color:#ffd700;font-weight:700;font-size:0.7rem;padding:2px 8px;border:1px solid rgba(255,215,0,0.4);border-radius:4px;">—</span>
+    <span id="pfName" style="color:#0ff;font-weight:900;font-size:0.9rem;letter-spacing:1px;"></span>
+  </div>
+  <div style="display:flex;gap:12px;align-items:center;font-size:0.75rem;margin-bottom:8px;">
+    <span style="color:#ffd700;">★ <span id="pfGold">0</span></span>
+    <span style="color:#c0c0c0;">♦ <span id="pfSilver">0</span></span>
+  </div>
+  <div id="pfSyncRow" style="margin-bottom:12px;padding:8px;background:rgba(0,0,0,0.2);border-radius:6px;border:1px solid rgba(255,255,255,0.08);">
+    <div id="pfSyncStatus" style="font-size:0.6rem;color:#888;font-family:monospace;text-align:center;margin-bottom:6px;">☁️ Cloud Sync — Not Registered</div>
+    <button onclick="openSyncPanel()" style="width:100%;padding:8px 0;background:linear-gradient(135deg,#333,#222);border:none;border-radius:6px;cursor:pointer;color:#fff;font-weight:700;font-size:0.7rem;letter-spacing:1px;">☁️ Cloud Sync</button>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+    <div>
+      <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">RANK</div>
+      <div id="pfRankSection" style="margin-bottom:12px;"></div>
+    </div>
+    <div>
+      <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">GLOBAL STATS</div>
+      <div id="pfGlobalStats" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px;">
+        <div class="pf-stat"><div class="pf-ico">🎮</div><div class="pf-val" id="pfMatches">0</div><div class="pf-lbl">Matches</div></div>
+        <div class="pf-stat"><div class="pf-ico">⏱️</div><div class="pf-val" id="pfTime">0m</div><div class="pf-lbl">Time</div></div>
+        <div class="pf-stat"><div class="pf-ico">🚩</div><div class="pf-val" id="pfClear">0%</div><div class="pf-lbl">Cleared</div></div>
+        <div class="pf-stat"><div class="pf-ico">💀</div><div class="pf-val" id="pfDeaths">0</div><div class="pf-lbl">Hazards</div></div>
+      </div>
+      <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">HAZARD BREAKDOWN</div>
+      <div id="pfHazardLog" style="font-size:0.65rem;color:#ccc;font-family:monospace;letter-spacing:1px;line-height:1.6;">
+        <div>FALLS: <span id="pfDeadFall">0</span></div>
+        <div>SPIKES: <span id="pfDeadSpike">0</span></div>
+        <div>LASERS: <span id="pfDeadLaser">0</span></div>
+      </div>
+    </div>
+  </div>
 </div>
 </div>
 
@@ -704,367 +741,150 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
   <button onclick="closeChangelog()" style="background:rgba(255,68,68,0.2);border:1px solid #f44;color:#f44;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:monospace;font-weight:700;font-size:.65rem;letter-spacing:1px;">✕ CLOSE</button>
 </div>
 <div style="width:100%;max-width:360px;max-height:60vh;overflow-y:auto;text-align:left;padding:10px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.1);">
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.0 — Daily Stage, Collection, Share Cards & More</div>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.51</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li><b style="color:#ffd700;">💎 Daily Stage</b> — fresh procedurally-generated stage every day. Mix-and-match themes, reversed difficulty, rank-scaled. Resets 5 AM UTC+7.</li>
-<li><b style="color:#ffd700;">📜 Daily Collection</b> — completed dailies become collectible badges (date, time, rank). Replay any past daily for practice — exact same stage, no gems, no deaths tracked.</li>
-<li><b style="color:#ffd700;">🔥 Streak System</b> — Duolingo-style streak calendar (week grid), 2 free Streak Freezes at start, buy extras for 15 ♦. Streak counts any 60s+ play.</li>
-<li><b style="color:#ffd700;">📤 Share Cards</b> — stage-themed visual cards for menu share, win screen, champion screen, and daily. "Can you beat this?" competitive text. No deaths/attempts shown.</li>
-<li><b style="color:#ffd700;">🏆 Master Gems</b> — increased in normal stages (2/3/4). Removed from daily stages. Daily stages only have persistent silver gems.</li>
-<li>🎁 Daily rewards, 💎 preview panel, 🎁 chest countdown, 💡 75 random tips, 📊 dashboard Daily tab.</li>
-<li>🔒 Security hardening: rate limiting, server-side validation, CORS, security headers.</li>
+<li>Build</li>
 </ul>
-
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.20 — Internal Restructure</div>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.50</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li><b style="color:#ffd700;">Zero gameplay changes.</b> This is a behind-the-scenes refactor to make future updates faster and safer.</li>
-<li>Game code split from a single 6,167-line file into 7 focused modules (PWA → Audio → Data → Save → UI → Game → Render).</li>
-<li>Build-time concatenation restores the exact same single-file zero-dependency game you already have. No player-facing difference.</li>
-<li>Development harness (<code>dev.html</code>) loads modules individually for rapid iteration without rebuilding.</li>
+<li>🔑 Forgot PIN reset — registered users can reset their PIN from the **Manage** tab without needing the old PIN</li>
+<li>→ Verifies identity via username + MMYY birthday stored locally</li>
+<li>→ Clears all linked devices on reset</li>
+<li>→ Rate limited to 3 attempts per minute per IP</li>
+<li>`sync_lookup` table now properly maintained across all PIN-change paths</li>
+<li>→ `handleSyncChangePin` — deletes old lookup row, inserts new one</li>
+<li>→ `handleSyncForgotPin` — deletes old lookup row, inserts new one</li>
+<li>→ `handleAdminSyncResetPin` — deletes old lookup row, inserts new one</li>
+<li>→ Without this fix, forgot-PIN lookup would break after any PIN change</li>
 </ul>
-
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.15 — Stage select dot navigation placement</div>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.49</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>Stage navigation dots now appear BELOW the global stats strip in all orientations (was above on landscape compact). Dots moved to be the last child of <code>lsDetails</code> in DOM, so they consistently flow under the global stats card.</li>
+<li>🔗 Link Device entry points — added "Link device" hyperlinks in:</li>
+<li>→ First-time onboarding modal (below the name input)</li>
+<li>→ Name-change prompt overlay (below the input field)</li>
+<li>→ Clicking opens Cloud Sync panel focused on the **Link Device** tab</li>
+<li>→ Onboarding/overlay temporarily hidden while sync panel is open, restored on close</li>
 </ul>
-
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.14 — Bug fixes + Consumable persistence + Resurrect nerf</div>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.48</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>Tablet rank chip: stats card height 52→68px, comfortable padding, line-height 1.4 — text no longer cropped by border.</li>
-<li>Daily Chest button shows ✅ icon (instead of 🎁) when claimed, half opacity, click disabled.</li>
-<li>Daily Master Chip now picks from levels you've UNLOCKED (was picking from all 20, sometimes locked levels). New players see today's daily on a level they can actually play.</li>
-<li>"DAILY MASTER" → "DAILY GEM" so it's clearer this is for everyone, not master-only. Champions still get +5 gold, others get +5 silver.</li>
-<li>Stage select dot navigation: max-width clamped to thumbnail width (min(90vw, 320px)), dots reordered to flow under the global stats strip via CSS order.</li>
-<li><b style="color:#ffd700;">⚡ Resurrect cooldown 5min → 2min</b> — much more usable.</li>
-<li><b style="color:#ffd700;">Consumables persist across retries.</b> Death no longer consumes inventory. Shield with 1 hit remaining stays at 1 hit on retry. Triple Jump and Time Freeze stay active. Only WIN or EXIT TO STAGE SELECTION consumes the inventory item.</li>
-<li>Triple Jump activation now consistent: deferred decrement (was eagerly decremented on activate). Now matches dblshield/timefreeze pattern.</li>
-<li>Shopkeeper tip in store now shows "1 / 50 ▶" with arrow indicator so it's obvious you can tap to cycle.</li>
+<li>**CRITICAL: Server-side deep merge bug** — `handleSyncSave` was using shallow spread `mergedData = { ...parsed, ...data }` which caused entire sub-objects (`scores`, `times`, `stats`, `chips`, etc.) to be overwritten when a device sent partial data. Now iterates ALL keys from BOTH cloud and incoming data, applying per-key rules (max/min/union/OR) so no data is lost across devices.</li>
+<li>**`deviceIds` now returned in load response** — `handleSyncLoad` includes `deviceIds` array so client can verify multi-device state.</li>
+<li>**Rate limiting added to PIN change** — `handleSyncChangePin` now has IP-based rate limiting (same window as save).</li>
+<li>**PWA banner dismissal not persisted** — `dismissPwaBanner()` saved `pwaBannerDismissed=true` but `showPwaInstallBanner()` never checked it, causing the banner to reappear every time the player returned to stage select.</li>
+<li>**PWA banner hidden on iOS** — The banner required `deferredPrompt` to be truthy, but iOS Safari never fires `beforeinstallprompt`. Removed the `deferredPrompt` gate from banner visibility so iOS users see the install helper too.</li>
+<li>**🔗 Link Device entry points** — Added "Link device" hyperlink in:</li>
+<li>→ First-time onboarding modal (below the name input)</li>
+<li>→ Name-change prompt overlay (below the input field)</li>
+<li>→ Clicking it opens the Cloud Sync panel focused on the **Link Device** tab</li>
+<li>→ Onboarding/overlay is temporarily hidden while the sync panel is open, then restored on close</li>
 </ul>
-
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.13 — Auto-retry single setting</div>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.47</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>Auto-retry consolidated to one setting "Auto-retry on death" with options: <b>No auto / Instant / 0.5s / 1s / 2s</b>. Death screen always appears; the chosen value is how long to wait before auto-retrying.</li>
-<li>Settings migration: existing v1.1.9 setups (autoRetry on/off + deathScreenDelay) auto-converted on load — if previously enabled with 1s delay, becomes "1s" auto-retry; if previously off, becomes "No auto".</li>
-<li>Tap-to-retry still works at any time after a 300ms safety gate (prevents stray taps from in-game).</li>
+<li>🔗 Link Device full-replace mode — linking a device now completely replaces local progress with cloud data (instead of merging)</li>
+<li>⚠️ Confirmation dialog warns before overwriting existing local progress</li>
+<li>`replaceSyncData()` client helper for full-replace sync load</li>
 </ul>
-
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.12 — Polish: retry placement, rank chip, daily indicators</div>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.46</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>In-game pause: 🔄 RETRY LEVEL button moved to the bottom action group between APPLY & RESUME and BACK TO STAGE SELECTION (was floating above QUICK SHOP).</li>
-<li>Stage select rank chip: text no longer cropped/clipped — bumped padding 1px → 3px vertical, font 0.5 → 0.55rem, explicit line-height 1.3.</li>
-<li>Daily Chest button on stage select: when claimed, stays visible at half opacity (no longer disappears). Click is disabled while claimed.</li>
-<li>💎 Daily Master Chip indicator added: dot in stage navigation now shows a 💎 marker for today's daily stage (or ✓ if already claimed). Stage info tags also display "💎 DAILY MASTER" / "💎 DAILY (claimed)".</li>
+<li>PWA install banner no longer blocked by aggressive CSS `!important` rule</li>
+<li>PIN and birthday inputs now use `inputmode="numeric"` for mobile numeric keypad</li>
 </ul>
-
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.10 — Reflex Dash Toggle</div>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.45</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li><b style="color:#ffd700;">Champions can now toggle Reflex Dash ENABLE/DISABLE</b> from the store. Defaults to ENABLED on first unlock.</li>
-<li>When you equip Air Dash → Reflex Dash auto-disables (AD covers the basic case; having both was redundant).</li>
-<li>When you sell Air Dash → Reflex Dash auto-disables too (clean slate). Re-enable manually if you want it back.</li>
-<li>Manually enabling Reflex Dash → unequips Air Dash automatically (mutual exclusion).</li>
-<li>While disabled, Reflex Dash grants no Air Dash effect either — you have to equip a separate Air Dash if you want any dash.</li>
+<li>Client-worker compatibility — sync load response now handles both old and new field names</li>
+<li>Cloud Sync status text now updates correctly when opening Settings panel</li>
 </ul>
-
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.9 — Auto-retry & Pause Retry</div>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.44</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li><b style="color:#ffd700;">🔄 RETRY LEVEL</b> button added to in-game pause panel — restart the current level on demand without dying first or backing out.</li>
-<li><b style="color:#ffd700;">Auto-retry on death</b> setting (default OFF). When enabled, after the configurable delay, the level auto-restarts without a tap.</li>
-<li><b>Death screen delay</b> setting: 0.5s / 1s / 2s (default) / 3s. Controls how long the death banner stays visible.</li>
-<li>Both settings available in stage-select Settings AND in-game pause panel — toggle anywhere, persists between sessions.</li>
-<li>Tap-to-retry still works as fallback when auto-retry is on (instant retry before timer fires).</li>
+<li>☁️ Cloud Sync — multi-device save synchronization</li>
+<li>→ Identity: username + MMYY birthday + 6-digit PIN → HMAC-SHA256 key hash</li>
+<li>→ AES-256-GCM encryption for all sync data stored in D1</li>
+<li>→ Auto-sync triggers after: level complete, purchases, daily chest, settings save, name change, PWA reward, champion ceremony</li>
+<li>→ Device limit: max 3 devices per account</li>
+<li>→ PIN change with automatic device ID reset</li>
+<li>→ Server-side purchase validation against canonical earned-vs-spent balance</li>
+<li>→ Rejected purchases trigger client-side refund</li>
+<li>→ Brute-force protection: 10 failed loads = 1-hour lockout</li>
+<li>→ Rate limiting: 5 saves/min, 10 loads/min per IP</li>
+<li>→ Daily reward deduplication via `rewardsLog` JSON</li>
+<li>🔗 Link Device on fresh devices — new phone can link an existing cloud account directly from the sync panel</li>
+<li>→ Full replacement mode: local progress is completely replaced with cloud data (not merged)</li>
+<li>→ Confirmation dialog warns before overwriting existing local progress</li>
+<li>`APP_VERSION` tracking — every metric event now tags build version (`data._v`)</li>
+<li>Build script (`zipgame.ps1`) auto-bumps `APP_VERSION` in `03-save.js`</li>
+<li>Cloud Sync status text now updates correctly when opening Settings panel</li>
+<li>PWA install banner no longer blocked by aggressive CSS `!important` rule</li>
+<li>PIN and birthday inputs now use `inputmode="numeric"` for mobile numeric keypad</li>
+<li>New endpoints: `POST /sync/save`, `POST /sync/load`, `POST /sync/change-pin`</li>
+<li>New dashboard endpoints: `GET /stats/appversion`, `GET /stats/feedback`, `GET /stats/sync`</li>
+<li>Dashboard tabs: App Version (adoption chart), Feedback (recent messages), Cloud Sync (accounts &amp; devices)</li>
+<li>Admin endpoint: `POST /admin/sync/reset-pin` (dashboard auth required)</li>
+<li>D1 tables: `sync_states`, `sync_history`, `sync_attempts`</li>
 </ul>
-
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.8 — Gold Economy Fix</div>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.40</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li><b style="color:#ffd700;">Master gems now actually give +2 gold each</b> (champion-only). Previously the credit was silently absorbed by an anti-cheat clamp — your master gem collections gave nothing.</li>
-<li><b style="color:#ffd700;">Daily Champion bonus now gives +5 gold</b> as advertised. Same fix.</li>
-<li>Retroactive credit: every master gem you've already collected is automatically added to your balance on next load (≈ 2 gold per master gem).</li>
-<li><b>Gem ratio display fixed.</b> Previously stored gem-collection state at sparse indices, then `normalizeBestChips` truncated indices > 6, silently losing 4 of every 6 collections on each page reload. Now stored as packed (0..maxGems-1).</li>
-<li>Migration: existing gem-collection data is auto-packed on next load. Caps at level's max gems (e.g. 7/7) — players who legitimately cleared a level keep full credit.</li>
-<li>Buy/sell skills now uses straightforward arithmetic — no more anti-cheat clamp eating gold.</li>
-<li>Self-heal: if `goldSpent` went negative from old bug, auto-resets to current owned skills cost on next load.</li>
+<li>📝 Send Feedback panel in Settings — POSTs to `/feedback` worker endpoint with rate limiting</li>
+<li>✉️ Contact Us button — mailto:xterzd@gmail.com</li>
+<li>Stage completion screen redesigned</li>
+<li>→ Shows best score alongside current score</li>
+<li>→ Shows time improvement `(-X.XXs)` in green when new best</li>
+<li>→ Removed inaccurate "FIRST TRY!" text</li>
+<li>→ `st.first` flag no longer set on completion</li>
 </ul>
-
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.7 — Telemetry Naming Fix</div>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.39</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>Session start now deferred until a player name is set (returning users send immediately, new users send after onboarding)</li>
-<li>Heartbeats only fire after the player has named themselves (no nameless online-counting)</li>
-<li>New 'name_set' event fires when a player picks/changes their name — fuels the metrics funnel</li>
-<li>No gameplay impact — pure metrics quality fix</li>
+<li>Build</li>
 </ul>
-
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.6 — Telemetry Plus</div>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.38</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>Heartbeat interval 60s → 90s (lower bandwidth + DB cost; same online detection)</li>
-<li>Session start now reports display mode (PWA standalone vs browser), PWA support flag, install timestamp — fuels new metrics dashboard</li>
-<li>PWA install lifecycle tracked: prompt shown, accepted, dismissed, browser-confirmed install</li>
-<li>UI clicks tracked anonymously: share, store, settings, play, store-tab — helps tune which buttons are reachable</li>
-<li>Internal: new metric event type 'ui_event' for these signals</li>
+<li>Build</li>
 </ul>
-
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.5 — Skill Swap, Replay Fix, Username</div>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.37</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li><b style="color:#ffd700;">⚡ Reflex Dash is now a Champion-only reward</b> — too overpowered for new players. Champions clear all 20 stages → Reflex Dash unlocks free, doesn't use a slot, includes Air Dash effect.</li>
-<li><b style="color:#0ff;">🌀 Clipping is now purchasable for all (22 gold)</b>, no prereq, equips a slot. Once per run, ignore the first hazard hit.</li>
-<li>Migration: existing Reflex Dash purchases auto-refunded (12 gold added back to balance), removed from owned/equipped lists.</li>
-<li><b style="color:#0ff;">📺 Watch Replay no longer counts as a level completion</b> — bypasses win banner, stats, rewards, ghost recording. Goes straight back to stage select.</li>
-<li>Migration: existing inflated completion counts auto-corrected on boot. Each level's completions capped at attempts. Total matches recomputed from sum of attempts. Stale bestTimes/bestChips/ghostData scrubbed for levels with zero legit completions.</li>
-<li>Username minimum: 3 → <b>5 characters</b> (3 was too short to recognize). Onboarding, name change prompt, Name Change consumable preview all updated.</li>
-<li>Pause-aware ghost replay timing — ghost rival now freezes during pause (was using Date.now() which kept advancing).</li>
+<li>Build</li>
 </ul>
-
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.4d — Layout polish + ghost pause fix</div>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.36</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>Ghost rival now freezes during pause (uses pauseTime instead of Date.now()) — no more teleport on resume</li>
-<li>Replay timing also pause-aware — same fix applies to replay frames</li>
-<li>In-game HUD: gems/deaths/weather panel moved below the N3ON DashJ logo (no more overlap on PC desktop)</li>
-<li>Weather + gravity + friction info now stacks on separate lines (RAIN / NORMAL G / NORMAL FRIC) instead of one long horizontal row</li>
-<li>In-game HUD compact in portrait: logo top-left, time/dist top-right, sector+progress middle row, gems/deaths/weather lower row — clean three-row stack</li>
-<li>Stage select rank chip on desktop: full-width bar with centered text + ellipsis, never overflows the stats card border</li>
-<li>Pause panel buttons (BACK TO STAGE SELECTION etc.): white-space nowrap + ellipsis so long text never breaks button bounds</li>
-<li>Stage select on tablet/fold: levelSelect padding-top 130px reserved so cardWrap and physics text never scroll under the logo</li>
-<li>Control preview text in pause panel: fluid width (was hardcoded 320px)</li>
+<li>PWA install button now shows fallback message when `beforeinstallprompt` isn't available (Android non-Chrome)</li>
+<li>PWA banner/button visibility now correctly tied to viewport mode — only one shows at a time</li>
+<li>Streak display consistency: `updateLsStreakBtn()` now uses same visual streak calculation as calendar</li>
+<li>HUD vertical alignment: `hudCenter`, `hudLeft`, and `hudRight` all now at `top: 64px`</li>
 </ul>
-
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.4c — Show Off Your Style (refined)</div>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.35</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li><b style="color:#0ff;">★ Stage select character portrait</b> — animated mini-canvas showing your character running with all equipped cosmetics (hat, cape, body, glow, trail). Theme-color border matches the thumbnail. Auto-resizes for portrait phone, tablet, and Z Fold cover/main screen.</li>
-<li><b style="color:#0ff;">📤 Share images</b> — character with cosmetics now embedded on win-share PNG (after stage clear), Champion ceremony PNG, AND the SHARE button image (600×400 brand card).</li>
-<li>Share dialog: pre-filled default note "Hey! Try this game with me — it's wild." auto-selected on open — type to replace, or send as-is</li>
-<li>Character running animation: faster cycle, body bob, alternating leg lift, opposite-phase arm swing, ground motion streaks — clearly running in place</li>
-<li>Logo "N3ON DashJ" 25% bigger in portrait + landscape stage select</li>
-<li>Stats card (rank/name/gems) better padding, no more "tight wrap" feeling</li>
-<li>Chest button moved to its own row in portrait — no more visual collision with rank chip</li>
-<li>Tablet + Z Fold main screen layout fixed: char portrait no longer covers thumbnail or stats text</li>
-<li>Stage-select stats strip (MATCHES/TIME/CLEARED/HAZARDS) now sits inside the right column under Play DashJ in landscape — tied to bottom of column</li>
-<li>Store/settings panels in compact landscape: tighter padding, scrollable content, compact QUICK SHOP items so all entries are reachable</li>
-<li>Overlay backdrops fully opaque + level-select UI hidden when overlays open — no more bleed-through</li>
-<li>In-game HUD compact in portrait: left/center/right groups no longer stack on each other</li>
-<li>Rank chip ellipsizes when too long instead of clipping mid-character</li>
+<li>iOS PWA reward now requires 60+ seconds of play after tapping install (anti-gaming)</li>
+<li>Landscape narrow mode: install button moved from floating banner to under `lsGlobalStats` in right column, centered</li>
 </ul>
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.4a — Show Off Your Style (bugfix)</div>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.34</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>Stage select character portrait — animated mini-canvas showing your character with all equipped cosmetics (hat, cape, body, glow, trail). Top-left in portrait, alongside the thumbnail in landscape.</li>
-<li>Landscape layout fix: portrait sits beside the thumbnail card (same height, narrower width) instead of overlapping. Total card+portrait width matches old thumbnail width — clean two-card row.</li>
-<li>Win-share PNG (after stage clear) and Champion ceremony PNG include character + cosmetics on the right side</li>
-<li>Stage select SHARE button now also generates a 600x400 character + brand PNG attached to the share. Recipient sees your decked-out character before they even click the link.</li>
-</ul>
-<div style="font-size:0.75rem;color:#ffd700;font-weight:700;margin-bottom:6px;">v1.1.3 — Master Economy</div>
-<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li><b style="color:#ffd700;">★ Master Gems</b>: 40 hidden rainbow gems across the 20 stages — 1 (Starter/Simple), 2 (Moderate), 3 (Hard) per stage. Only champions see them. Each worth +2 gold (+80 gold total). Placed above platforms in tricky positions.</li>
-<li><b style="color:#0ff;">💎 Daily Master Chip</b>: rotating stage each day gets a special diamond. Champions get +5 gold, non-champions get +5 silver. Resets at next calendar day.</li>
-<li><b style="color:#26a1ff;">⚡ Reflex Dash</b> skill (12 ★, requires Air Dash): adds dash even when double-jump is on cooldown. Equipping it gives full Air Dash effect too — only one slot needed.</li>
-<li>Magnet skill now attracts <b>both</b> silver arc gems and gold platform gems</li>
-<li>Pulse platform redesign: bright purple gradient, dashed animated outline, glowing top edge, white floating dots inside — clearly recognizable as landable</li>
-<li>Pulse warning duration: 0.5s → <b>1 second</b> (more reaction time)</li>
-<li>Lightning strike death: now shows "⚡ STRUCK!" (was incorrectly "FALLEN" or "LASERED!")</li>
-<li>Bouncy platform: spring-coil zigzag pattern (was a simple ▲)</li>
-<li>Phase Dash renamed to <b>Clipping</b></li>
-<li>Black body cosmetic: now suppresses default theme glow halo (so it actually looks black)</li>
-<li>Champion's Aura cosmetic: store shows 🔒 LOCKED instead of free BUY when not yet unlocked</li>
-<li>Skills tab order: Air Dash, Reflex Dash, then the rest</li>
-<li>Pause panel landscape layout: Quick Shop on left, ADJUST + APPLY + EXIT stacked on right</li>
-<li>Reflex Dash + Master Gems + Daily Master integrated into store, info panels, and rules</li>
-<li>Game name finalized: <b>N3ON DashJ</b></li>
-<li>Manifest orientation set to landscape (PWA installs lock to landscape natively)</li>
-<li>Multiple bug fixes: home button leak protection (body pointer-events block), exit double-fire guard, lightning death cause, magnet gold support</li>
-</ul>
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.2 — Polish</div>
-<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>🔄 RESTART button added to Settings (next to UPDATE LOG) — forces a clean reload to pick up new updates from the service worker</li>
-<li>Pause settings: Quick Shop on left, ADJUST/APPLY/EXIT buttons stacked on right (landscape) — better space use</li>
-<li>Bouncy platform: replaced ▲ with spring-coil zigzag pattern (resembles a compressed spring)</li>
-<li>Top buttons reordered: 🎁 Daily Chest / 🛒 STORE / ↗ Share / ⚙ Settings (left to right)</li>
-<li>Game name updated to <b>N3ON DashJ</b> (uppercase N3ON)</li>
-<li>Black body suppresses default theme glow halo when no glow cosmetic equipped</li>
-<li>Champion's Aura in store now shows 🔒 LOCKED until earned (was showing free BUY button)</li>
-<li>Cape physics rewritten: simple lerp + shortest-angle path + behind-hemisphere clamp (no more flipping in front)</li>
-<li>Stage select stars removed from rank chip and player name (kept on gold gem)</li>
-<li>lsTopStats background made transparent (was covering game title on narrow screens)</li>
-<li>Dot navigation no longer overlaps global stats strip in landscape</li>
-<li>Orientation lock now persists through menus (not just gameplay) — first user gesture triggers fullscreen + lock</li>
-<li>Orientation change in settings re-locks immediately</li>
-</ul>
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.1 — Polish & UX</div>
-<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>Game renamed: <b>N3ON DashJ</b> (was N30N DASH J) — friendlier in titles and headers</li>
-<li>Stage select play button: "Play DashJ" (was "ENTER DASH J")</li>
-<li>Pause: "Back to Stage Selection" (was "EXIT TO HOME")</li>
-<li>Top-right buttons reordered: 🎁 Daily Chest → ↗ Share → ⚙ Settings (rightmost). 🛒 STORE pill stays at far left of cluster.</li>
-<li>Player Rank popup now uses two columns in landscape (rank tiers + progress on left; how to earn points on right)</li>
-<li>Store cosmetics ordered by category: Hat → Cape → Glow first, then Trail/Body/Death/Jump/Platform; within each: Common → Master tier, then by cost</li>
-<li>"Body: White" replaced with <b>"Body: Black"</b> (default body is already light cyan; black gives real contrast). Existing owners auto-migrated.</li>
-<li>"Show FPS" toggle added to in-game pause Settings (was only in main settings)</li>
-<li>Fixed: settings panels appearing as locked overlay when rotating phone (CSS grid was applying without .active class check)</li>
-<li>Removed orange "DAILY CHEST READY" banner from stage select — pulsing 🎁 icon button is enough</li>
-<li>Share dialog: removed duplicate URL (was appearing twice on WhatsApp etc.)</li>
-<li>Stage card: simplified ghost status to icon-only "👻 🚫" when no recording (was "🚫 no ghost yet (replay to record)")</li>
-<li>Orientation setting: removed "Auto" option. Default Landscape. Existing "Auto" settings auto-migrated to Landscape.</li>
-<li>Orientation setting added to main Settings panel (was only in pause)</li>
-</ul>
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.0 — Master Update</div>
-<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li><b style="color:#ffd700;">★ Champion of N30N</b> — clear all 20 stages to unlock: ★ MASTER badge next to your name, Champion's Aura cosmetic, Clipping skill (one free hazard pass per run), and 1.5× silver multiplier. End-of-game ceremony with confetti, dedicated share card.</li>
-<li><b style="color:#a0f;">🌀 Pulse Platforms</b> — new mechanic on Moderate (12%) and Hard (22%) stages: platforms that appear → warning flicker → disappear in a 6.5s cycle. Time your jumps or fall through the gap.</li>
-<li><b style="color:#0ff;">🎬 Replay System</b> — record + watch your own ghost run. Inline "👻 ghost ready ▶" text on stage select, WATCH button on the win screen.</li>
-<li><b style="color:#fa0;">💎 Gem Escrow</b> — collected gems persist across deaths/retries within the same stage session. Gems are credited to wallet only on completion. Exit-to-home loses all uncashed gems.</li>
-<li><b style="color:#0f8;">🔄 UPDATED Tag</b> — stages with new content show this badge on the card until you replay them. Achievement preserved.</li>
-<li><b style="color:#0aa;">📐 Mobile Landscape</b> — stage select redesigned for short-height phones (Z Fold cover, low-end devices): two-column thumbnail-dominant layout, compact stats strip, smaller top buttons.</li>
-<li><b style="color:#fa0;">🎁 Daily Chest</b> — moved to stage select. Pulsing icon top-right + glowing banner when ready. Tap to claim instant rewards.</li>
-<li><b style="color:#0ff;">⭐ Player Rank</b> — chip moved next to your name with click-to-popup for full progression details.</li>
-<li><b style="color:#aaa;">🛒 STORE button</b> — now a labeled pill (was a star icon) for clarity.</li>
-<li><b style="color:#0aa;">🎨 Visual Quality</b> — new Low/Med/High setting for lower-end devices. Live FPS counter (toggleable). Auto-recommend lower quality if FPS drops. Confirmation when switching to LOW (since it disables ghost replays for performance).</li>
-<li><b style="color:#fa0;">📁 Save File Export/Import</b> — file download instead of giant clipboard text. Optional ghost data inclusion (default off, keeps file small).</li>
-<li><b style="color:#0ff;">🦸 Cape Physics</b> — capes now react to jump direction: trail down when jumping up, trail up when falling. Length harmonized between in-game and store preview.</li>
-<li><b style="color:#0ff;">🎮 Default Controls</b> — Arrow Buttons now the recommended default (was Joystick). Switch in settings anytime.</li>
-<li>Cosmetic store preview overhaul: body color now actually applies, hat/cape positioning matches in-game, glow_champion preview shows ascending sparks.</li>
-<li>Replay no longer counts as game completion or attempt. Anti-fraud: gems are runtime-only until you complete the stage.</li>
-<li>Many bug fixes: home button leak to game, Void Walker white-screen, replay state leaking, double-event taps, edge-landing effect simplified.</li>
-</ul>
-<div style="font-size:0.6rem;color:#888;font-weight:700;margin-bottom:6px;">v1.0.37 ~ v1.0.46</div>
-<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>★ MASTER OF N30N reward: clear all 20 stages → end ceremony, ★ MASTER badge, Champion's Aura cosmetic, Clipping skill, 1.5× silver multiplier</li>
-<li>Clipping: once per run, ignore one hazard (HUD icon 🌀 → ⚫ when used)</li>
-<li>Champion's Aura: pulsing gold halo + ascending sparks (Glow slot)</li>
-<li>Backfill: existing all-clear players see ceremony + rewards on next launch</li>
-<li>Visual Quality setting (Low/Med/High) — affects particles, atmosphere, stars, bg shapes for low-spec phones</li>
-<li>FPS counter (toggleable) + auto-recommend lower visual quality on sustained low FPS</li>
-<li>Ghost Replay toggle — disable ghost recording/render entirely for performance</li>
-<li>Live Visual quality picker in pause menu (no restart needed)</li>
-<li>Save export → file download (no more clipboard size limit)</li>
-<li>Save import → file picker (paste textarea kept as fallback)</li>
-<li>Optional ghost data in save export (default off — keeps file small)</li>
-<li>WATCH REPLAY: inline clickable "👻 ghost ready ▶" on stage select (subtle); WATCH button on win screen</li>
-<li>Cape length harmonized between in-game and store preview (in-game lengthened, preview shortened — both ~16px)</li>
-<li>Store button now a labeled pill: 🛒 STORE (was ★)</li>
-<li>Daily Chest moved out of store onto stage select: pulsing 🎁 icon top-right + banner when ready, hidden when claimed</li>
-<li>Player rank chip moved next to player name (top-left bar) with click-to-popup; removed the big rank tile</li>
-<li>Landscape compact stats strip at bottom of stage select (matches/time/clear%/deaths) instead of being hidden</li>
-<li>Stage select now uses a two-column layout in landscape mode on short-height phones (Z Fold cover screen, low-end devices) — thumbnail dominates left, details on the right scrollable column</li>
-<li>Cosmetic store preview fixed: body color now actually applies to the stickman, hat/cape positioning matches in-game, glow_champion preview shows ascending sparks</li>
-<li>Persistent gems across retries: collected gems stay collected on death/retry within a stage session — only awarded to wallet on completion. Exit-to-home loses all uncashed gems (anti-fraud)</li>
-<li>New mechanic on Moderate/Hard stages: pulse platforms (appear/disappear cycle, ~6.5s loop with warning flicker before disappearing). 12% rate on Moderate, 22% on Hard</li>
-<li>"🔄 UPDATED" tag on stage cards when stage gameplay content changes — preserves achievement, prompts a replay (ghost recordings auto-wiped for stages 6+)</li>
-<li>Visual quality LOW now confirms before applying (also disables Ghost Replays automatically since both are perf-related)</li>
-<li>Champion ceremony confetti (DOM-based, falls past the canvas)</li>
-<li>Clipping visible in store — Skills tab, gold "★ MASTER" badge when unlocked, info button shows rules</li>
-<li>Champion / quality settings now in save export/import (previously lost on transfer)</li>
-<li>Share card now displays player name with ★ MASTER prefix in gold when champion</li>
-<li>Champion's Aura particles fixed (were spawning in wrong screen location due to coord-system mix-up)</li>
-<li>Default controls: Arrow Buttons (was Joystick) — onboarding shows Buttons first as the recommended choice; can switch to Joystick anytime in settings</li>
-<li>Champion ceremony share: dedicated gold-themed share card "★ MASTER OF N30N ★" with career stats (was incorrectly using last stage's theme)</li>
-<li>Replay (WATCH) no longer counts as game completion or attempt — stats untouched, no analytics event sent</li>
-<li>Bug: home button sometimes returned to game — pointer-events blocked briefly after exit</li>
-<li>Void Walker white-screen fix (3-char hex caused gradient NaN crash)</li>
-<li>Edge landing: simplified to text only (no particle ring)</li>
-</ul>
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.0.27 ~ v1.0.36</div>
-<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>Stage order overhaul: 4 difficulty tiers (Starter / Simple / Moderate / Hard); Terminal is now the hardest stage</li>
-<li>Weather gameplay impact: rain/snow slippery, dust visibility, storm lightning strikes (Stage 7+)</li>
-<li>Starter tier (Stage 1-2): wider platforms, no weather penalty — honeymoon phase</li>
-<li>Distinct background visuals per stage (Bio Lab tubes, Aurora ribbons, Starlight stars, Obsidian shards, Mirror City glass, Rust Belt smokestacks, etc.)</li>
-<li>Stars only show at night for star-themed stages</li>
-<li>Day/night cycle: 1 min day + 1 min night with sun/moon overlay, random per-stage start</li>
-<li>Atmospheric overlays per stage: embers, bubbles, fog, shooting stars, snow, dust, haze, aurora ribbons, matrix code, glitch artifacts, lightning, wisps, window lights, star twinkles</li>
-<li>Slow Fall moved back to Skills (most expensive at 30g)</li>
-<li>3 new skills: Coyote Boost (10g), Magnet (20g), Platform Bounce (22g)</li>
-<li>Ghost Rival now FREE — auto-unlocked after Stages 1 & 2; doesn't use slot</li>
-<li>Ghost Rival rendered as translucent stickman with running/in-air poses</li>
-<li>Auto Resurrect grand visual: rings, particles, screen flash</li>
-<li>Shield visual: dashed cyan ring + sparkles only when absorbing hit (1s grace)</li>
-<li>Shield bug fixed: now only consumes ONE shield per hit</li>
-<li>Double Shield + Time Freeze only consumed from inventory if actually used</li>
-<li>End-of-run finalization on death, win, and exit-to-home</li>
-<li>Trail cosmetics enhanced: glow, larger dots, walking visibility</li>
-<li>Skill buttons (👻 Ghost, ⏸ Time Freeze) moved to top center</li>
-<li>Live cooldown HUD: Triple Jump, Time Freeze, Slow Fall, Resurrect timers</li>
-<li>Pause menu shows active skills + Resurrect cooldown</li>
-<li>Fixed Exit confirmation needing two taps</li>
-<li>Always-on ghost recording (regardless of skill ownership); only saves new best time runs</li>
-<li>Resurrect teleport shown as visual effect in ghost replay</li>
-<li>LAYOUT_VERSION migration: cleans stale stats/ghosts after stage reorder</li>
-<li>"No ghost yet" hint on level select with replay instruction</li>
-<li>Bug fix: Enter key during username no longer auto-starts level</li>
-<li>Bug fix: trail not appearing for new accounts</li>
-<li>Save/Export complete: all progression and cooldowns persisted</li>
-</ul>
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.0.21 ~ v1.0.26</div>
-<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>Daily chest in Store — free gold/silver gems every 24 hours, occasional consumable drop</li>
-<li>Shopkeeper NPC with random tips, clickable for new tip</li>
-<li>Button hints for new players on level select</li>
-<li>In-game Update Log page in Settings</li>
-<li>Physics-based cape animation — flies behind when running, hangs when idle</li>
-<li>Death bonus consumable after many deaths (15-25 threshold)</li>
-<li>Skills refactor: Shield removed (Double Shield covers it), Slow Fall + Time Freeze became consumables (later reverted)</li>
-<li>Auto-refund of obsolete skills with gold migration</li>
-<li>In-game pause shop with active item status</li>
-<li>Comprehensive ℹ️ rules popup for every skill and consumable</li>
-<li>Self-correcting gold balance (auto-fixes drift)</li>
-<li>Human-readable physics labels in level select (gravity, friction, weather)</li>
-<li>Death cosmetics fleshed out: pixel blocks, dissolve drift, N30N logo, supernova rings</li>
-<li>Jump cosmetics: lightning streaks, electric sparks</li>
-<li>Cape direction fixed (now trails behind)</li>
-<li>Default body color now fixed cyan (was theme-dependent)</li>
-<li>Unified onboarding screen — name, controls, how-to-play in one welcome</li>
-<li>HUD indicators: Resurrection cooldown, Triple Jump CD, Shield count visible</li>
-<li>Stronger triple jump glow + double jump ring</li>
-<li>Top-left stats stack vertically; N3ON DashJ logo on stage selection</li>
-<li>Ranks recalibrated for better progression curve</li>
-<li>Ziplines positioned higher and longer (proper bridge between platforms)</li>
-<li>Versioning scheme renamed: x.y.z → x.0.y</li>
-<li>HUD shows human-readable physics (LOW G • SLIPPERY • RAIN)</li>
-<li>Trail rainbow now graduates per dot; trail glitch random per dot</li>
-<li>Pause-menu shop activates consumables in current run if not in use</li>
-</ul>
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.0.14 ~ v1.0.20</div>
-<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>Best time tracking and split timer; Progress bar HUD</li>
-<li>Consumable items: Speed Boost, Magnet, Triple Jump</li>
-<li>Style points and combo system; Edge landing detection</li>
-<li>Skill system (initial): Shield, Slow Fall, Ghost Rival, Air Dash, Resurrect, Time Freeze</li>
-<li>Skill store with gem currency</li>
-<li>Zipline obstacles added to levels</li>
-<li>Laser hazards with timed activation</li>
-<li>Cosmetic store: trails, platform skins, death effects</li>
-<li>Gold/silver gem economy and spending</li>
-<li>Themed platform step effects (fire, poison, water, sparks per stage)</li>
-<li>Expanded parallax backgrounds unique to each stage theme</li>
-<li>Ghost mode toggle button</li>
-</ul>
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.0.2</div>
-<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>PWA install support (offline play)</li>
-<li>Arrow button controls option</li>
-<li>Vibration feedback</li>
-<li>Delta-time physics (frame-rate independent)</li>
-</ul>
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.0.0 — May 5, 2026</div>
-<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>Initial release: 20 themed levels, double jump, weather effects</li>
+<li>PWA install incentive banner on stage select — "📲 INSTALL APP — 100♦" appears when PWA is supported and not yet installed</li>
+<li>iOS users must play 60+ seconds after tapping install to claim reward; Android users get reward only after accepting install</li>
+<li>Dismissible banner (✕) with persistent state</li>
+<li>Stage-select random tip — same `homeTooltip` style/behavior as in-game tips, shows for 3s when opening stage select</li>
 </ul>
 </div>
 <button onclick="closeChangelog()" style="width:100%;max-width:320px;margin-top:12px;">BACK</button>
 </div>
 
 <div id="streakCalendar">
-  <div style="width:100%;max-width:380px;display:flex;align-items:center;justify-content:space-between;">
+  <div style="width:100%;max-width:560px;display:flex;align-items:center;justify-content:space-between;">
     <h2 style="margin:0">🔥 STREAK</h2>
     <button onclick="closeStreakCalendar()" style="background:rgba(255,68,68,0.2);border:1px solid #f44;color:#f44;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:monospace;font-weight:700;font-size:.65rem;letter-spacing:1px;">✕ CLOSE</button>
   </div>
-  <div style="text-align:center;margin:8px 0;">
-    <div id="streakBig" style="font-size:3rem;font-weight:900;color:#fa0;text-shadow:0 0 20px rgba(255,170,0,0.5);">0</div>
-    <div style="font-size:0.8rem;color:#aaa;">day streak</div>
+  <div style="width:100%;max-width:560px;display:grid;grid-template-columns:140px 1fr;gap:16px;align-items:start;margin-top:8px;">
+    <div style="text-align:center;padding:10px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.1);">
+      <div id="streakBig" style="font-size:2.5rem;font-weight:900;color:#fa0;text-shadow:0 0 20px rgba(255,170,0,0.5);">0</div>
+      <div style="font-size:0.75rem;color:#aaa;margin-bottom:10px;">day streak</div>
+      <div style="display:flex;gap:8px;align-items:center;justify-content:center;margin-bottom:8px;">
+        <button id="sfBuyBtn" onclick="buyStreakFreezeFromCalendar()" style="background:linear-gradient(135deg,#0ff,#0088ff);border:none;color:#000;padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:700;font-size:0.65rem;">🧊 Buy Freeze</button>
+        <span id="sfInv" style="font-size:0.7rem;color:#aaa;">0 / 2</span>
+      </div>
+      <div style="font-size:0.55rem;color:#666;text-align:center;">Play any stage for 60+ seconds to keep your streak alive</div>
+    </div>
+    <div id="streakStripWrap" style="overflow-x:auto;padding:10px 0;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.1);">
+      <div id="streakStrip" style="display:flex;gap:4px;align-items:center;min-width:100%;"></div>
+    </div>
   </div>
-  <div id="streakStripWrap" style="width:100%;max-width:380px;overflow-x:auto;padding:10px 0;">
-    <div id="streakStrip" style="display:flex;gap:4px;align-items:center;min-width:100%;"></div>
-  </div>
-  <div style="width:100%;max-width:380px;display:flex;gap:10px;align-items:center;justify-content:center;margin-top:8px;">
-    <button id="sfBuyBtn" onclick="buyStreakFreezeFromCalendar()" style="background:linear-gradient(135deg,#0ff,#0088ff);border:none;color:#000;padding:10px 18px;border-radius:8px;cursor:pointer;font-weight:700;font-size:0.75rem;">🧊 Buy Freeze (10 ♦)</button>
-    <span id="sfInv" style="font-size:0.75rem;color:#aaa;">0 / 2</span>
-  </div>
-  <div style="width:100%;max-width:380px;font-size:0.6rem;color:#666;text-align:center;margin-top:4px;">Play any stage for 60+ seconds to keep your streak alive</div>
 </div>
 
 <div id="dailyPreview">
@@ -1073,7 +893,9 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     <button onclick="closeDailyPreview()" style="background:rgba(255,68,68,0.2);border:1px solid #f44;color:#f44;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:monospace;font-weight:700;font-size:.65rem;letter-spacing:1px;">✕ CLOSE</button>
   </div>
   <div style="width:100%;max-width:340px;text-align:center;padding:16px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.1);margin-top:8px;">
+    <div id="dpDate" style="font-size:0.75rem;color:#ccc;margin-bottom:4px;">📅 --</div>
     <div id="dpDiff" style="font-size:1rem;font-weight:700;color:#0ff;margin-bottom:8px;">MODERATE</div>
+    <div id="dpTheme" style="font-size:0.6rem;color:#aaa;margin-bottom:8px;line-height:1.5;word-wrap:break-word;"></div>
     <div id="dpStreak" style="font-size:0.8rem;color:#fa0;margin-bottom:4px;">🔥 Streak: 0 days</div>
     <div id="dpBest" style="font-size:0.75rem;color:#aaa;margin-bottom:16px;">Best today: --</div>
     <div style="display:flex;gap:10px;justify-content:center;">
@@ -1081,6 +903,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
       <button onclick="closeDailyPreview()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#ccc;padding:12px 20px;border-radius:8px;cursor:pointer;font-weight:700;font-size:0.8rem;">CLOSE</button>
     </div>
   </div>
+  <div id="dpCollection" style="width:100%;max-width:340px;margin-top:8px;padding:10px 12px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid rgba(255,255,255,0.08);display:none;"></div>
   <div style="width:100%;max-width:340px;font-size:0.6rem;color:#666;text-align:center;margin-top:8px;">A new stage every day. Same for everyone at your rank. Play as many times as you want.</div>
 </div>
 
@@ -1106,18 +929,19 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 </div>
 
 <div id="store">
-<h2 style="color:#ffd700;">★ STORE ♦</h2>
-<div style="display:flex;align-items:center;justify-content:space-between;width:100%;max-width:360px;margin-bottom:10px;">
-<div id="storeBalance" style="font-family:monospace;font-size:0.85rem;"></div>
-<button id="dailyChestBtn" onclick="claimDailyChest()" style="display:none;padding:6px 12px;font-size:0.7rem;font-weight:700;border:none;border-radius:8px;cursor:pointer;color:#fff;background:linear-gradient(135deg,#fa0,#f60);">🎁 DAILY</button>
+<div style="display:flex;align-items:center;justify-content:space-between;width:100%;max-width:360px;margin-bottom:6px;gap:8px;">
+    <div id="storeBalance" style="font-family:monospace;font-size:0.8rem;white-space:nowrap;"></div>
+    <h2 style="color:#ffd700;margin:0;font-size:1rem;white-space:nowrap;">★ STORE</h2>
+    <div onclick="updateShopkeeper()" style="cursor:pointer;display:flex;align-items:center;gap:4px;min-width:0;">
+        <span style="font-size:1.2rem;line-height:1;">🤖</span>
+        <span id="shopkeeperIdx" style="font-size:0.55rem;color:#666;font-family:monospace;">— / —</span>
+        <span style="font-size:0.65rem;color:#0ff;">▶</span>
+        <span id="shopkeeperMsgInline" class="sk-inline" style="font-size:0.5rem;color:#aaa;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none;flex:1;min-width:0;">Tip</span>
+    </div>
 </div>
-<div id="shopkeeper" onclick="updateShopkeeper()" style="width:100%;max-width:360px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px 12px;display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;cursor:pointer;position:relative;">
-<div style="font-size:1.5rem;line-height:1;">🤖</div>
-<div id="shopkeeperMsg" style="font-size:0.65rem;color:#aaa;line-height:1.5;font-style:italic;flex:1;"></div>
-<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-family:monospace;color:#666;font-size:0.55rem;">
-    <span id="shopkeeperIdx">— / —</span>
-    <span style="font-size:0.65rem;color:#0ff;">▶</span>
-</div>
+<div id="shopkeeperMsg" class="sk-block" style="width:100%;max-width:360px;font-size:0.65rem;color:#aaa;line-height:1.5;font-style:italic;text-align:center;margin-bottom:8px;"></div>
+<div id="storePortraitWrap" style="display:none;width:100%;max-width:360px;height:80px;margin-bottom:10px;position:relative;">
+    <canvas id="storePortrait" width="120" height="80" style="position:absolute;left:50%;transform:translateX(-50%);background:transparent;"></canvas>
 </div>
 <div id="storeTabs" style="display:flex;gap:8px;margin-bottom:15px;">
 <button class="stab active" onclick="showStoreTab('consumables')">CONSUMABLES</button>
@@ -1160,7 +984,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     <div class="prog-container"><div id="progFill" class="prog-bar"></div></div>
     <div id="hudSkillBar" style="display:flex;gap:8px;margin-top:6px;justify-content:center;">
         <button id="freezeBtn" type="button" tabindex="-1" onclick="this.blur();activateFreeze();" style="width:36px;height:36px;border-radius:50%;background:rgba(0,136,255,0.2);border:2px solid #08f;display:none;align-items:center;justify-content:center;font-size:1rem;color:#08f;cursor:pointer;padding:0;">⏸</button>
-        <button id="ghostBtn" type="button" tabindex="-1" onclick="this.blur();toggleGhost();" style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.1);border:2px solid rgba(255,255,255,0.4);display:none;align-items:center;justify-content:center;font-size:1rem;color:#fff;cursor:pointer;padding:0;opacity:0.8;">👻</button>
+
     </div>
 </div>
 
@@ -1172,7 +996,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 </div>
 
 <!-- 4. Bottom-Left: Gems & Status -->
-<div id="hudLeft" style="position:fixed;top:64px;left:12px;z-index:200;display:none;flex-direction:column;gap:3px;background:rgba(0,0,0,0.6);padding:5px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(10px);pointer-events:none;">
+<div id="hudLeft" style="position:fixed;top:64px;left:12px;z-index:200;display:none;flex-direction:column;gap:3px;background:rgba(0,0,0,0.05);padding:5px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(10px);pointer-events:none;">
     <div style="font-size:0.6rem;font-family:monospace;color:#aaa;">GEMS: <b id="hudChips" style="color:#fff;font-size:0.7rem;"><span style="color:#ffd700">★ 0</span> &nbsp; <span style="color:#ccc">♦ 0</span></b></div>
     <div style="font-size:0.6rem;font-family:monospace;color:#aaa;">DEATHS: <b id="hudDeath" style="color:#fff;font-size:0.7rem;">0</b></div>
     <div id="hudFx" style="font-family:monospace;color:#0ff;font-size:0.5rem;line-height:1.3;"></div>
@@ -1195,7 +1019,8 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 <div id="adjustOverlay" class="adjust-overlay"></div>
 <button id="adjustDone" style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:500;display:none;padding:12px 36px;font-size:1rem;font-weight:900;border:none;border-radius:30px;background:linear-gradient(90deg,#0f8,#0c8);color:#000;cursor:pointer;box-shadow:0 0 20px rgba(0,255,136,0.4);letter-spacing:2px;" onclick="exitAdjustMode()">✓ DONE</button>
 <div id="adjustPanel" style="position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:500;display:none;background:rgba(0,0,0,0.85);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:12px 20px;backdrop-filter:blur(8px);flex-direction:column;gap:8px;align-items:center;">
-<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:0.7rem;color:#aaa;min-width:50px;">Size</label><input type="range" id="adjSize" min="60" max="120" value="80" style="width:140px;" oninput="applyAdjustSize(this.value)"><span id="adjSizeVal" style="font-size:0.7rem;color:#0ff;min-width:35px;">80px</span></div>
+<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:0.7rem;color:#aaa;min-width:55px;">Move</label><input type="range" id="adjMoveSize" min="60" max="120" value="80" style="width:120px;" oninput="applyMoveSize(this.value)"><span id="adjMoveSizeVal" style="font-size:0.7rem;color:#0ff;min-width:35px;">80px</span></div>
+<div style="display:flex;align-items:center;gap:8px;"><label style="font-size:0.7rem;color:#aaa;min-width:55px;">Jump</label><input type="range" id="adjJumpSize" min="60" max="120" value="80" style="width:120px;" oninput="applyJumpSize(this.value)"><span id="adjJumpSizeVal" style="font-size:0.7rem;color:#0ff;min-width:35px;">80px</span></div>
 <button onclick="resetAdjustDefaults()" style="padding:8px 20px;font-size:0.75rem;font-weight:700;border:none;border-radius:8px;background:rgba(255,255,255,0.1);color:#f80;cursor:pointer;letter-spacing:1px;width:100%;">↺ RESET TO DEFAULT</button>
 </div>
 
@@ -1206,6 +1031,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 <div class="onb-card">
 <div class="onb-label">&#x270f;&#xfe0f; Your Name</div>
 <input id="onbName" class="onb-input" type="text" maxlength="10" placeholder="5-10 chars" onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();finishOnboard();}">
+<div style="font-size:0.6rem;color:#888;text-align:center;margin-top:6px;">Already have a cloud account? <a href="#" onclick="openSyncLinkPanel();return false;" style="color:#0ff;text-decoration:underline;">Link device</a></div>
 </div>
 
 <div class="onb-card">
@@ -1277,6 +1103,109 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     <button id="ovBtnReplay" style="display:none; background:linear-gradient(135deg,#a0f,#60a);">WATCH</button>
     <button id="ovBtnCancel" style="display:none; background:linear-gradient(135deg,#555,#333);">CANCEL</button>
 </div>
+</div>
+
+<div id="feedbackPanel" style="position:fixed;inset:0;z-index:500;background:#020205;display:none;flex-direction:column;align-items:center;justify-content:flex-start;gap:16px;padding:24px 16px;overflow-y:auto;">
+    <h2 style="font-size:1.4rem;font-weight:900;letter-spacing:3px;color:#0ff;margin:0;">📝 SEND FEEDBACK</h2>
+    <div style="width:100%;max-width:320px;display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;gap:8px;">
+            <div style="flex:1;">
+                <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">PLAYER ID</div>
+                <div id="fbPlayerId" style="font-size:0.6rem;color:#0ff;font-family:monospace;background:rgba(0,0,0,0.3);padding:8px;border-radius:6px;border:1px solid rgba(0,229,255,0.2);word-break:break-all;"></div>
+            </div>
+            <div style="flex:1;">
+                <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">USERNAME</div>
+                <div id="fbPlayerName" style="font-size:0.7rem;color:#fff;font-family:monospace;background:rgba(0,0,0,0.3);padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);"></div>
+            </div>
+        </div>
+        <div>
+            <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">SUBJECT</div>
+            <input id="fbSubject" type="text" maxlength="100" placeholder="What's this about?" style="width:100%;padding:10px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:inherit;font-size:0.75rem;outline:none;">
+        </div>
+        <div>
+            <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">EMAIL <span style="color:#555;">(optional)</span></div>
+            <input id="fbEmail" type="email" maxlength="120" placeholder="your@email.com" style="width:100%;padding:10px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:inherit;font-size:0.75rem;outline:none;">
+        </div>
+        <div>
+            <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">MESSAGE</div>
+            <textarea id="fbContent" rows="6" maxlength="2000" placeholder="Tell us what's on your mind..." style="width:100%;padding:10px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:inherit;font-size:0.75rem;outline:none;resize:vertical;"></textarea>
+        </div>
+        <div id="fbStatus" style="font-size:0.65rem;color:#f80;text-align:center;min-height:16px;"></div>
+        <div style="display:flex;gap:10px;">
+            <button onclick="submitFeedback()" style="flex:1;padding:12px 0;background:linear-gradient(135deg,#0ff,#08f);color:#000;font-weight:700;border:none;border-radius:8px;cursor:pointer;font-size:0.8rem;letter-spacing:1px;">SEND</button>
+            <button onclick="closeFeedbackPanel()" style="flex:1;padding:12px 0;background:linear-gradient(135deg,#555,#333);color:#fff;font-weight:700;border:none;border-radius:8px;cursor:pointer;font-size:0.8rem;letter-spacing:1px;">CANCEL</button>
+        </div>
+    </div>
+</div>
+
+<div id="syncPanel" style="position:fixed;inset:0;z-index:500;background:#020205;display:none;flex-direction:column;align-items:center;justify-content:flex-start;gap:16px;padding:24px 16px;overflow-y:auto;">
+    <h2 style="font-size:1.4rem;font-weight:900;letter-spacing:3px;color:#0ff;margin:0;">☁️ CLOUD SYNC</h2>
+    <div style="width:100%;max-width:320px;display:flex;flex-direction:column;gap:12px;">
+        <div id="syncTabRegister">
+            <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:8px;">REGISTER DEVICE</div>
+            <div>
+                <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">USERNAME</div>
+                <div id="syncUsername" style="font-size:0.7rem;color:#fff;font-family:monospace;background:rgba(0,0,0,0.3);padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);"></div>
+            </div>
+            <div>
+                <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">BIRTHDAY (MMYY)</div>
+                <input id="syncMmyy" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="0314" style="width:100%;padding:10px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.75rem;outline:none;text-align:center;letter-spacing:2px;">
+            </div>
+            <div>
+                <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">PIN (6 digits)</div>
+                <input id="syncPinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" style="width:100%;padding:10px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.75rem;outline:none;text-align:center;letter-spacing:2px;">
+            </div>
+            <button onclick="registerSync()" style="width:100%;padding:12px 0;background:linear-gradient(135deg,#0ff,#08f);color:#000;font-weight:700;border:none;border-radius:8px;cursor:pointer;font-size:0.8rem;letter-spacing:1px;">REGISTER</button>
+        </div>
+        <div id="syncTabLink" style="display:none;">
+            <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:8px;">LINK DEVICE</div>
+            <div style="font-size:0.6rem;color:#888;margin-bottom:8px;">Already have a cloud account? Enter your credentials to restore progress on this device.</div>
+            <div>
+                <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">USERNAME</div>
+                <input id="syncLinkUsername" type="text" maxlength="10" placeholder="RUNNER99" style="width:100%;padding:10px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.75rem;outline:none;text-align:center;text-transform:uppercase;">
+            </div>
+            <div>
+                <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">BIRTHDAY (MMYY)</div>
+                <input id="syncLinkMmyy" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="0314" style="width:100%;padding:10px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.75rem;outline:none;text-align:center;letter-spacing:2px;">
+            </div>
+            <div>
+                <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">PIN (6 digits)</div>
+                <input id="syncLinkPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" style="width:100%;padding:10px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.75rem;outline:none;text-align:center;letter-spacing:2px;">
+            </div>
+            <button onclick="linkDevice()" style="width:100%;padding:12px 0;background:linear-gradient(135deg,#0ff,#08f);color:#000;font-weight:700;border:none;border-radius:8px;cursor:pointer;font-size:0.8rem;letter-spacing:1px;">LINK DEVICE</button>
+            <button onclick="verifySyncCredentialsUI()" style="width:100%;padding:8px 0;background:linear-gradient(135deg,#333,#222);border:none;border-radius:8px;cursor:pointer;color:#aaa;font-weight:700;font-size:0.7rem;letter-spacing:1px;margin-top:6px;">✅ VERIFY CREDENTIALS</button>
+        </div>
+        <div id="syncTabManage" style="display:none;">
+            <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:8px;">MANAGE SYNC</div>
+            <div style="background:rgba(0,0,0,0.3);padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);margin-bottom:8px;">
+                <div style="font-size:0.6rem;color:#888;margin-bottom:2px;">USERNAME</div>
+                <div id="syncManageUsername" style="font-size:0.7rem;color:#fff;font-family:monospace;margin-bottom:6px;">—</div>
+                <div style="font-size:0.6rem;color:#888;margin-bottom:2px;">BIRTHDAY</div>
+                <div id="syncManageMmyy" style="font-size:0.7rem;color:#fff;font-family:monospace;margin-bottom:6px;">—</div>
+                <div style="font-size:0.6rem;color:#888;margin-bottom:2px;">DEVICE ID</div>
+                <div id="syncManageDeviceId" style="font-size:0.6rem;color:#666;font-family:monospace;word-break:break-all;">—</div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,0.3);padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);">
+                <div style="font-size:0.65rem;color:#888;">AUTO-SYNC</div>
+                <button id="syncAutoToggle" onclick="toggleSyncAuto()" style="padding:4px 12px;font-size:0.65rem;font-weight:700;border:none;border-radius:4px;background:#0f8;color:#000;cursor:pointer;">ON</button>
+            </div>
+            <button onclick="syncNow()" style="width:100%;padding:10px 0;background:linear-gradient(135deg,#0aa,#055);border:none;border-radius:8px;cursor:pointer;color:#fff;font-weight:700;font-size:0.75rem;letter-spacing:1px;margin-top:8px;">🔄 SYNC NOW</button>
+            <div id="syncChangePinSection" style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.1);">
+                <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">CHANGE PIN <span style="color:#666;font-size:0.55rem;">— know your current PIN</span></div>
+                <input id="syncOldPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="Current PIN" style="width:100%;padding:8px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.7rem;outline:none;text-align:center;margin-bottom:6px;">
+                <input id="syncNewPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="New PIN" style="width:100%;padding:8px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.7rem;outline:none;text-align:center;margin-bottom:6px;">
+                <button onclick="changeSyncPinUI()" style="width:100%;padding:8px 0;background:linear-gradient(135deg,#555,#333);border:none;border-radius:8px;cursor:pointer;color:#fff;font-weight:700;font-size:0.7rem;letter-spacing:1px;">CHANGE PIN</button>
+            </div>
+            <div id="syncForgotPinSection" style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.1);">
+                <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">FORGOT PIN <span style="color:#666;font-size:0.55rem;">— reset without old PIN</span></div>
+                <input id="syncForgotNewPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="New PIN (6 digits)" style="width:100%;padding:8px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.7rem;outline:none;text-align:center;margin-bottom:6px;">
+                <button onclick="forgotSyncPinUI()" style="width:100%;padding:8px 0;background:linear-gradient(135deg,#a50,#830);border:none;border-radius:8px;cursor:pointer;color:#fff;font-weight:700;font-size:0.7rem;letter-spacing:1px;">RESET PIN</button>
+            </div>
+            <button onclick="showSyncLinkTab()" style="width:100%;padding:10px 0;background:linear-gradient(135deg,#333,#222);border:none;border-radius:8px;cursor:pointer;color:#aaa;font-weight:700;font-size:0.75rem;letter-spacing:1px;margin-top:8px;">🔗 LINK ANOTHER DEVICE</button>
+        </div>
+        <div id="syncStatus" style="font-size:0.65rem;color:#f80;text-align:center;min-height:16px;"></div>
+        <button onclick="closeSyncPanel()" style="width:100%;padding:12px 0;background:linear-gradient(135deg,#555,#333);color:#fff;font-weight:700;border:none;border-radius:8px;cursor:pointer;font-size:0.8rem;letter-spacing:1px;">CLOSE</button>
+    </div>
 </div>
 
 </body>

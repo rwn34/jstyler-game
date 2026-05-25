@@ -1,4 +1,4 @@
-﻿var LS=null;
+var LS=null;
 try{LS=localStorage;}catch(e){console.warn('localStorage unavailable:',e);}
 var _sk='n3j8x2qf';
 function _xor(s){var o='';for(var i=0;i<s.length;i++)o+=String.fromCharCode(s.charCodeAt(i)^_sk.charCodeAt(i%_sk.length));return o;}
@@ -27,6 +27,7 @@ if(!isV2) {
 
 // === METRICS (anonymous, opt-out by setting METRIC_URL='') ===
 var METRIC_URL = 'https://ndj-metrics.jstylr.workers.dev'; // Cloudflare Worker — set to '' to disable metrics
+var APP_VERSION = 'v1.2.50'; // Build version — updated by zipgame.ps1
 var playerId = load('playerId', null);
 if(!playerId){playerId='p_'+Math.random().toString(36).slice(2,10)+Date.now().toString(36);save('playerId',playerId);}
 
@@ -61,7 +62,9 @@ function _hmacSign(key,message){
 
 function sendMetric(type, data){
     if(!METRIC_URL)return;
-    var e={pid:playerId,name:(typeof playerName!=='undefined'&&playerName)?playerName:null,type:type,data:data||{},ts:Date.now()};
+    var d=Object.assign({},data);
+    d._v=APP_VERSION;
+    var e={pid:playerId,name:(typeof playerName!=='undefined'&&playerName)?playerName:null,type:type,data:d,ts:Date.now()};
     getSessionToken().then(function(token){
         if(token){
             e.token=token;
@@ -354,6 +357,297 @@ if(_storedContent<STAGE_CONTENT_VERSION){
     save('ghostData',ghostData);
     save('stageContentVersion',STAGE_CONTENT_VERSION);
 }
+// === CLOUD SYNC ===
+var playerMmyy=load('playerMmyy','');
+var syncPin=load('syncPin','');
+var syncRegistered=load('syncRegistered',false);
+var syncAuto=load('syncAuto',true);
+var pendingPurchases=load('pendingPurchases',[]);
+var syncDeviceId=load('syncDeviceId','');
+if(!syncDeviceId){syncDeviceId='d_'+Math.random().toString(36).slice(2,8);save('syncDeviceId',syncDeviceId);}
+var _syncDebounce=null;
+var SYNC_SALT_CLIENT='ndj-sync-v1-salt';
+
+function hashSyncKeyClient(username,mmyy,pin){
+    var msg=String(username||'').toUpperCase()+'|'+String(mmyy||'')+'|'+String(pin||'');
+    if(!window.crypto||!crypto.subtle)return Promise.resolve(null);
+    var enc=new TextEncoder();
+    return crypto.subtle.importKey('raw',enc.encode(SYNC_SALT_CLIENT),{name:'HMAC',hash:'SHA-256'},false,['sign']).then(function(k){
+        return crypto.subtle.sign('HMAC',k,enc.encode(msg));
+    }).then(function(sig){
+        return Array.from(new Uint8Array(sig)).map(function(b){return ('0'+b.toString(16)).slice(-2);}).join('');
+    }).catch(function(){return null;});
+}
+
+function buildSyncData(){
+    return {
+        pid:playerId,
+        playerName:playerName,
+        playerMmyy:playerMmyy,
+        unlocked:unlocked,
+        scores:bestScores,
+        times:bestTimes,
+        chips:bestChips,
+        stats:levelStats,
+        lastPlayed:lastPlayed,
+        silver:silverWallet,
+        globalData:globalData,
+        goldSpent:goldSpent,
+        bonusGold:bonusGold,
+        ownedSkills:ownedSkills,
+        equippedSkills:equippedSkills,
+        ownedCosmetics:ownedCosmetics,
+        equippedCosmetics:equippedCosmetics,
+        consumableInv:consumableInv,
+        lastChest:lastChestClaim,
+        lastResurrect:lastResurrectTime,
+        championStatus:championStatus,
+        streakFreezes:load('streakFreezes',0),
+        frozenDays:load('frozenDays',[]),
+        dailyStreak:load('dailyStreak',0),
+        sfx:sfxOn,
+        mus:musOn,
+        ctrl:ctrlMode,
+        vibrate:vibrateOn,
+        orient:orient,
+        visualQuality:visualQuality,
+        ghostsEnabled:ghostsEnabled,
+        showFps:showFps,
+        autoRetryDelay:autoRetryDelay,
+        hintsSeen:hintsSeen,
+        tutorialDone:load('tutorialDone',false),
+        ctrlPicked:load('ctrlPicked',false)
+    };
+}
+
+function mergeSyncData(cloud){
+    if(!cloud||typeof cloud!=='object')return;
+    // Adopt PID from cloud
+    if(cloud.pid&&cloud.pid!==playerId){playerId=cloud.pid;save('playerId',playerId);}
+    // Player name
+    if(cloud.playerName){playerName=cloud.playerName;save('playerName',playerName);}
+    // Player mmyy
+    if(cloud.playerMmyy){playerMmyy=cloud.playerMmyy;save('playerMmyy',playerMmyy);}
+    // Unlocked: union
+    if(Array.isArray(cloud.unlocked)){
+        var uSet=new Set(unlocked);
+        for(var i=0;i<cloud.unlocked.length;i++)uSet.add(cloud.unlocked[i]);
+        unlocked=Array.from(uSet);save('unlocked',unlocked);
+    }
+    // Best scores: per-level max
+    if(cloud.scores){for(var k in cloud.scores){if(cloud.scores[k]>(bestScores[k]||0))bestScores[k]=cloud.scores[k];}save('scores',bestScores);}
+    // Best times: per-level min
+    if(cloud.times){for(var k in cloud.times){if(cloud.times[k]<(bestTimes[k]||Infinity))bestTimes[k]=cloud.times[k];}save('times',bestTimes);}
+    // Best chips: per-index OR
+    if(cloud.chips){for(var k in cloud.chips){var ca=cloud.chips[k]||[];var ba=bestChips[k]||[];var maxLen=Math.max(ca.length,ba.length);var merged=[];for(var i=0;i<maxLen;i++)merged[i]=!!ca[i]||!!ba[i];bestChips[k]=merged;}save('chips',bestChips);}
+    // Stats: per-level max completions/attempts/silver
+    if(cloud.stats){for(var k in cloud.stats){var cs=cloud.stats[k]||{};var ls=levelStats[k]||{};levelStats[k]={attempts:Math.max(ls.attempts||0,cs.attempts||0),completions:Math.max(ls.completions||0,cs.completions||0),hazards:Math.max(ls.hazards||0,cs.hazards||0),silver:Math.max(ls.silver||0,cs.silver||0),timePlayed:Math.max(ls.timePlayed||0,cs.timePlayed||0),contentVersion:Math.max(ls.contentVersion||0,cs.contentVersion||0),masterGems:Array.isArray(cs.masterGems)?cs.masterGems.slice():([])};}save('stats',levelStats);}
+    // Silver: max
+    if(typeof cloud.silver==='number'){silverWallet=Math.max(silverWallet,cloud.silver);save('silver',silverWallet);}
+    // Gold spent: max
+    if(typeof cloud.goldSpent==='number'){goldSpent=Math.max(goldSpent,cloud.goldSpent);save('goldSpent',goldSpent);}
+    // Bonus gold: max
+    if(typeof cloud.bonusGold==='number'){bonusGold=Math.max(bonusGold,cloud.bonusGold);save('bonusGold',bonusGold);}
+    // Skills: union
+    if(Array.isArray(cloud.ownedSkills)){for(var i=0;i<cloud.ownedSkills.length;i++){if(ownedSkills.indexOf(cloud.ownedSkills[i])<0)ownedSkills.push(cloud.ownedSkills[i]);}save('ownedSkills',ownedSkills);}
+    if(Array.isArray(cloud.equippedSkills)){equippedSkills=cloud.equippedSkills.slice(0,3);save('equippedSkills',equippedSkills);}
+    // Cosmetics: union
+    if(Array.isArray(cloud.ownedCosmetics)){for(var i=0;i<cloud.ownedCosmetics.length;i++){if(ownedCosmetics.indexOf(cloud.ownedCosmetics[i])<0)ownedCosmetics.push(cloud.ownedCosmetics[i]);}save('ownedCosmetics',ownedCosmetics);}
+    if(cloud.equippedCosmetics&&typeof cloud.equippedCosmetics==='object'){for(var k in cloud.equippedCosmetics){if(cloud.equippedCosmetics[k])equippedCosmetics[k]=cloud.equippedCosmetics[k];}save('equippedCosmetics',equippedCosmetics);}
+    // Consumables: per-item max
+    if(cloud.consumableInv&&typeof cloud.consumableInv==='object'){for(var k in cloud.consumableInv){consumableInv[k]=Math.max(consumableInv[k]||0,cloud.consumableInv[k]||0);}save('consumableInv',consumableInv);}
+    // Settings
+    if(typeof cloud.sfx==='boolean'){sfxOn=cloud.sfx;save('sfx',sfxOn);}
+    if(typeof cloud.mus==='boolean'){musOn=cloud.mus;save('mus',musOn);}
+    if(typeof cloud.ctrl==='string'){ctrlMode=cloud.ctrl;save('ctrl',ctrlMode);}
+    if(typeof cloud.vibrate==='boolean'){vibrateOn=cloud.vibrate;save('vibrate',vibrateOn);}
+    if(typeof cloud.orient==='string'){orient=cloud.orient;save('orient',orient);}
+    if(typeof cloud.visualQuality==='string'){visualQuality=cloud.visualQuality;save('visualQuality',visualQuality);}
+    if(typeof cloud.ghostsEnabled==='boolean'){ghostsEnabled=cloud.ghostsEnabled;save('ghostsEnabled',ghostsEnabled);}
+    if(typeof cloud.showFps==='boolean'){showFps=cloud.showFps;save('showFps',showFps);}
+    if(cloud.autoRetryDelay){autoRetryDelay=cloud.autoRetryDelay;save('autoRetryDelay',autoRetryDelay);}
+    // Champion status
+    if(cloud.championStatus&&typeof cloud.championStatus==='object'){
+        championStatus.unlocked=!!(championStatus.unlocked||cloud.championStatus.unlocked);
+        save('championStatus',championStatus);
+    }
+    // Daily/streak
+    if(typeof cloud.dailyStreak==='number'){save('dailyStreak',cloud.dailyStreak);}
+    if(typeof cloud.streakFreezes==='number'){save('streakFreezes',cloud.streakFreezes);}
+    if(Array.isArray(cloud.frozenDays)){save('frozenDays',cloud.frozenDays);}
+    if(typeof cloud.lastChest==='number'){lastChestClaim=cloud.lastChest;save('lastChest',lastChestClaim);}
+    if(typeof cloud.lastResurrect==='number'){lastResurrectTime=cloud.lastResurrect;save('lastResurrect',lastResurrectTime);}
+}
+
+function queueSync(data,rewards,purchases){
+    if(!syncRegistered||!syncAuto)return;
+    if(_syncDebounce)clearTimeout(_syncDebounce);
+    _syncDebounce=setTimeout(function(){saveSync(data,rewards,purchases);},5000);
+}
+
+function saveSync(data,rewards,purchases){
+    if(!METRIC_URL||!syncRegistered||!syncPin||!playerMmyy)return;
+    var payload={
+        username:playerName,
+        mmyy:playerMmyy,
+        pin:syncPin,
+        deviceId:syncDeviceId,
+        data:data||buildSyncData(),
+        rewards:rewards||[],
+        pendingPurchases:purchases||pendingPurchases||[],
+        ts:Date.now()
+    };
+    fetch(METRIC_URL+'/sync/save',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload),
+        keepalive:true
+    }).then(function(r){return r.json();}).then(function(d){
+        if(d&&d.ok){
+            pendingPurchases=[];save('pendingPurchases',pendingPurchases);
+            if(d.rejectedPurchases&&d.rejectedPurchases.length>0){
+                // Refund rejected purchases locally
+                for(var i=0;i<d.rejectedPurchases.length;i++){
+                    var p=d.rejectedPurchases[i];
+                    if(p.currency==='silver'){silverWallet+=p.cost;save('silver',silverWallet);}
+                    else if(p.currency==='gold'){goldSpent=Math.max(0,goldSpent-p.cost);save('goldSpent',goldSpent);}
+                    // Remove item from owned
+                    if(ownedSkills.indexOf(p.id)>=0){ownedSkills.splice(ownedSkills.indexOf(p.id),1);save('ownedSkills',ownedSkills);}
+                    if(ownedCosmetics.indexOf(p.id)>=0){ownedCosmetics.splice(ownedCosmetics.indexOf(p.id),1);save('ownedCosmetics',ownedCosmetics);}
+                }
+                if(typeof addFloat==='function')addFloat(W.innerWidth/2,W.innerHeight/2,'Some purchases were refunded (sync conflict)','#f80');
+            }
+        }
+    }).catch(function(){});
+}
+
+function replaceSyncData(cloud){
+    if(!cloud||typeof cloud!=='object')return;
+    // Adopt PID from cloud
+    if(cloud.pid&&cloud.pid!==playerId){playerId=cloud.pid;save('playerId',playerId);}
+    // Player name
+    if(cloud.playerName){playerName=cloud.playerName;save('playerName',playerName);}
+    // Player mmyy
+    if(cloud.playerMmyy){playerMmyy=cloud.playerMmyy;save('playerMmyy',playerMmyy);}
+    // Replace unlocked
+    if(Array.isArray(cloud.unlocked)){unlocked=cloud.unlocked.slice();save('unlocked',unlocked);}
+    // Replace scores
+    if(cloud.scores){bestScores=JSON.parse(JSON.stringify(cloud.scores));save('scores',bestScores);}
+    // Replace times
+    if(cloud.times){bestTimes=JSON.parse(JSON.stringify(cloud.times));save('times',bestTimes);}
+    // Replace chips
+    if(cloud.chips){bestChips=JSON.parse(JSON.stringify(cloud.chips));save('chips',bestChips);}
+    // Replace stats
+    if(cloud.stats){levelStats=JSON.parse(JSON.stringify(cloud.stats));save('stats',levelStats);}
+    // Replace silver
+    if(typeof cloud.silver==='number'){silverWallet=cloud.silver;save('silver',silverWallet);}
+    // Replace globalData
+    if(cloud.globalData){globalData=JSON.parse(JSON.stringify(cloud.globalData));save('globalData',globalData);}
+    // Replace goldSpent
+    if(typeof cloud.goldSpent==='number'){goldSpent=cloud.goldSpent;save('goldSpent',goldSpent);}
+    // Replace bonusGold
+    if(typeof cloud.bonusGold==='number'){bonusGold=cloud.bonusGold;save('bonusGold',bonusGold);}
+    // Replace skills
+    if(Array.isArray(cloud.ownedSkills)){ownedSkills=cloud.ownedSkills.slice();save('ownedSkills',ownedSkills);}
+    if(Array.isArray(cloud.equippedSkills)){equippedSkills=cloud.equippedSkills.slice(0,3);save('equippedSkills',equippedSkills);}
+    // Replace cosmetics
+    if(Array.isArray(cloud.ownedCosmetics)){ownedCosmetics=cloud.ownedCosmetics.slice();save('ownedCosmetics',ownedCosmetics);}
+    if(cloud.equippedCosmetics&&typeof cloud.equippedCosmetics==='object'){equippedCosmetics=JSON.parse(JSON.stringify(cloud.equippedCosmetics));save('equippedCosmetics',equippedCosmetics);}
+    // Replace consumables
+    if(cloud.consumableInv&&typeof cloud.consumableInv==='object'){consumableInv=JSON.parse(JSON.stringify(cloud.consumableInv));save('consumableInv',consumableInv);}
+    // Settings
+    if(typeof cloud.sfx==='boolean'){sfxOn=cloud.sfx;save('sfx',sfxOn);}
+    if(typeof cloud.mus==='boolean'){musOn=cloud.mus;save('mus',musOn);}
+    if(typeof cloud.ctrl==='string'){ctrlMode=cloud.ctrl;save('ctrl',ctrlMode);}
+    if(typeof cloud.vibrate==='boolean'){vibrateOn=cloud.vibrate;save('vibrate',vibrateOn);}
+    if(typeof cloud.orient==='string'){orient=cloud.orient;save('orient',orient);}
+    if(typeof cloud.visualQuality==='string'){visualQuality=cloud.visualQuality;save('visualQuality',visualQuality);}
+    if(typeof cloud.ghostsEnabled==='boolean'){ghostsEnabled=cloud.ghostsEnabled;save('ghostsEnabled',ghostsEnabled);}
+    if(typeof cloud.showFps==='boolean'){showFps=cloud.showFps;save('showFps',showFps);}
+    if(cloud.autoRetryDelay){autoRetryDelay=cloud.autoRetryDelay;save('autoRetryDelay',autoRetryDelay);}
+    // Champion status
+    if(cloud.championStatus&&typeof cloud.championStatus==='object'){
+        championStatus=JSON.parse(JSON.stringify(cloud.championStatus));
+        save('championStatus',championStatus);
+    }
+    // Daily/streak
+    if(typeof cloud.dailyStreak==='number'){save('dailyStreak',cloud.dailyStreak);}
+    if(typeof cloud.streakFreezes==='number'){save('streakFreezes',cloud.streakFreezes);}
+    if(Array.isArray(cloud.frozenDays)){save('frozenDays',cloud.frozenDays);}
+    if(typeof cloud.lastChest==='number'){lastChestClaim=cloud.lastChest;save('lastChest',lastChestClaim);}
+    if(typeof cloud.lastResurrect==='number'){lastResurrectTime=cloud.lastResurrect;save('lastResurrect',lastResurrectTime);}
+    if(Array.isArray(cloud.hintsSeen)){hintsSeen=cloud.hintsSeen.slice();save('hintsSeen',hintsSeen);}
+    if(typeof cloud.tutorialDone==='boolean'){save('tutorialDone',cloud.tutorialDone);}
+    if(typeof cloud.ctrlPicked==='boolean'){save('ctrlPicked',cloud.ctrlPicked);}
+}
+
+function checkSyncCredentials(username,mmyy,pin,callback){
+    if(!METRIC_URL)return;
+    var payload={username:mmyy?username:playerName,mmyy:mmyy||playerMmyy,pin:pin||syncPin};
+    fetch(METRIC_URL+'/sync/check',{
+        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),keepalive:true
+    }).then(function(r){return r.json();}).then(function(d){
+        if(typeof callback==='function')callback(d&&d.ok,d);
+    }).catch(function(){if(typeof callback==='function')callback(false,null);});
+}
+function loadSync(username,mmyy,pin,callback,replace){
+    if(!METRIC_URL)return;
+    var payload={username:mmyy?username:playerName,mmyy:mmyy||playerMmyy,pin:pin||syncPin,deviceId:syncDeviceId};
+    fetch(METRIC_URL+'/sync/load',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload),
+        keepalive:true
+    }).then(function(r){return r.json();}).then(function(d){
+        if(d&&d.ok&&d.data){
+            if(replace)replaceSyncData(d.data);
+            else mergeSyncData(d.data);
+            if(typeof callback==='function')callback(true,d);
+        }else{
+            if(typeof callback==='function')callback(false,d);
+        }
+    }).catch(function(){if(typeof callback==='function')callback(false,null);});
+}
+
+function forgotSyncPin(username,mmyy,newPin,callback){
+    if(!METRIC_URL)return;
+    var payload={username:mmyy?username:playerName,mmyy:mmyy||playerMmyy,newPin:newPin};
+    fetch(METRIC_URL+'/sync/forgot-pin',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload),
+        keepalive:true
+    }).then(function(r){return r.json();}).then(function(d){
+        if(d&&d.ok){
+            syncPin=newPin;save('syncPin',syncPin);
+            playerName=String(payload.username).toUpperCase();save('playerName',playerName);
+            playerMmyy=String(payload.mmyy);save('playerMmyy',playerMmyy);
+            syncRegistered=true;save('syncRegistered',true);
+            if(typeof callback==='function')callback(true,d);
+        }else{
+            if(typeof callback==='function')callback(false,d&&d.error?d.error:'Failed');
+        }
+    }).catch(function(){if(typeof callback==='function')callback(false,'Network error');});
+}
+
+function changeSyncPin(oldPin,newPin,callback){
+    if(!METRIC_URL||!syncRegistered||!playerMmyy)return;
+    var payload={username:playerName,mmyy:playerMmyy,oldPin:oldPin,newPin:newPin};
+    fetch(METRIC_URL+'/sync/change-pin',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload),
+        keepalive:true
+    }).then(function(r){return r.json();}).then(function(d){
+        if(d&&d.ok){
+            syncPin=newPin;save('syncPin',syncPin);
+            if(typeof callback==='function')callback(true);
+        }else{
+            if(typeof callback==='function')callback(false,d&&d.error);
+        }
+    }).catch(function(){if(typeof callback==='function')callback(false,'network error');});
+}
+
 function getTotalGoldEarned(){var t=0;for(var i=0;i<LEVELS.length;i++){var c=bestChips[i]||[];for(var j=0;j<c.length;j++)if(c[j])t++;}return t;}
 function getOwnedSkillsCost(){var t=0;for(var i=0;i<ownedSkills.length;i++){var s=SKILLS.find(function(x){return x.id===ownedSkills[i];});if(s)t+=s.cost;}return t;}
 function getGoldBalance(){
@@ -395,6 +689,11 @@ function hasSkill(id){
 }
 var globalData=normalizeGlobalData(load('globalData', {}));
 save('globalData', globalData);
+// Today play time tracker
+var todayPlayDay=load('todayPlayDay','');
+var todayPlayTime=load('todayPlayTime',0);
+var _todayShort=getGameDayShort?getGameDayShort():'';
+if(todayPlayDay!==_todayShort){todayPlayDay=_todayShort;todayPlayTime=0;save('todayPlayDay',todayPlayDay);save('todayPlayTime',todayPlayTime);}
 // v1.1.5 migration: replays previously incremented levelStats[i].completions and globalData.matches.
 // Cap completions at attempts (impossible to complete more times than you started) and recompute matches.
 // Also: if a level has 0 legit completions after capping, scrub any stale bestTimes/bestChips/ghostData.
@@ -472,7 +771,7 @@ function setQualityConfirmed(q,sourceEl){
     setQuality(q);
 }
 // Per-orientation control layouts (separate persistence for portrait vs landscape)
-var DEFAULT_CTRL_LAYOUT = {padX:20, padY:20, jSize:150, btnSize:80};
+var DEFAULT_CTRL_LAYOUT = {padX:20, padY:20, jSize:150, btnSize:80, jumpX:20, jumpY:20, jumpSize:80};
 var ctrlLayouts = load('ctrlLayouts', null);
 if(!ctrlLayouts || typeof ctrlLayouts!=='object'){
     // Migrate legacy single-orientation save (if any) into both layouts as starting point
@@ -480,27 +779,30 @@ if(!ctrlLayouts || typeof ctrlLayouts!=='object'){
         padX: cleanNumber(load('padX', 20), 20),
         padY: cleanNumber(load('padY', 20), 20),
         jSize: cleanNumber(load('jSize', 150), 150),
-        btnSize: cleanNumber(load('btnSize', 80), 80)
+        btnSize: cleanNumber(load('btnSize', 80), 80),
+        jumpX: cleanNumber(load('jumpX', 20), 20),
+        jumpY: cleanNumber(load('jumpY', 20), 20),
+        jumpSize: cleanNumber(load('jumpSize', 80), 80)
     };
     ctrlLayouts = {portrait:Object.assign({},legacy), landscape:Object.assign({},legacy)};
     save('ctrlLayouts', ctrlLayouts);
 }
-function currentLayoutKey(){return W.innerWidth >= W.innerHeight ? 'landscape' : 'portrait';}
+function currentLayoutKey(){if(orient==='portrait')return W.innerWidth >= W.innerHeight ? 'landscape' : 'portrait';return 'landscape';}
 function loadCurrentCtrlLayout(){
     var key = currentLayoutKey();
     var layout = ctrlLayouts[key] || Object.assign({}, DEFAULT_CTRL_LAYOUT);
     padX = layout.padX; padY = layout.padY; jSize = layout.jSize; btnSize = layout.btnSize;
+    jumpX = layout.jumpX || 20; jumpY = layout.jumpY || 20; jumpSize = layout.jumpSize || 80;
 }
 function saveCurrentCtrlLayout(){
     var key = currentLayoutKey();
-    ctrlLayouts[key] = {padX:padX, padY:padY, jSize:jSize, btnSize:btnSize};
+    ctrlLayouts[key] = {padX:padX, padY:padY, jSize:jSize, btnSize:btnSize, jumpX:jumpX, jumpY:jumpY, jumpSize:jumpSize};
     save('ctrlLayouts', ctrlLayouts);
 }
 var jSize = 150;
 var padX = 20;
 var padY = 20;
 var orient=load('orient','landscape');
-if(orient!=='landscape'&&orient!=='portrait'){orient='landscape';save('orient',orient);}
 var ctrlMode=load('ctrl','arrows');
 var vibrateOn=load('vibrate',true);
 var sfxOn=load('sfx',true);
@@ -568,16 +870,18 @@ function recordPlayDay(){
 }
 function getCalendarDays(){
     var today = getGameDayShort();
+    var frozenDays = load('frozenDays', []);
     var days = [];
     for(var i = -27; i <= 3; i++){
         var d = offsetDay(today, i);
         var isPlayed = playDays.indexOf(d) !== -1;
+        var isFrozen = frozenDays.indexOf(d) !== -1;
         var prevD = i > -27 ? offsetDay(today, i-1) : null;
         var nextD = i < 3 ? offsetDay(today, i+1) : null;
         days.push({
             day: d, label: parseInt(d.slice(6,8),10),
             isToday: i === 0, isFuture: i > 0,
-            isPlayed: isPlayed,
+            isPlayed: isPlayed, isFrozen: isFrozen,
             hasPrev: prevD && playDays.indexOf(prevD) !== -1,
             hasNext: nextD && playDays.indexOf(nextD) !== -1
         });
@@ -642,6 +946,18 @@ function updateStreak(){
             var canSave = Math.min(daysMissed, streakFreezes);
             streakFreezes -= canSave;
             save('streakFreezes', streakFreezes);
+            if(canSave > 0){
+                var frozenDays = load('frozenDays', []);
+                for(var fi = 1; fi <= canSave; fi++){
+                    var fd = offsetDay(lastStreakDay, fi);
+                    if(frozenDays.indexOf(fd) === -1 && playDays.indexOf(fd) === -1){
+                        frozenDays.push(fd);
+                    }
+                }
+                var cutoff = offsetDay(today, -90);
+                frozenDays = frozenDays.filter(function(d){ return d >= cutoff; });
+                save('frozenDays', frozenDays);
+            }
             if(daysMissed <= canSave){
                 dailyStreak++;
             } else {
@@ -686,7 +1002,7 @@ function generateDailyLevel(dateKey, forcedRankIdx){
     var today = dateKey || getGameDayKey();
     var ymd = today.slice(0, 8);
     var dmy = today.slice(8, 16);
-    var mdy = today.slice(4, 6) + today.slice(2, 4) + ymd.slice(0, 4);
+    var mdy = ymd.slice(4, 6) + ymd.slice(6, 8) + ymd.slice(0, 4);
     
     var rankInfo = getPlayerRankInfo();
     var rankIdx = (forcedRankIdx !== undefined) ? forcedRankIdx : rankInfo.index;
@@ -724,7 +1040,9 @@ function generateDailyLevel(dateKey, forcedRankIdx){
         hc: hc,
         move: move,
         diff: diff,
-        reversed: true
+        reversed: true,
+        dateKey: today,
+        rankIdx: rankIdx
     };
 }
 
@@ -942,7 +1260,7 @@ function applyImportCode(code, ov){
     if(typeof parsed.part==='number'){partMult=parsed.part;save('part',partMult);}
     if(typeof parsed.ctrl==='string'){ctrlMode=parsed.ctrl;save('ctrl',ctrlMode);}
     if(typeof parsed.vibrate==='boolean'){vibrateOn=parsed.vibrate;save('vibrate',vibrateOn);}
-    if(typeof parsed.orient==='string'){orient=(parsed.orient==='portrait')?'portrait':'landscape';save('orient',orient);}
+    if(typeof parsed.orient==='string'){orient=parsed.orient;save('orient',orient);}
     if(parsed.championStatus&&typeof parsed.championStatus==='object'){championStatus={unlocked:!!parsed.championStatus.unlocked,ceremonyShown:!!parsed.championStatus.ceremonyShown,unlockedAt:cleanNumber(parsed.championStatus.unlockedAt,0)};save('championStatus',championStatus);}
     if(typeof parsed.visualQuality==='string'){applyQuality(parsed.visualQuality);save('visualQuality',visualQuality);}
     if(typeof parsed.ghostsEnabled==='boolean'){ghostsEnabled=parsed.ghostsEnabled;save('ghostsEnabled',ghostsEnabled);}

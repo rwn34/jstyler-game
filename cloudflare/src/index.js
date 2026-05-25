@@ -25,6 +25,16 @@ const RATE_LIMIT_PID_WINDOW_MS = 5 * 60 * 1000;  // 5 minutes
 const RATE_LIMIT_PID_MAX = 300;                  // 300 req per 5 min per pid
 const RATE_LIMIT_SESSION_IP_MAX = 10;            // 10 session creates per 5 min per IP
 
+// === Sync constants ===
+const SYNC_RATE_LIMIT_SAVE_WINDOW_MS = 60 * 1000;   // 1 minute
+const SYNC_RATE_LIMIT_SAVE_MAX = 5;                 // 5 saves per min per IP
+const SYNC_RATE_LIMIT_LOAD_WINDOW_MS = 60 * 1000;   // 1 minute
+const SYNC_RATE_LIMIT_LOAD_MAX = 10;                // 10 loads per min per IP
+const SYNC_LOCKOUT_THRESHOLD = 10;                  // 10 fails = lockout
+const SYNC_LOCKOUT_DURATION_MS = 60 * 60 * 1000;    // 1 hour lockout
+const SYNC_MAX_DEVICES = 3;
+const SYNC_HISTORY_MAX = 5;
+
 // === Helpers ===
 
 function publicCorsHeaders() {
@@ -57,6 +67,46 @@ function sanitizeName(name) {
   if (!name || typeof name !== 'string') return null;
   const cleaned = name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
   return cleaned || null;
+}
+
+function hexToBytes(hex) {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+  return bytes;
+}
+
+function bytesToHex(bytes) {
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function aesEncrypt(plainText, keyHex) {
+  const key = await crypto.subtle.importKey('raw', hexToBytes(keyHex), { name: 'AES-GCM' }, false, ['encrypt']);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(plainText));
+  const combined = new Uint8Array(iv.length + encrypted.byteLength);
+  combined.set(iv);
+  combined.set(new Uint8Array(encrypted), iv.length);
+  return bytesToHex(combined);
+}
+
+async function aesDecrypt(cipherHex, keyHex) {
+  try {
+    const key = await crypto.subtle.importKey('raw', hexToBytes(keyHex), { name: 'AES-GCM' }, false, ['decrypt']);
+    const combined = hexToBytes(cipherHex);
+    const iv = combined.slice(0, 12);
+    const ciphertext = combined.slice(12);
+    const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+    return new TextDecoder().decode(decrypted);
+  } catch (e) {
+    return null;
+  }
+}
+
+async function hashSyncKey(username, mmyy, pin, salt) {
+  const msg = `${String(username || '').toUpperCase()}|${String(mmyy || '')}|${String(pin || '')}`;
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(salt), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(msg));
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 // === Rate limiting (in-memory per-isolate) ===
@@ -804,6 +854,51 @@ async function handleStatsEconomy(env, range, force) {
   }, force);
 }
 
+// === Feedback handler ===
+async function handleFeedback(request, env) {
+  const body = await readJsonBody(request);
+  const { pid, name, subject, email, content, ts } = body || {};
+
+  if (!pid || typeof pid !== 'string' || !content || typeof content !== 'string' || content.trim().length < 3) {
+    return errResponse('pid and content (min 3 chars) required', 400, true);
+  }
+  if (content.length > 2000) {
+    return errResponse('content too long (max 2000 chars)', 400, true);
+  }
+
+  // Rate limit: 5 feedback per 5 min per IP
+  const ip = getClientIp(request);
+  if (isRateLimited(`feedback:ip:${ip}`, RATE_LIMIT_IP_WINDOW_MS, 5)) {
+    return new Response(JSON.stringify({ ok: false, error: 'rate limit exceeded' }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json', 'Retry-After': String(Math.ceil(RATE_LIMIT_IP_WINDOW_MS / 1000)), ...publicCorsHeaders() },
+    });
+  }
+
+  const serverTs = Date.now();
+  const data = JSON.stringify({
+    subject: (subject || '').slice(0, 100),
+    email: (email || '').slice(0, 120),
+    content: content.trim().slice(0, 2000),
+  });
+
+  await env.DB.prepare(
+    'INSERT INTO events (pid, name, type, level, data, client_ts, server_ts, offline, verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    pid,
+    sanitizeName(name),
+    'feedback',
+    null,
+    data,
+    typeof ts === 'number' ? ts : serverTs,
+    serverTs,
+    0,
+    0
+  ).run();
+
+  return jsonResponse({ ok: true }, 200, true);
+}
+
 // === Daily Stage stats ===
 async function handleStatsDailyStage(env, range, force) {
   const cacheKey = 'dailystage:' + range;
@@ -847,6 +942,138 @@ async function handleStatsDailyStage(env, range, force) {
         deathCauses: (deathCauses && deathCauses.results) || [],
         byDay: (byDay && byDay.results) || [],
         byDiff: (byDiff && byDiff.results) || [],
+        generatedAt: Date.now(),
+      },
+    };
+  }, force);
+}
+
+// === App Version stats ===
+async function handleStatsAppVersion(env, range, force) {
+  const cacheKey = 'appversion:' + range;
+  return cachedJson(cacheKey, async () => {
+    const startTs = rangeStartTs(range);
+    const [
+      versionRows,
+      totalEventsRow,
+      versionTimeSeries,
+    ] = await Promise.all([
+      env.DB.prepare("SELECT JSON_EXTRACT(data,'$._v') as v, COUNT(*) as c, COUNT(DISTINCT pid) as players FROM events WHERE server_ts > ? AND JSON_EXTRACT(data,'$._v') IS NOT NULL GROUP BY v ORDER BY c DESC").bind(startTs).all(),
+      env.DB.prepare('SELECT COUNT(*) as c FROM events WHERE server_ts > ?').bind(startTs).first(),
+      env.DB.prepare("SELECT CAST((server_ts - ?) / 86400000 AS INTEGER) as day, JSON_EXTRACT(data,'$._v') as v, COUNT(*) as c FROM events WHERE server_ts > ? AND JSON_EXTRACT(data,'$._v') IS NOT NULL GROUP BY day, v ORDER BY day").bind(startTs, startTs).all(),
+    ]);
+
+    const totalEvents = totalEventsRow ? totalEventsRow.c : 0;
+    const versions = (versionRows && versionRows.results) || [];
+
+    // Build time-series per version
+    const dayCount = Math.min(31, Math.max(1, Math.ceil((Date.now() - startTs) / 86400000)));
+    const tsMap = {};
+    if (versionTimeSeries && versionTimeSeries.results) {
+      for (const r of versionTimeSeries.results) {
+        const v = r.v || 'unknown';
+        if (!tsMap[v]) tsMap[v] = new Array(dayCount).fill(0);
+        const idx = Math.max(0, Math.min(dayCount - 1, r.day));
+        tsMap[v][idx] = (tsMap[v][idx] || 0) + r.c;
+      }
+    }
+
+    return {
+      ok: true,
+      data: {
+        range,
+        totalEvents,
+        versions: versions.map(function(r) {
+          return {
+            version: r.v || 'unknown',
+            events: r.c,
+            players: r.players,
+            pct: totalEvents > 0 ? Math.round((r.c / totalEvents) * 1000) / 10 : 0,
+            series: tsMap[r.v || 'unknown'] || new Array(dayCount).fill(0),
+          };
+        }),
+        generatedAt: Date.now(),
+      },
+    };
+  }, force);
+}
+
+// === Feedback stats ===
+async function handleStatsFeedback(env, force) {
+  return cachedJson('feedback:latest', async () => {
+    const [
+      totalRow,
+      recentRows,
+    ] = await Promise.all([
+      env.DB.prepare("SELECT COUNT(*) as c FROM events WHERE type='feedback'").first(),
+      env.DB.prepare("SELECT pid, name, data, client_ts, server_ts FROM events WHERE type='feedback' ORDER BY server_ts DESC LIMIT 50").all(),
+    ]);
+
+    const items = [];
+    if (recentRows && recentRows.results) {
+      for (const r of recentRows.results) {
+        let parsed = {};
+        try { parsed = JSON.parse(r.data || '{}'); } catch (_) {}
+        items.push({
+          pid: r.pid,
+          name: r.name,
+          subject: parsed.subject || '',
+          email: parsed.email || '',
+          content: parsed.content || '',
+          clientTs: r.client_ts,
+          serverTs: r.server_ts,
+        });
+      }
+    }
+
+    return {
+      ok: true,
+      data: {
+        total: totalRow ? totalRow.c : 0,
+        items,
+        generatedAt: Date.now(),
+      },
+    };
+  }, force);
+}
+
+// === Cloud Sync stats ===
+async function handleStatsSync(env, force) {
+  return cachedJson('sync:latest', async () => {
+    const [
+      totalRow,
+      totalDevicesRow,
+      recentRows,
+      deviceDistRow,
+    ] = await Promise.all([
+      env.DB.prepare('SELECT COUNT(*) as c FROM sync_states').first(),
+      env.DB.prepare("SELECT SUM(JSON_ARRAY_LENGTH(device_ids)) as total_devices, AVG(JSON_ARRAY_LENGTH(device_ids)) as avg_devices FROM sync_states").first(),
+      env.DB.prepare('SELECT key_hash, pid, device_ids, updated_at FROM sync_states ORDER BY updated_at DESC LIMIT 50').all(),
+      env.DB.prepare("SELECT JSON_ARRAY_LENGTH(device_ids) as dcount, COUNT(*) as c FROM sync_states GROUP BY dcount ORDER BY dcount").all(),
+    ]);
+
+    const items = [];
+    if (recentRows && recentRows.results) {
+      for (const r of recentRows.results) {
+        let devices = [];
+        try { devices = JSON.parse(r.device_ids || '[]'); } catch (_) {}
+        items.push({
+          keyHash: r.key_hash,
+          pid: r.pid,
+          devices: devices.length,
+          updatedAt: r.updated_at,
+        });
+      }
+    }
+
+    return {
+      ok: true,
+      data: {
+        totalAccounts: totalRow ? totalRow.c : 0,
+        totalDevices: totalDevicesRow ? totalDevicesRow.total_devices || 0 : 0,
+        avgDevicesPerAccount: totalDevicesRow ? Math.round((totalDevicesRow.avg_devices || 0) * 10) / 10 : 0,
+        items,
+        deviceDistribution: (deviceDistRow && deviceDistRow.results) || [],
         generatedAt: Date.now(),
       },
     };
@@ -1021,6 +1248,611 @@ async function handleStatsPlayer(env, pid) {
   });
 }
 
+// === Sync handlers ===
+
+async function checkSyncLockout(keyHash, env) {
+  const row = await env.DB.prepare('SELECT fails, last_fail_at FROM sync_attempts WHERE key_hash = ?').bind(keyHash).first();
+  if (!row) return { locked: false };
+  if (row.fails >= SYNC_LOCKOUT_THRESHOLD && Date.now() - row.last_fail_at < SYNC_LOCKOUT_DURATION_MS) {
+    return { locked: true, retryAfter: Math.ceil((SYNC_LOCKOUT_DURATION_MS - (Date.now() - row.last_fail_at)) / 1000) };
+  }
+  return { locked: false };
+}
+
+async function recordSyncFail(keyHash, env) {
+  const row = await env.DB.prepare('SELECT fails FROM sync_attempts WHERE key_hash = ?').bind(keyHash).first();
+  const fails = (row ? row.fails : 0) + 1;
+  await env.DB.prepare(
+    'INSERT INTO sync_attempts (key_hash, fails, last_fail_at) VALUES (?, ?, ?) ON CONFLICT(key_hash) DO UPDATE SET fails = excluded.fails, last_fail_at = excluded.last_fail_at'
+  ).bind(keyHash, fails, Date.now()).run();
+}
+
+async function clearSyncFails(keyHash, env) {
+  await env.DB.prepare('DELETE FROM sync_attempts WHERE key_hash = ?').bind(keyHash).run();
+}
+
+async function handleSyncSave(request, env) {
+  const body = await readJsonBody(request);
+  const { username, mmyy, pin, deviceId, data, rewards, pendingPurchases, ts } = body || {};
+
+  if (!username || !mmyy || !pin || !data || typeof data !== 'object') {
+    return errResponse('username, mmyy, pin, and data required', 400, true);
+  }
+
+  const ip = getClientIp(request);
+  const ipKey = `sync-save:ip:${ip}`;
+  if (isRateLimited(ipKey, SYNC_RATE_LIMIT_SAVE_WINDOW_MS, SYNC_RATE_LIMIT_SAVE_MAX)) {
+    return new Response(JSON.stringify({ ok: false, error: 'rate limit exceeded' }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json', 'Retry-After': String(Math.ceil(SYNC_RATE_LIMIT_SAVE_WINDOW_MS / 1000)), ...publicCorsHeaders() },
+    });
+  }
+
+  const keyHash = await hashSyncKey(username, mmyy, pin, env.SYNC_SALT);
+  const lockout = await checkSyncLockout(keyHash, env);
+  if (lockout.locked) {
+    return new Response(JSON.stringify({ ok: false, error: 'too many failed attempts' }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json', 'Retry-After': String(lockout.retryAfter), ...publicCorsHeaders() },
+    });
+  }
+
+  const serverTs = Date.now();
+
+  // Load existing sync state
+  const existing = await env.DB.prepare('SELECT pid, data_json, rewards_json, purchase_json, device_ids FROM sync_states WHERE key_hash = ?').bind(keyHash).first();
+
+  let mergedData = { ...data };
+  let rewardsLog = {};
+  let purchaseLog = [];
+  let deviceIds = [];
+  let existingPid = data.pid || null;
+
+  if (existing) {
+    existingPid = existing.pid;
+    try {
+      const decrypted = await aesDecrypt(existing.data_json, env.ENCRYPTION_KEY);
+      if (decrypted) {
+        const parsed = JSON.parse(decrypted);
+        // Deep clone parsed as base so we don't lose any keys
+        mergedData = JSON.parse(JSON.stringify(parsed));
+
+        // Bring in brand-new top-level fields from data
+        for (const key in data) {
+          if (!(key in parsed)) {
+            mergedData[key] = data[key];
+          }
+        }
+
+        // Scores: per-level max (iterate ALL keys from BOTH)
+        if (parsed.scores || data.scores) {
+          mergedData.scores = mergedData.scores || {};
+          const allKeys = new Set([...Object.keys(parsed.scores || {}), ...Object.keys(data.scores || {})]);
+          for (const k of allKeys) {
+            const pv = (parsed.scores && parsed.scores[k]) || 0;
+            const dv = (data.scores && data.scores[k]) || 0;
+            mergedData.scores[k] = Math.max(pv, dv);
+          }
+        }
+
+        // Times: per-level min
+        if (parsed.times || data.times) {
+          mergedData.times = mergedData.times || {};
+          const allKeys = new Set([...Object.keys(parsed.times || {}), ...Object.keys(data.times || {})]);
+          for (const k of allKeys) {
+            const pv = (parsed.times && parsed.times[k]) || Infinity;
+            const dv = (data.times && data.times[k]) || Infinity;
+            mergedData.times[k] = Math.min(pv, dv);
+          }
+        }
+
+        // Chips: per-level OR
+        if (parsed.chips || data.chips) {
+          mergedData.chips = mergedData.chips || {};
+          const allKeys = new Set([...Object.keys(parsed.chips || {}), ...Object.keys(data.chips || {})]);
+          for (const k of allKeys) {
+            const pa = (parsed.chips && parsed.chips[k]) || [];
+            const da = (data.chips && data.chips[k]) || [];
+            const maxLen = Math.max(pa.length, da.length);
+            const merged = [];
+            for (let i = 0; i < maxLen; i++) {
+              merged[i] = !!pa[i] || !!da[i];
+            }
+            mergedData.chips[k] = merged;
+          }
+        }
+
+        // Stats: per-level deep merge
+        if (parsed.stats || data.stats) {
+          mergedData.stats = mergedData.stats || {};
+          const allKeys = new Set([...Object.keys(parsed.stats || {}), ...Object.keys(data.stats || {})]);
+          for (const k of allKeys) {
+            const ps = (parsed.stats && parsed.stats[k]) || {};
+            const ds = (data.stats && data.stats[k]) || {};
+            mergedData.stats[k] = {
+              ...ps,
+              ...ds,
+              attempts: Math.max(ps.attempts || 0, ds.attempts || 0),
+              completions: Math.max(ps.completions || 0, ds.completions || 0),
+              hazards: Math.max(ps.hazards || 0, ds.hazards || 0),
+              silver: Math.max(ps.silver || 0, ds.silver || 0),
+              timePlayed: Math.max(ps.timePlayed || 0, ds.timePlayed || 0),
+              contentVersion: Math.max(ps.contentVersion || 0, ds.contentVersion || 0),
+              masterGems: Array.isArray(ds.masterGems) ? ds.masterGems.slice() : (Array.isArray(ps.masterGems) ? ps.masterGems.slice() : []),
+            };
+          }
+        }
+
+        // Unlocked: union
+        if (Array.isArray(parsed.unlocked) || Array.isArray(data.unlocked)) {
+          const uSet = new Set([...(parsed.unlocked || []), ...(data.unlocked || [])]);
+          mergedData.unlocked = Array.from(uSet);
+        }
+
+        // Silver: max
+        mergedData.silver = Math.max(parsed.silver || 0, data.silver || 0);
+        // GoldSpent: max
+        mergedData.goldSpent = Math.max(parsed.goldSpent || 0, data.goldSpent || 0);
+        // BonusGold: max
+        mergedData.bonusGold = Math.max(parsed.bonusGold || 0, data.bonusGold || 0);
+
+        // Owned skills: union
+        if (Array.isArray(parsed.ownedSkills) || Array.isArray(data.ownedSkills)) {
+          mergedData.ownedSkills = Array.from(new Set([...(parsed.ownedSkills || []), ...(data.ownedSkills || [])]));
+        }
+        // Owned cosmetics: union
+        if (Array.isArray(parsed.ownedCosmetics) || Array.isArray(data.ownedCosmetics)) {
+          mergedData.ownedCosmetics = Array.from(new Set([...(parsed.ownedCosmetics || []), ...(data.ownedCosmetics || [])]));
+        }
+        // Equipped skills: cloud wins (latest device)
+        if (Array.isArray(data.equippedSkills)) {
+          mergedData.equippedSkills = data.equippedSkills.slice(0, 3);
+        }
+        // Equipped cosmetics: cloud wins
+        if (data.equippedCosmetics && typeof data.equippedCosmetics === 'object') {
+          mergedData.equippedCosmetics = { ...data.equippedCosmetics };
+        }
+
+        // Consumables: per-item max
+        if (parsed.consumableInv || data.consumableInv) {
+          mergedData.consumableInv = mergedData.consumableInv || {};
+          const allKeys = new Set([...Object.keys(parsed.consumableInv || {}), ...Object.keys(data.consumableInv || {})]);
+          for (const k of allKeys) {
+            const pv = (parsed.consumableInv && parsed.consumableInv[k]) || 0;
+            const dv = (data.consumableInv && data.consumableInv[k]) || 0;
+            mergedData.consumableInv[k] = Math.max(pv, dv);
+          }
+        }
+
+        // Champion status: OR
+        if (parsed.championStatus || data.championStatus) {
+          mergedData.championStatus = {
+            ...(parsed.championStatus || {}),
+            ...(data.championStatus || {}),
+            unlocked: !!((parsed.championStatus && parsed.championStatus.unlocked) || (data.championStatus && data.championStatus.unlocked)),
+          };
+        }
+
+        // Settings: cloud wins (latest device)
+        const settingsKeys = ['sfx', 'mus', 'ctrl', 'vibrate', 'orient', 'visualQuality', 'ghostsEnabled', 'showFps', 'autoRetryDelay'];
+        for (const sk of settingsKeys) {
+          if (sk in data) mergedData[sk] = data[sk];
+        }
+
+        // Daily/streak: cloud wins
+        if ('dailyStreak' in data) mergedData.dailyStreak = data.dailyStreak;
+        if ('streakFreezes' in data) mergedData.streakFreezes = data.streakFreezes;
+        if (Array.isArray(data.frozenDays)) mergedData.frozenDays = data.frozenDays;
+        if ('lastChest' in data) mergedData.lastChest = data.lastChest;
+        if ('lastResurrect' in data) mergedData.lastResurrect = data.lastResurrect;
+        if (Array.isArray(data.hintsSeen)) mergedData.hintsSeen = data.hintsSeen;
+        if ('tutorialDone' in data) mergedData.tutorialDone = data.tutorialDone;
+        if ('ctrlPicked' in data) mergedData.ctrlPicked = data.ctrlPicked;
+      }
+    } catch (_) {}
+
+    try { rewardsLog = JSON.parse(existing.rewards_json) || {}; } catch (_) {}
+    try { purchaseLog = JSON.parse(existing.purchase_json) || []; } catch (_) {}
+    try { deviceIds = JSON.parse(existing.device_ids) || []; } catch (_) {}
+  }
+
+  // Deduplicate rewards
+  const approvedRewards = [];
+  if (Array.isArray(rewards)) {
+    for (const r of rewards) {
+      const key = r.type;
+      if (rewardsLog[key] && rewardsLog[key].date === r.date) continue; // duplicate
+      rewardsLog[key] = { date: r.date, silver: r.silver, reward: r.reward, claimedAt: serverTs };
+      approvedRewards.push(r);
+    }
+  }
+
+  // Deduplicate and validate purchases
+  const approvedPurchases = [];
+  const rejectedPurchases = [];
+  if (Array.isArray(pendingPurchases)) {
+    for (const p of pendingPurchases) {
+      // Deduplicate by id + ts
+      if (purchaseLog.find(x => x.id === p.id && x.ts === p.ts)) {
+        rejectedPurchases.push({ ...p, reason: 'duplicate' });
+        continue;
+      }
+
+      // Simple balance check: compute total earned vs total spent
+      const totalSilverEarned = Object.values(mergedData.stats || {}).reduce((s, st) => s + (st.silver || 0), 0) +
+        Object.values(rewardsLog).reduce((s, r) => s + (r.silver || 0), 0);
+      const totalGoldEarned = Object.values(mergedData.scores || {}).reduce((s, sc) => s + Math.floor((sc || 0) / 50), 0) + (mergedData.bonusGold || 0);
+      const totalSilverSpent = purchaseLog.filter(x => x.currency === 'silver').reduce((s, x) => s + (x.cost || 0), 0);
+      const totalGoldSpent = purchaseLog.filter(x => x.currency === 'gold').reduce((s, x) => s + (x.cost || 0), 0);
+
+      if (p.currency === 'silver' && totalSilverEarned - totalSilverSpent < p.cost) {
+        rejectedPurchases.push({ ...p, reason: 'insufficient_silver' });
+        continue;
+      }
+      if (p.currency === 'gold' && totalGoldEarned - totalGoldSpent < p.cost) {
+        rejectedPurchases.push({ ...p, reason: 'insufficient_gold' });
+        continue;
+      }
+
+      purchaseLog.push(p);
+      approvedPurchases.push(p);
+    }
+  }
+
+  // Device limit
+  if (deviceId && !deviceIds.includes(deviceId)) {
+    if (deviceIds.length >= SYNC_MAX_DEVICES) {
+      return errResponse('device limit reached (max 3)', 403, true);
+    }
+    deviceIds.push(deviceId);
+  }
+
+  // Encrypt and save
+  const encrypted = await aesEncrypt(JSON.stringify(mergedData), env.ENCRYPTION_KEY);
+
+  // Archive to history
+  if (existing) {
+    await env.DB.prepare(
+      'INSERT INTO sync_history (key_hash, version, data_json, created_at) VALUES (?, (SELECT COALESCE(MAX(version), 0) + 1 FROM sync_history WHERE key_hash = ?), ?, ?)'
+    ).bind(keyHash, keyHash, existing.data_json, serverTs).run();
+    // Trim old history
+    await env.DB.prepare(
+      'DELETE FROM sync_history WHERE key_hash = ? AND version <= (SELECT MAX(version) - ? FROM sync_history WHERE key_hash = ?)'
+    ).bind(keyHash, SYNC_HISTORY_MAX, keyHash).run();
+  }
+
+  await env.DB.prepare(
+    'INSERT INTO sync_states (key_hash, pid, data_json, rewards_json, purchase_json, device_ids, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(key_hash) DO UPDATE SET pid = excluded.pid, data_json = excluded.data_json, rewards_json = excluded.rewards_json, purchase_json = excluded.purchase_json, device_ids = excluded.device_ids, updated_at = excluded.updated_at'
+  ).bind(keyHash, existingPid, encrypted, JSON.stringify(rewardsLog), JSON.stringify(purchaseLog), JSON.stringify(deviceIds), serverTs).run();
+
+  // Upsert username+mmyy lookup for forgot-pin support
+  try {
+    const userName = (data && data.playerName) || '';
+    const userMmyy = (data && data.playerMmyy) || '';
+    if (userName && userMmyy) {
+      await env.DB.prepare(
+        'CREATE TABLE IF NOT EXISTS sync_lookup (username TEXT, mmyy TEXT, key_hash TEXT PRIMARY KEY)'
+      ).run();
+      await env.DB.prepare(
+        'INSERT INTO sync_lookup (username, mmyy, key_hash) VALUES (?, ?, ?) ON CONFLICT(key_hash) DO UPDATE SET username = excluded.username, mmyy = excluded.mmyy'
+      ).bind(userName, userMmyy, keyHash).run();
+    }
+  } catch (_) {}
+
+  await clearSyncFails(keyHash, env);
+
+  return jsonResponse({ ok: true, approvedPurchases, rejectedPurchases, serverTs }, 200, true);
+}
+
+async function handleSyncLoad(request, env) {
+  const body = await readJsonBody(request);
+  const { username, mmyy, pin, deviceId } = body || {};
+
+  if (!username || !mmyy || !pin) {
+    return errResponse('username, mmyy, and pin required', 400, true);
+  }
+
+  const ip = getClientIp(request);
+  const ipKey = `sync-load:ip:${ip}`;
+  if (isRateLimited(ipKey, SYNC_RATE_LIMIT_LOAD_WINDOW_MS, SYNC_RATE_LIMIT_LOAD_MAX)) {
+    return new Response(JSON.stringify({ ok: false, error: 'rate limit exceeded' }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json', 'Retry-After': String(Math.ceil(SYNC_RATE_LIMIT_LOAD_WINDOW_MS / 1000)), ...publicCorsHeaders() },
+    });
+  }
+
+  const keyHash = await hashSyncKey(username, mmyy, pin, env.SYNC_SALT);
+  const lockout = await checkSyncLockout(keyHash, env);
+  if (lockout.locked) {
+    return new Response(JSON.stringify({ ok: false, error: 'too many failed attempts' }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json', 'Retry-After': String(lockout.retryAfter), ...publicCorsHeaders() },
+    });
+  }
+
+  const row = await env.DB.prepare('SELECT pid, data_json, rewards_json, purchase_json, device_ids, updated_at FROM sync_states WHERE key_hash = ?').bind(keyHash).first();
+  if (!row) {
+    await recordSyncFail(keyHash, env);
+    return errResponse('invalid credentials', 401, true);
+  }
+
+  // Validate device
+  let deviceIds = [];
+  try { deviceIds = JSON.parse(row.device_ids) || []; } catch (_) {}
+  if (deviceId && !deviceIds.includes(deviceId)) {
+    if (deviceIds.length >= SYNC_MAX_DEVICES) {
+      return errResponse('device limit reached', 403, true);
+    }
+    // Auto-register new device on load if within limit
+    deviceIds.push(deviceId);
+    await env.DB.prepare('UPDATE sync_states SET device_ids = ? WHERE key_hash = ?').bind(JSON.stringify(deviceIds), keyHash).run();
+  }
+
+  const decrypted = await aesDecrypt(row.data_json, env.ENCRYPTION_KEY);
+  if (!decrypted) {
+    return errResponse('decryption failed', 500, true);
+  }
+
+  let data;
+  try { data = JSON.parse(decrypted); } catch (_) {
+    return errResponse('corrupt data', 500, true);
+  }
+
+  let rewardsLog = {};
+  let purchaseLog = [];
+  try { rewardsLog = JSON.parse(row.rewards_json) || {}; } catch (_) {}
+  try { purchaseLog = JSON.parse(row.purchase_json) || []; } catch (_) {}
+
+  await clearSyncFails(keyHash, env);
+
+  // Backfill sync_lookup for old accounts
+  try {
+    const userName = (data && data.playerName) || '';
+    const userMmyy = (data && data.playerMmyy) || '';
+    if (userName && userMmyy) {
+      await env.DB.prepare(
+        'CREATE TABLE IF NOT EXISTS sync_lookup (username TEXT, mmyy TEXT, key_hash TEXT PRIMARY KEY)'
+      ).run();
+      await env.DB.prepare(
+        'INSERT INTO sync_lookup (username, mmyy, key_hash) VALUES (?, ?, ?) ON CONFLICT(key_hash) DO UPDATE SET username = excluded.username, mmyy = excluded.mmyy'
+      ).bind(userName, userMmyy, keyHash).run();
+    }
+  } catch (_) {}
+
+  return jsonResponse({
+    ok: true,
+    data,
+    pid: row.pid,
+    rewardsLog,
+    purchaseLog,
+    deviceIds,
+    updatedAt: row.updated_at,
+  }, 200, true);
+}
+
+async function handleSyncCheck(request, env) {
+  const body = await readJsonBody(request);
+  const { username, mmyy, pin } = body || {};
+
+  if (!username || !mmyy || !pin) {
+    return errResponse('username, mmyy, and pin required', 400, true);
+  }
+
+  const keyHash = await hashSyncKey(username, mmyy, pin, env.SYNC_SALT);
+  const row = await env.DB.prepare('SELECT 1 FROM sync_states WHERE key_hash = ?').bind(keyHash).first();
+
+  if (!row) {
+    // Light debug: log the attempted username (not the PIN) to help diagnose
+    console.log('[SYNC CHECK] Not found for username:', String(username).toUpperCase(), 'mmyy:', mmyy);
+    return jsonResponse({ ok: false, found: false, error: 'invalid credentials' }, 401, true);
+  }
+
+  return jsonResponse({ ok: true, found: true }, 200, true);
+}
+
+async function handleSyncChangePin(request, env) {
+  const body = await readJsonBody(request);
+  const { username, mmyy, oldPin, newPin } = body || {};
+
+  if (!username || !mmyy || !oldPin || !newPin) {
+    return errResponse('username, mmyy, oldPin, and newPin required', 400, true);
+  }
+
+  const ip = getClientIp(request);
+  const ipKey = `sync-changepin:ip:${ip}`;
+  if (isRateLimited(ipKey, SYNC_RATE_LIMIT_SAVE_WINDOW_MS, SYNC_RATE_LIMIT_SAVE_MAX)) {
+    return new Response(JSON.stringify({ ok: false, error: 'rate limit exceeded' }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json', 'Retry-After': String(Math.ceil(SYNC_RATE_LIMIT_SAVE_WINDOW_MS / 1000)), ...publicCorsHeaders() },
+    });
+  }
+
+  const oldKeyHash = await hashSyncKey(username, mmyy, oldPin, env.SYNC_SALT);
+  const row = await env.DB.prepare('SELECT pid, data_json, rewards_json, purchase_json, updated_at FROM sync_states WHERE key_hash = ?').bind(oldKeyHash).first();
+  if (!row) {
+    return errResponse('invalid credentials', 401, true);
+  }
+
+  const newKeyHash = await hashSyncKey(username, mmyy, newPin, env.SYNC_SALT);
+  const collision = await env.DB.prepare('SELECT 1 FROM sync_states WHERE key_hash = ?').bind(newKeyHash).first();
+  if (collision) {
+    return errResponse('new pin collision, try another', 409, true);
+  }
+
+  // Move row to new key hash, clear device IDs
+  await env.DB.prepare(
+    'INSERT INTO sync_states (key_hash, pid, data_json, rewards_json, purchase_json, device_ids, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).bind(newKeyHash, row.pid, row.data_json, row.rewards_json, row.purchase_json, '[]', Date.now()).run();
+
+  await env.DB.prepare('DELETE FROM sync_states WHERE key_hash = ?').bind(oldKeyHash).run();
+  await env.DB.prepare('DELETE FROM sync_attempts WHERE key_hash = ?').bind(oldKeyHash).run();
+  await env.DB.prepare('DELETE FROM sync_lookup WHERE key_hash = ?').bind(oldKeyHash).run();
+
+  try {
+    await env.DB.prepare(
+      'INSERT INTO sync_lookup (username, mmyy, key_hash) VALUES (?, ?, ?) ON CONFLICT(key_hash) DO UPDATE SET username = excluded.username, mmyy = excluded.mmyy'
+    ).bind(String(username).toUpperCase(), String(mmyy), newKeyHash).run();
+  } catch (_) {}
+
+  return jsonResponse({ ok: true }, 200, true);
+}
+
+async function handleSyncForgotPin(request, env) {
+  const body = await readJsonBody(request);
+  const { username, mmyy, newPin } = body || {};
+
+  if (!username || !mmyy || !newPin) {
+    return errResponse('username, mmyy, and newPin required', 400, true);
+  }
+  if (String(username).length < 5 || String(username).length > 10) {
+    return errResponse('username must be 5-10 chars', 400, true);
+  }
+  if (!/^[0-9]{4}$/.test(String(mmyy))) {
+    return errResponse('mmyy must be 4 digits', 400, true);
+  }
+  if (!/^[0-9]{6}$/.test(String(newPin))) {
+    return errResponse('newPin must be 6 digits', 400, true);
+  }
+
+  const ip = getClientIp(request);
+  const ipKey = `sync-forgotpin:ip:${ip}`;
+  if (isRateLimited(ipKey, SYNC_RATE_LIMIT_SAVE_WINDOW_MS, 3)) {
+    return new Response(JSON.stringify({ ok: false, error: 'rate limit exceeded' }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json', 'Retry-After': String(Math.ceil(SYNC_RATE_LIMIT_SAVE_WINDOW_MS / 1000)), ...publicCorsHeaders() },
+    });
+  }
+
+  // Ensure sync_lookup table exists
+  try {
+    await env.DB.prepare('CREATE TABLE IF NOT EXISTS sync_lookup (username TEXT, mmyy TEXT, key_hash TEXT PRIMARY KEY)').run();
+  } catch (_) {}
+
+  // Lookup existing account by username+mmyy
+  let lookupRow = null;
+  try {
+    lookupRow = await env.DB.prepare('SELECT key_hash FROM sync_lookup WHERE username = ? AND mmyy = ?').bind(username, mmyy).first();
+  } catch (_) {}
+
+  // Fallback: scan sync_states for old accounts created before sync_lookup existed
+  if (!lookupRow || !lookupRow.key_hash) {
+    try {
+      const allRows = await env.DB.prepare('SELECT key_hash, data_json FROM sync_states LIMIT 500').all();
+      for (const r of allRows.results || []) {
+        try {
+          const decrypted = await aesDecrypt(r.data_json, env.ENCRYPTION_KEY);
+          if (decrypted) {
+            const parsed = JSON.parse(decrypted);
+            if (parsed.playerName === String(username).toUpperCase() && parsed.playerMmyy === String(mmyy)) {
+              lookupRow = { key_hash: r.key_hash };
+              // Backfill sync_lookup for future forgot-pin calls
+              try {
+                await env.DB.prepare(
+                  'INSERT INTO sync_lookup (username, mmyy, key_hash) VALUES (?, ?, ?) ON CONFLICT(key_hash) DO UPDATE SET username = excluded.username, mmyy = excluded.mmyy'
+                ).bind(String(username).toUpperCase(), String(mmyy), r.key_hash).run();
+              } catch (_) {}
+              break;
+            }
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
+  if (!lookupRow || !lookupRow.key_hash) {
+    return errResponse('no account found with that username and birthday', 404, true);
+  }
+
+  const oldKeyHash = lookupRow.key_hash;
+  const newKeyHash = await hashSyncKey(username, mmyy, newPin, env.SYNC_SALT);
+
+  // If new key hash is same as old, PIN hasn't changed
+  if (newKeyHash === oldKeyHash) {
+    return errResponse('new pin must be different from old pin', 409, true);
+  }
+
+  const collision = await env.DB.prepare('SELECT 1 FROM sync_states WHERE key_hash = ?').bind(newKeyHash).first();
+  if (collision) {
+    return errResponse('new pin collision, try another', 409, true);
+  }
+
+  const row = await env.DB.prepare('SELECT pid, data_json, rewards_json, purchase_json FROM sync_states WHERE key_hash = ?').bind(oldKeyHash).first();
+  if (!row) {
+    return errResponse('account data missing', 500, true);
+  }
+
+  // Migrate to new key hash, clear device IDs, update PIN inside encrypted data
+  let updatedData = row.data_json;
+  try {
+    const decrypted = await aesDecrypt(row.data_json, env.ENCRYPTION_KEY);
+    if (decrypted) {
+      const parsed = JSON.parse(decrypted);
+      parsed.syncPin = newPin; // update PIN inside data too
+      updatedData = await aesEncrypt(JSON.stringify(parsed), env.ENCRYPTION_KEY);
+    }
+  } catch (_) {}
+
+  await env.DB.prepare(
+    'INSERT INTO sync_states (key_hash, pid, data_json, rewards_json, purchase_json, device_ids, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).bind(newKeyHash, row.pid, updatedData, row.rewards_json, row.purchase_json, '[]', Date.now()).run();
+
+  await env.DB.prepare('DELETE FROM sync_states WHERE key_hash = ?').bind(oldKeyHash).run();
+  await env.DB.prepare('DELETE FROM sync_attempts WHERE key_hash = ?').bind(oldKeyHash).run();
+  await env.DB.prepare('DELETE FROM sync_lookup WHERE key_hash = ?').bind(oldKeyHash).run();
+
+  // Insert new lookup row for the new key hash
+  try {
+    await env.DB.prepare(
+      'INSERT INTO sync_lookup (username, mmyy, key_hash) VALUES (?, ?, ?) ON CONFLICT(key_hash) DO UPDATE SET username = excluded.username, mmyy = excluded.mmyy'
+    ).bind(String(username).toUpperCase(), String(mmyy), newKeyHash).run();
+  } catch (_) {}
+
+  return jsonResponse({ ok: true, newKeyHash }, 200, true);
+}
+
+async function handleAdminSyncResetPin(request, env) {
+  const body = await readJsonBody(request);
+  const { keyHash, newPin } = body || {};
+
+  if (!keyHash || !newPin) {
+    return errResponse('keyHash and newPin required', 400);
+  }
+
+  const row = await env.DB.prepare('SELECT username FROM sync_states WHERE key_hash = ?').bind(keyHash).first();
+  if (!row) {
+    return errResponse('sync state not found', 404);
+  }
+
+  // Extract username from decrypted data to compute new hash
+  const decrypted = await aesDecrypt(row.data_json, env.ENCRYPTION_KEY);
+  let username = '';
+  let mmyy = '';
+  try {
+    const parsed = JSON.parse(decrypted || '{}');
+    username = parsed.playerName || '';
+    mmyy = parsed.playerMmyy || '';
+  } catch (_) {}
+
+  const newKeyHash = await hashSyncKey(username, mmyy, newPin, env.SYNC_SALT);
+  const collision = await env.DB.prepare('SELECT 1 FROM sync_states WHERE key_hash = ?').bind(newKeyHash).first();
+  if (collision) {
+    return errResponse('new pin collision', 409);
+  }
+
+  await env.DB.prepare(
+    'UPDATE sync_states SET key_hash = ?, device_ids = ?, updated_at = ? WHERE key_hash = ?'
+  ).bind(newKeyHash, '[]', Date.now(), keyHash).run();
+
+  await env.DB.prepare('DELETE FROM sync_lookup WHERE key_hash = ?').bind(keyHash).run();
+  try {
+    await env.DB.prepare(
+      'INSERT INTO sync_lookup (username, mmyy, key_hash) VALUES (?, ?, ?) ON CONFLICT(key_hash) DO UPDATE SET username = excluded.username, mmyy = excluded.mmyy'
+    ).bind(String(username).toUpperCase(), String(mmyy), newKeyHash).run();
+  } catch (_) {}
+
+  return jsonResponse({ ok: true, newKeyHash }, 200);
+}
+
 // === Cron handler ===
 
 async function handleCron(env) {
@@ -1070,11 +1902,29 @@ export default {
       if (path === '/events/batch' && request.method === 'POST') {
         return await handleEventsBatch(request, env);
       }
+      if (path === '/feedback' && request.method === 'POST') {
+        return await handleFeedback(request, env);
+      }
       if (path === '/auth' && request.method === 'POST') {
         return await handleAuth(request, env);
       }
+      if (path === '/sync/save' && request.method === 'POST') {
+        return await handleSyncSave(request, env);
+      }
+      if (path === '/sync/check' && request.method === 'POST') {
+        return await handleSyncCheck(request, env);
+      }
+      if (path === '/sync/load' && request.method === 'POST') {
+        return await handleSyncLoad(request, env);
+      }
+      if (path === '/sync/change-pin' && request.method === 'POST') {
+        return await handleSyncChangePin(request, env);
+      }
+      if (path === '/sync/forgot-pin' && request.method === 'POST') {
+        return await handleSyncForgotPin(request, env);
+      }
       // Stats and dashboard endpoints require auth cookie
-      const needsAuth = path === '/stats' || path.startsWith('/stats/') || path === '/dashboard' || path === '/';
+      const needsAuth = path === '/stats' || path.startsWith('/stats/') || path === '/dashboard' || path === '/' || path.startsWith('/admin/');
       if (needsAuth) {
         const ok = await isAuthed(request, env);
         if (!ok) {
@@ -1113,9 +1963,21 @@ export default {
       if (path === '/stats/feed' && request.method === 'GET') {
         return jsonResponse(await handleStatsFeed(env, force));
       }
+      if (path === '/stats/appversion' && request.method === 'GET') {
+        return jsonResponse(await handleStatsAppVersion(env, range, force));
+      }
+      if (path === '/stats/feedback' && request.method === 'GET') {
+        return jsonResponse(await handleStatsFeedback(env, force));
+      }
+      if (path === '/stats/sync' && request.method === 'GET') {
+        return jsonResponse(await handleStatsSync(env, force));
+      }
       if (path === '/stats/player' && request.method === 'GET') {
         const pid = url.searchParams.get('pid');
         return await handleStatsPlayer(env, pid);
+      }
+      if (path === '/admin/sync/reset-pin' && request.method === 'POST') {
+        return await handleAdminSyncResetPin(request, env);
       }
       if ((path === '/' || path === '/dashboard') && request.method === 'GET') {
         return new Response(dashboardHtml, {
