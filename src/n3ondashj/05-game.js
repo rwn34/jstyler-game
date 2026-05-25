@@ -258,6 +258,37 @@ for(var i=0;i<cnt;i++){
     var pw=80+(seed/233280)*120*sc;
     if(lv.diff==='STARTER')pw=140+(seed/233280)*140*sc;
     
+    // Layout-specific geometry adjustments
+    if(lv.layoutType && lv.layoutType !== 'wave'){
+        if(lv.layoutType === 'clusters'){
+            var clusterSize = 3 + Math.floor((seed/233280)*2);
+            if(i > 0 && i % clusterSize === 0){
+                gap += 35 + Math.floor((seed/233280)*25);
+            }else if(i > 0){
+                gap = Math.max(40, gap * 0.62);
+            }
+        }else if(lv.layoutType === 'stairs'){
+            var stairDir = (i % 4 < 2) ? 1 : -1;
+            var stairStep = 12 + Math.floor((seed/233280)*28);
+            hc = stairDir * stairStep;
+            gap = Math.max(50, gap * 0.8);
+            pw = Math.max(50, pw * 0.86);
+        }else if(lv.layoutType === 'islands'){
+            pw = 40 + Math.floor((seed/233280)*55*sc);
+            hc = hc * 1.5;
+            gap = Math.max(60, gap * 1.2);
+        }else if(lv.layoutType === 'gaps'){
+            if((seed/233280) < 0.14){
+                gap += 45 + Math.floor((seed/233280)*35);
+            }
+        }else if(lv.layoutType === 'vertical'){
+            hc = hc * 1.3;
+            gap = Math.max(48, gap * 0.85);
+        }else if(lv.layoutType === 'dense'){
+            pw = Math.min(170, pw * 1.15);
+        }
+    }
+    
     if(px>lastX+20){
         var isMove=i<lv.move;
         if(isMove){

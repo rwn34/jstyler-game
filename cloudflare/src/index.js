@@ -1424,6 +1424,17 @@ async function handleSyncSave(request, env) {
           }
         }
 
+        // globalData: per-key max (cumulative stats)
+        if (parsed.globalData || data.globalData) {
+          mergedData.globalData = mergedData.globalData || {};
+          const allKeys = new Set([...Object.keys(parsed.globalData || {}), ...Object.keys(data.globalData || {})]);
+          for (const k of allKeys) {
+            const pv = (parsed.globalData && parsed.globalData[k]) || 0;
+            const dv = (data.globalData && data.globalData[k]) || 0;
+            mergedData.globalData[k] = Math.max(pv, dv);
+          }
+        }
+
         // Champion status: OR
         if (parsed.championStatus || data.championStatus) {
           mergedData.championStatus = {
@@ -1639,15 +1650,40 @@ async function handleSyncCheck(request, env) {
   }
 
   const keyHash = await hashSyncKey(username, mmyy, pin, env.SYNC_SALT);
-  const row = await env.DB.prepare('SELECT 1 FROM sync_states WHERE key_hash = ?').bind(keyHash).first();
+  const row = await env.DB.prepare('SELECT data_json, device_ids, updated_at FROM sync_states WHERE key_hash = ?').bind(keyHash).first();
 
   if (!row) {
-    // Light debug: log the attempted username (not the PIN) to help diagnose
     console.log('[SYNC CHECK] Not found for username:', String(username).toUpperCase(), 'mmyy:', mmyy);
     return jsonResponse({ ok: false, found: false, error: 'invalid credentials' }, 401, true);
   }
 
-  return jsonResponse({ ok: true, found: true }, 200, true);
+  // Build a lightweight summary from encrypted data (no decryption needed for meta)
+  let deviceCount = 0;
+  try {
+    const ids = JSON.parse(row.device_ids);
+    deviceCount = Array.isArray(ids) ? ids.length : 0;
+  } catch (_) {}
+
+  // Try to decrypt for a data summary
+  let summary = {};
+  try {
+    const decrypted = await aesDecrypt(row.data_json, env.ENCRYPTION_KEY);
+    if (decrypted) {
+      const d = JSON.parse(decrypted);
+      const levelsCleared = Object.keys(d.stats || {}).filter(k => d.stats[k] && d.stats[k].completions > 0).length;
+      summary = {
+        playerName: d.playerName || '',
+        silver: d.silver || 0,
+        gold: (d.scores ? Object.keys(d.scores).reduce((s, k) => s + Math.floor((d.scores[k] || 0) / 50), 0) : 0) + (d.bonusGold || 0),
+        levelsCleared: levelsCleared,
+        totalLevels: Object.keys(d.scores || {}).length,
+        deviceCount: deviceCount,
+        updatedAt: row.updated_at,
+      };
+    }
+  } catch (_) {}
+
+  return jsonResponse({ ok: true, found: true, summary }, 200, true);
 }
 
 async function handleSyncChangePin(request, env) {

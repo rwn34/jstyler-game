@@ -1,9 +1,31 @@
 # Changelog
 
-## v1.2.51 — May 25, 2026
+## v1.2.52 — May 26, 2026
+
+### Added
+- 🎲 **Daily stage variety system** — daily stages now have much more day-to-day variety
+  - 5 independent hash seeds (was 2) controlling platform count, gap range, height change, moving platforms, and layout type
+  - Wider parameter ranges: platforms 18–35, height change 30–139, moving platforms 0–4
+  - **7 layout types**: Rolling Hills (wave), Platform Clusters, Stair Steps, Sky Islands, Leap of Faith (wide gaps), Cliffhanger (vertical), Tightrope (dense)
+  - ~25% chance for a "special layout" override (gaps/vertical/dense)
+  - Layout type shown in daily stage preview UI
 
 ### Changed
-- Build
+- `generateDailyLevel()` now returns `layoutType` field consumed by `genLvl()` for geometry branching
+
+## v1.2.51 — May 25, 2026
+
+### Added
+- 🔍 **Cloud Sync credential verification** — `/sync/check` endpoint returns account summary without side effects (no lockout, no data changes)
+- **Link Device flow improvements**:
+  - "Verify Credentials" button shows account preview (levels cleared, silver/gold, devices linked) before committing
+  - Successful link shows "All data received!" panel with **Restart Game** button (reloads page)
+- Cloud Sync UI moved from Settings panel to **Profile panel**
+
+### Fixed
+- Client error callback bug — forgot-PIN failure now shows actual error string instead of `[object Object]`
+- Worker `handleSyncSave` globalData merge gap — server-side deep merge now correctly handles `globalData` keys
+
 ## v1.2.50 — May 25, 2026
 
 ### Added

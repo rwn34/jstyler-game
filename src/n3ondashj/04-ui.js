@@ -916,12 +916,17 @@ function openDailyPreview(){
     dailyLevelObj=generateDailyLevel();
     var lv=dailyLevelObj;
     var dpDiff=$('dpDiff');
+    var dpLayout=$('dpLayout');
     var dpStreak=$('dpStreak');
     var dpBest=$('dpBest');
     var dpDate=$('dpDate');
     var dpTheme=$('dpTheme');
     var dpCollection=$('dpCollection');
     if(dpDiff){dpDiff.textContent=lv.diff;dpDiff.style.color=lv.diff==='HARD'?'#f44':lv.diff==='MODERATE'?'#fa0':'#0f8';}
+    if(dpLayout){
+        var layoutNames={wave:'Rolling Hills',clusters:'Platform Clusters',stairs:'Stair Steps',islands:'Sky Islands',gaps:'Leap of Faith',vertical:'Cliffhanger',dense:'Tightrope'};
+        dpLayout.textContent=(layoutNames[lv.layoutType]||lv.layoutType||'Standard').toUpperCase();
+    }
     if(dpStreak) dpStreak.textContent='🔥 Streak: '+dailyStreak+' days';
     var stats=getDailyStats();
     if(dpBest) dpBest.textContent=stats.bestTime?'Best today: '+(stats.bestTime/1000).toFixed(2)+'s':'Best today: --';
@@ -2559,7 +2564,15 @@ function verifySyncCredentialsUI(){
     if(!pin||pin.length!==6||!/^[0-9]{6}$/.test(pin)){status.textContent='Enter 6-digit PIN.';status.style.color='#f80';return;}
     status.textContent='Verifying...';status.style.color='#0ff';
     checkSyncCredentials(username,mmyy,pin,function(ok,d){
-        if(ok){
+        if(ok&&d&&d.summary){
+            var s=d.summary;
+            var lines='✅ Account found!\n';
+            lines+='👤 '+String(s.playerName||username)+'\n';
+            lines+='🏆 '+s.levelsCleared+'/'+s.totalLevels+' levels cleared\n';
+            lines+='♦ '+s.silver+' silver  ★ '+s.gold+' gold\n';
+            lines+='📱 '+s.deviceCount+' device(s) linked';
+            status.textContent=lines;status.style.color='#0f8';
+        }else if(ok){
             status.textContent='✅ Credentials verified! Account exists.';status.style.color='#0f8';
         }else{
             status.textContent='❌ '+(d&&d.error?d.error:'Verify failed. Check username, MMYY, and PIN.');status.style.color='#f80';
@@ -2584,13 +2597,13 @@ function linkDevice(){
             playerMmyy=mmyy;save('playerMmyy',playerMmyy);
             syncPin=pin;save('syncPin',syncPin);
             syncRegistered=true;save('syncRegistered',true);
-            status.textContent='Device linked! Progress restored.';status.style.color='#0f8';
-            updateSyncIdentityDisplay();
-            updateSyncStatusText();
-            setTimeout(function(){
-                $('syncTabLink').style.display='none';
-                $('syncTabManage').style.display='block';
-            },1000);
+            // Show restart prompt instead of switching tabs
+            var restartHtml='<div style="text-align:center;padding:12px;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.3);border-radius:8px;margin-top:8px;">';
+            restartHtml+='<div style="font-size:0.75rem;color:#0f8;font-weight:700;margin-bottom:6px;">🎉 All data received!</div>';
+            restartHtml+='<div style="font-size:0.6rem;color:#888;margin-bottom:10px;">Your progress has been restored from the cloud. Restart the game to apply everything.</div>';
+            restartHtml+='<button onclick="restartGame()" style="width:100%;padding:10px 0;background:linear-gradient(135deg,#0a4,#062);border:none;border-radius:8px;cursor:pointer;color:#0f8;font-weight:700;font-size:0.8rem;letter-spacing:1px;">🔄 RESTART GAME</button>';
+            restartHtml+='</div>';
+            status.innerHTML=restartHtml;
         }else{
             status.textContent=(d&&d.error)||'Link failed. Check username, MMYY, and PIN.';status.style.color='#f80';
         }

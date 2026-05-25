@@ -27,7 +27,7 @@ if(!isV2) {
 
 // === METRICS (anonymous, opt-out by setting METRIC_URL='') ===
 var METRIC_URL = 'https://ndj-metrics.jstylr.workers.dev'; // Cloudflare Worker — set to '' to disable metrics
-var APP_VERSION = 'v1.2.50'; // Build version — updated by zipgame.ps1
+var APP_VERSION = 'v1.2.52'; // Build version — updated by zipgame.ps1
 var playerId = load('playerId', null);
 if(!playerId){playerId='p_'+Math.random().toString(36).slice(2,10)+Date.now().toString(36);save('playerId',playerId);}
 
@@ -1014,21 +1014,53 @@ function generateDailyLevel(dateKey, forcedRankIdx){
     
     var customTheme = buildDailyTheme(s1, s2, s3);
     
-    var h2 = hashString(s2);
-    var h3 = hashString(s3);
+    // 5 independent hashes for much more day-to-day variety
+    var hPlats = hashString('P' + s1);
+    var hGap   = hashString('G' + s2);
+    var hHc    = hashString('H' + s3);
+    var hMove  = hashString('M' + s1 + s2);
+    var hSpec  = hashString('S' + s3 + s1);
+    var hLayout = hashString('L' + s2 + s3);
     
-    var basePlats = 18 + (h2 % 14);
-    var baseGapMin = 90 + (h2 % 20);
-    var baseGapMax = 130 + (h2 % 60);
-    var baseHc = 40 + (h3 % 70);
-    var baseMove = h3 % 4;
+    // Base layout type pool
+    var layoutPool = ['wave','clusters','stairs','islands'];
+    var layoutType = layoutPool[hLayout % layoutPool.length];
+    
+    // ~25% chance for a special layout override
+    var specialRoll = (hSpec % 100) < 25;
+    if(specialRoll){
+        var specials = ['gaps','vertical','dense'];
+        layoutType = specials[hSpec % specials.length];
+    }
+    
+    var basePlats = 18 + (hPlats % 18);      // wider range: 18-35
+    var baseGapMin = 85 + (hGap % 30);       // wider range: 85-114
+    var baseGapMax = 125 + (hGap % 70);      // wider range: 125-194
+    var baseHc = 30 + (hHc % 110);           // wider range: 30-139
+    var baseMove = hMove % 5;                // wider range: 0-4
     
     var plats = Math.max(15, basePlats + rankIdx * 2);
-    var gapMin = Math.max(80, baseGapMin + rankIdx * 5);
+    var gapMin = Math.max(70, baseGapMin + rankIdx * 5);
     var gapMax = Math.max(gapMin + 20, baseGapMax + rankIdx * 8);
-    var hc = Math.max(25, baseHc + rankIdx * 10);
+    var hc = Math.max(20, baseHc + rankIdx * 12);
     var move = Math.max(0, baseMove + Math.floor(rankIdx / 2));
     var diff = rankIdx < 2 ? 'SIMPLE' : rankIdx < 4 ? 'MODERATE' : 'HARD';
+    
+    // Adjust params for special layouts
+    if(layoutType === 'gaps'){
+        gapMin = Math.max(110, gapMin + 25);
+        gapMax = Math.max(gapMin + 30, gapMax + 35);
+        move = Math.max(2, move);
+    }else if(layoutType === 'vertical'){
+        hc = Math.max(70, hc + 35);
+        gapMin = Math.max(55, gapMin - 18);
+        gapMax = Math.max(gapMin + 10, gapMax - 12);
+    }else if(layoutType === 'dense'){
+        plats = Math.max(22, plats + 7);
+        gapMin = Math.max(45, gapMin - 22);
+        gapMax = Math.max(gapMin + 15, gapMax - 28);
+        move = Math.max(1, move + 1);
+    }
     
     return {
         name: 'DAILY STAGE',
@@ -1042,7 +1074,8 @@ function generateDailyLevel(dateKey, forcedRankIdx){
         diff: diff,
         reversed: true,
         dateKey: today,
-        rankIdx: rankIdx
+        rankIdx: rankIdx,
+        layoutType: layoutType
     };
 }
 

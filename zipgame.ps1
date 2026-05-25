@@ -86,26 +86,26 @@ if (Test-Path $changelogPath) {
 # Parse CHANGELOG.md into version entries
 $versionEntries = @()
 $lines = $changelogContent -split "`r?`n"
-$currentVersion = $null
+$changelogVersion = $null
 $currentItems = @()
 
 foreach ($line in $lines) {
     if ($line -match '^## v([0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9\-_]*)') {
-        if ($currentVersion -and $currentItems.Count -gt 0) {
-            $versionEntries += @{ version = $currentVersion; items = $currentItems }
+        if ($changelogVersion -and $currentItems.Count -gt 0) {
+            $versionEntries += @{ version = $changelogVersion; items = $currentItems }
         }
-        $currentVersion = $matches[1]
+        $changelogVersion = $matches[1]
         $currentItems = @()
     }
-    elseif ($currentVersion -and $line -match '^(\s*)-\s+(.+)$') {
+    elseif ($changelogVersion -and $line -match '^(\s*)-\s+(.+)$') {
         $indent = $matches[1].Length
         $text = $matches[2]
         $currentItems += @{ text = $text; indent = $indent }
     }
 }
 
-if ($currentVersion -and $currentItems.Count -gt 0) {
-    $versionEntries += @{ version = $currentVersion; items = $currentItems }
+if ($changelogVersion -and $currentItems.Count -gt 0) {
+    $versionEntries += @{ version = $changelogVersion; items = $currentItems }
 }
 
 # Generate in-game changelog HTML (last 15 versions)

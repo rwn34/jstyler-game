@@ -15,6 +15,16 @@ type = "Text"
 globs = ["**/*.html"]
 fallthrough = true
 
+[[rules]]
+type = "Text"
+globs = ["**/*.bundle.js"]
+fallthrough = true
+
+[[rules]]
+type = "Text"
+globs = ["**/*.css"]
+fallthrough = true
+
 # After running `npx wrangler d1 create ndj-metrics-db`,
 # paste the database_id from the output below
 [[d1_databases]]
