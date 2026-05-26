@@ -1,3 +1,11 @@
 export function LoadingPane() {
-  return <div style="color:#666;font-family:monospace;padding:20px">Loading…</div>;
+  return (
+    <div class="loading-skeleton">
+      <div class="skel-grid">
+        <div class="skel-card" /><div class="skel-card" /><div class="skel-card" /><div class="skel-card" />
+      </div>
+      <div class="skel-panel" />
+      <div class="skel-panel short" />
+    </div>
+  );
 }

@@ -2,8 +2,17 @@ import { useState, useEffect } from 'preact/hooks';
 import { range, loadedAt, currentPlayerPid } from '../state.js';
 import { fetchJson } from '../api.js';
 import { fmtNum, fmtAgo, escapeHtml, truncatePid } from '../format.js';
+import { Table } from '../components/Table.jsx';
 import { LoadingPane } from '../components/LoadingPane.jsx';
+import { EmptyState } from '../components/EmptyState.jsx';
 import { ErrorState } from '../components/ErrorState.jsx';
+
+function PlayerLink({ p }) {
+  return <a href="javascript:void(0)" onClick={() => { currentPlayerPid.value = p.pid; }} style="color:#0ff;text-decoration:none;border-bottom:1px dotted rgba(0,255,255,.3)">{escapeHtml(p.name) || '(anon)'}</a>;
+}
+function PidLink({ p }) {
+  return <a href="javascript:void(0)" onClick={() => { currentPlayerPid.value = p.pid; }} style="color:#666;text-decoration:none">{truncatePid(p.pid)}</a>;
+}
 
 export function Players({ force }) {
   const [d, setD] = useState(null);
@@ -18,80 +27,112 @@ export function Players({ force }) {
       .catch(setErr);
   }, [range.value, force]);
 
-  if (err) return <ErrorState error={err} />;
+  if (err) return <ErrorState error={err} onRetry={() => { loadedAt.value = { ...loadedAt.value, players: 0 }; setErr(null); setD(null); }} />;
   if (!d) return <LoadingPane />;
 
-  function openP(pid) { currentPlayerPid.value = pid; }
+  const today = new Date().toISOString().slice(0, 10);
 
-  function PlayerRow({ p, i, prefix, children }) {
-    const displayName = escapeHtml(p.name) || '(anon)';
-    return (
-      <tr>
-        <td>{i + 1}</td>
-        <td><a href="javascript:void(0)" onClick={() => openP(p.pid)} style="color:#0ff;text-decoration:none;border-bottom:1px dotted rgba(0,255,255,.3)">{prefix || ''}{displayName}</a></td>
-        <td class="pid"><a href="javascript:void(0)" onClick={() => openP(p.pid)} style="color:#666;text-decoration:none">{truncatePid(p.pid)}</a></td>
-        {children}
-      </tr>
-    );
-  }
+  const recentCols = [
+    { key: '_i', label: '#', render: (r, i) => i + 1 },
+    { key: 'name', label: 'Name', sortable: true, sortType: 'string', render: r => <PlayerLink p={r} /> },
+    { key: 'pid', label: 'PID', render: r => <PidLink p={r} />, className: 'pid' },
+    { key: 'cohort', label: 'Cohort', render: r => r.cohort === 'new' ? <span class="badge green">NEW</span> : <span class="badge gold">RETURNING</span> },
+    { key: 'last_seen', label: 'Last Seen', sortable: true, sortType: 'date', render: r => fmtAgo(r.last_seen) },
+  ];
+
+  const motivCols = [
+    { key: '_i', label: '#', render: (r, i) => i + 1 },
+    { key: 'name', label: 'Name', sortable: true, sortType: 'string', render: r => <PlayerLink p={r} /> },
+    { key: 'pid', label: 'PID', render: r => <PidLink p={r} />, className: 'pid' },
+    { key: 'perseverance', label: 'Perseverance', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.perseverance || 0) },
+    { key: 'streak', label: 'Streak', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.streak || 0) },
+    { key: '_score', label: 'Score', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum((r.perseverance || 0) + (r.streak || 0) * 5), exportFormat: v => '' },
+  ];
+
+  const newCols = [
+    { key: '_i', label: '#', render: (r, i) => i + 1 },
+    { key: 'name', label: 'Name', sortable: true, sortType: 'string', render: r => <PlayerLink p={r} /> },
+    { key: 'pid', label: 'PID', render: r => <PidLink p={r} />, className: 'pid' },
+    { key: 'events', label: 'Events', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.events) },
+    { key: 'first_seen', label: 'First Seen', sortable: true, sortType: 'date', render: r => fmtAgo(r.first_seen) },
+  ];
+
+  const retCols = [
+    { key: '_i', label: '#', render: (r, i) => i + 1 },
+    { key: 'name', label: 'Name', sortable: true, sortType: 'string', render: r => <PlayerLink p={r} /> },
+    { key: 'pid', label: 'PID', render: r => <PidLink p={r} />, className: 'pid' },
+    { key: 'events', label: 'Events', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.events) },
+    { key: 'last_seen', label: 'Last Seen', sortable: true, sortType: 'date', render: r => fmtAgo(r.last_seen) },
+  ];
+
+  const champCols = [
+    { key: '_i', label: '#', render: (r, i) => i + 1 },
+    { key: 'name', label: 'Name', sortable: true, sortType: 'string', render: r => <><span>★ </span><PlayerLink p={r} /></> },
+    { key: 'pid', label: 'PID', render: r => <PidLink p={r} />, className: 'pid' },
+    { key: 'cleared', label: 'Cleared', align: 'right', sortable: true, sortType: 'number', className: 'gold', render: r => fmtNum(r.cleared) },
+  ];
+
+  const activeCols = [
+    { key: '_i', label: '#', render: (r, i) => i + 1 },
+    { key: 'name', label: 'Name', sortable: true, sortType: 'string', render: r => <PlayerLink p={r} /> },
+    { key: 'pid', label: 'PID', render: r => <PidLink p={r} />, className: 'pid' },
+    { key: 'events', label: 'Events', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.events) },
+    { key: 'last_seen', label: 'Last Seen', sortable: true, sortType: 'date', render: r => fmtAgo(r.last_seen) },
+  ];
+
+  const completerCols = [
+    { key: '_i', label: '#', render: (r, i) => i + 1 },
+    { key: 'name', label: 'Name', sortable: true, sortType: 'string', render: r => <PlayerLink p={r} /> },
+    { key: 'pid', label: 'PID', render: r => <PidLink p={r} />, className: 'pid' },
+    { key: 'completions', label: 'Wins', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.completions) },
+    { key: 'unique_levels', label: 'Unique Levels', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.unique_levels) + '/20' },
+  ];
+
+  const goldCols = [
+    { key: '_i', label: '#', render: (r, i) => i + 1 },
+    { key: 'name', label: 'Name', sortable: true, sortType: 'string', render: r => <PlayerLink p={r} /> },
+    { key: 'pid', label: 'PID', render: r => <PidLink p={r} />, className: 'pid' },
+    { key: 'total_gold', label: '★ Gold', align: 'right', sortable: true, sortType: 'number', className: 'gold', render: r => fmtNum(Math.round(r.total_gold || 0)) },
+    { key: 'total_silver', label: '♦ Silver', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(Math.round(r.total_silver || 0)) },
+  ];
+
+  const watchCols = [
+    { key: '_i', label: '#', render: (r, i) => i + 1 },
+    { key: 'name', label: 'Name', sortable: true, sortType: 'string', render: r => <PlayerLink p={r} /> },
+    { key: 'pid', label: 'PID', render: r => <PidLink p={r} />, className: 'pid' },
+    { key: 'v', label: 'Verified', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.v) },
+    { key: 'total', label: 'Total', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.total) },
+    { key: '_ratio', label: 'Ratio', align: 'right', sortable: true, sortType: 'number', render: r => { const ratio = r.total > 0 ? Math.round((r.v / r.total) * 100) : 0; return <span class={`badge ${ratio < 30 ? 'bad' : ratio < 60 ? 'warn' : ''}`}>{ratio}%</span>; } },
+  ];
 
   return (
     <>
       <h2>Recently Active</h2>
-      <div class="panel scroll-x"><table><thead><tr><th>#</th><th>Name</th><th>PID</th><th>Cohort</th><th>Last Seen</th></tr></thead><tbody>
-        {(d.recentActive || []).map((p, i) => (
-          <PlayerRow key={p.pid} p={p} i={i}>
-            <td>{p.cohort === 'new' ? <span class="badge green">NEW</span> : <span class="badge gold">RETURNING</span>}</td>
-            <td>{fmtAgo(p.last_seen)}</td>
-          </PlayerRow>
-        ))}
-      </tbody></table></div>
+      <div class="panel scroll-x"><Table columns={recentCols} rows={d.recentActive || []} defaultSort={{ key: 'last_seen', dir: 'desc' }} filterable exportable exportFilename={`ndj-recent-active-${range.value}-${today}.csv`} /></div>
 
       <h2>High Motivation (perseverance + streak)</h2>
-      <div class="panel scroll-x"><table><thead><tr><th>#</th><th>Name</th><th>PID</th><th class="num">Perseverance</th><th class="num">Streak</th><th class="num">Score</th></tr></thead><tbody>
-        {(d.highMotivation || []).map((p, i) => {
-          const score = (p.perseverance || 0) + (p.streak || 0) * 5;
-          return <PlayerRow key={p.pid} p={p} i={i}><td class="num">{fmtNum(p.perseverance || 0)}</td><td class="num">{fmtNum(p.streak || 0)}</td><td class="num">{fmtNum(score)}</td></PlayerRow>;
-        })}
-      </tbody></table></div>
+      <div class="panel scroll-x"><Table columns={motivCols} rows={d.highMotivation || []} defaultSort={{ key: '_score', dir: 'desc' }} filterable exportable exportFilename={`ndj-motivation-${range.value}-${today}.csv`} /></div>
 
       <h2>New Players (in range)</h2>
-      <div class="panel scroll-x"><table><thead><tr><th>#</th><th>Name</th><th>PID</th><th class="num">Events</th><th>First Seen</th></tr></thead><tbody>
-        {(d.newPlayers || []).map((p, i) => <PlayerRow key={p.pid} p={p} i={i}><td class="num">{fmtNum(p.events)}</td><td>{fmtAgo(p.first_seen)}</td></PlayerRow>)}
-      </tbody></table></div>
+      <div class="panel scroll-x"><Table columns={newCols} rows={d.newPlayers || []} defaultSort={{ key: 'first_seen', dir: 'desc' }} filterable exportable exportFilename={`ndj-new-players-${range.value}-${today}.csv`} /></div>
 
       <h2>Returning Players (in range)</h2>
-      <div class="panel scroll-x"><table><thead><tr><th>#</th><th>Name</th><th>PID</th><th class="num">Events</th><th>Last Seen</th></tr></thead><tbody>
-        {(d.returningPlayers || []).map((p, i) => <PlayerRow key={p.pid} p={p} i={i}><td class="num">{fmtNum(p.events)}</td><td>{fmtAgo(p.last_seen)}</td></PlayerRow>)}
-      </tbody></table></div>
+      <div class="panel scroll-x"><Table columns={retCols} rows={d.returningPlayers || []} defaultSort={{ key: 'last_seen', dir: 'desc' }} filterable exportable exportFilename={`ndj-returning-${range.value}-${today}.csv`} /></div>
 
       <h2>★ Champions (all 20 cleared, all-time)</h2>
-      <div class="panel scroll-x"><table><thead><tr><th>#</th><th>Name</th><th>PID</th><th class="gold">Cleared</th></tr></thead><tbody>
-        {(d.champions || []).map((p, i) => <PlayerRow key={p.pid} p={p} i={i} prefix="★ "><td class="gold">{fmtNum(p.cleared)}</td></PlayerRow>)}
-      </tbody></table></div>
+      <div class="panel scroll-x"><Table columns={champCols} rows={d.champions || []} filterable exportable exportFilename={`ndj-champions-${today}.csv`} /></div>
 
       <h2>Most Active</h2>
-      <div class="panel scroll-x"><table><thead><tr><th>#</th><th>Name</th><th>PID</th><th class="num">Events</th><th>Last Seen</th></tr></thead><tbody>
-        {(d.topActive || []).map((p, i) => <PlayerRow key={p.pid} p={p} i={i}><td class="num">{fmtNum(p.events)}</td><td>{fmtAgo(p.last_seen)}</td></PlayerRow>)}
-      </tbody></table></div>
+      <div class="panel scroll-x"><Table columns={activeCols} rows={d.topActive || []} defaultSort={{ key: 'events', dir: 'desc' }} filterable exportable exportFilename={`ndj-most-active-${range.value}-${today}.csv`} /></div>
 
       <h2>Top Completers</h2>
-      <div class="panel scroll-x"><table><thead><tr><th>#</th><th>Name</th><th>PID</th><th class="num">Wins</th><th class="num">Unique Levels</th></tr></thead><tbody>
-        {(d.topCompleters || []).map((p, i) => <PlayerRow key={p.pid} p={p} i={i}><td class="num">{fmtNum(p.completions)}</td><td class="num">{fmtNum(p.unique_levels)}/20</td></PlayerRow>)}
-      </tbody></table></div>
+      <div class="panel scroll-x"><Table columns={completerCols} rows={d.topCompleters || []} defaultSort={{ key: 'completions', dir: 'desc' }} filterable exportable exportFilename={`ndj-completers-${range.value}-${today}.csv`} /></div>
 
       <h2>Wealthiest</h2>
-      <div class="panel scroll-x"><table><thead><tr><th>#</th><th>Name</th><th>PID</th><th class="gold">★ Gold</th><th class="num">♦ Silver</th></tr></thead><tbody>
-        {(d.topGold || []).map((p, i) => <PlayerRow key={p.pid} p={p} i={i}><td class="gold">{fmtNum(Math.round(p.total_gold || 0))}</td><td class="num">{fmtNum(Math.round(p.total_silver || 0))}</td></PlayerRow>)}
-      </tbody></table></div>
+      <div class="panel scroll-x"><Table columns={goldCols} rows={d.topGold || []} defaultSort={{ key: 'total_gold', dir: 'desc' }} filterable exportable exportFilename={`ndj-wealthiest-${range.value}-${today}.csv`} /></div>
 
       <h2>Anti-cheat Watchlist</h2>
-      <div class="panel scroll-x"><table><thead><tr><th>#</th><th>Name</th><th>PID</th><th class="num">Verified</th><th class="num">Total</th><th class="num">Ratio</th></tr></thead><tbody>
-        {(d.lowestVerified || []).map((p, i) => {
-          const ratio = p.total > 0 ? Math.round((p.v / p.total) * 100) : 0;
-          return <PlayerRow key={p.pid} p={p} i={i}><td class="num">{fmtNum(p.v)}</td><td class="num">{fmtNum(p.total)}</td><td class="num"><span class={`badge ${ratio < 30 ? 'bad' : ratio < 60 ? 'warn' : ''}`}>{ratio}%</span></td></PlayerRow>;
-        })}
-      </tbody></table></div>
+      <div class="panel scroll-x"><Table columns={watchCols} rows={d.lowestVerified || []} defaultSort={{ key: '_ratio', dir: 'asc' }} filterable exportable exportFilename={`ndj-watchlist-${range.value}-${today}.csv`} /></div>
     </>
   );
 }

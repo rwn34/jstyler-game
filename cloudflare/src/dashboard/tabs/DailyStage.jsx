@@ -4,6 +4,7 @@ import { fetchJson } from '../api.js';
 import { fmtNum, fmtMs } from '../format.js';
 import { Card } from '../components/Card.jsx';
 import { BarRow } from '../components/BarRow.jsx';
+import { Table } from '../components/Table.jsx';
 import { LoadingPane } from '../components/LoadingPane.jsx';
 import { ErrorState } from '../components/ErrorState.jsx';
 
@@ -20,8 +21,24 @@ export function DailyStage({ force }) {
       .catch(setErr);
   }, [range.value, force]);
 
-  if (err) return <ErrorState error={err} />;
+  if (err) return <ErrorState error={err} onRetry={() => { loadedAt.value = { ...loadedAt.value, dailystage: 0 }; setErr(null); setD(null); }} />;
   if (!d) return <LoadingPane />;
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  const byDayCols = [
+    { key: 'day', label: 'Day', render: r => 'Day ' + (r.day != null ? r.day : '?') },
+    { key: 'starts', label: 'Attempts', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.starts) },
+    { key: 'completes', label: 'Completions', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.completes) },
+    { key: 'players', label: 'Unique Players', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.players) },
+  ];
+
+  const byDiffCols = [
+    { key: 'diff', label: 'Difficulty', render: r => <span class={`badge ${r.diff === 'HARD' ? 'bad' : r.diff === 'MODERATE' ? 'warn' : ''}`}>{r.diff || '?'}</span> },
+    { key: 'starts', label: 'Starts', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.starts) },
+    { key: 'completes', label: 'Completions', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.completes) },
+    { key: '_rate', label: 'Rate', align: 'right', sortable: true, sortType: 'number', render: r => { const rate = r.starts > 0 ? Math.round((r.completes / r.starts) * 1000) / 10 : 0; return rate + '%'; } },
+  ];
 
   return (
     <>
@@ -50,21 +67,18 @@ export function DailyStage({ force }) {
       {d.byDiff && d.byDiff.length > 0 && (
         <>
           <h2>By Difficulty (Rank Tier)</h2>
-          <div class="panel scroll-x"><table><thead><tr><th>Difficulty</th><th class="num">Starts</th><th class="num">Completions</th><th class="num">Rate</th></tr></thead><tbody>
-            {d.byDiff.map(r => {
-              const rate = r.starts > 0 ? Math.round((r.completes / r.starts) * 1000) / 10 : 0;
-              return <tr key={r.diff}><td><span class={`badge ${r.diff === 'HARD' ? 'bad' : r.diff === 'MODERATE' ? 'warn' : ''}`}>{r.diff || '?'}</span></td><td class="num">{fmtNum(r.starts)}</td><td class="num">{fmtNum(r.completes)}</td><td class="num">{rate}%</td></tr>;
-            })}
-          </tbody></table></div>
+          <div class="panel scroll-x">
+            <Table columns={byDiffCols} rows={d.byDiff} exportable exportFilename={`ndj-daily-bydiff-${range.value}-${today}.csv`} />
+          </div>
         </>
       )}
 
       {d.byDay && d.byDay.length > 0 && (
         <>
           <h2>Daily Trend</h2>
-          <div class="panel scroll-x"><table><thead><tr><th>Day</th><th class="num">Attempts</th><th class="num">Completions</th><th class="num">Unique Players</th></tr></thead><tbody>
-            {d.byDay.map(r => <tr key={r.day}><td>Day {r.day != null ? r.day : '?'}</td><td class="num">{fmtNum(r.starts)}</td><td class="num">{fmtNum(r.completes)}</td><td class="num">{fmtNum(r.players)}</td></tr>)}
-          </tbody></table></div>
+          <div class="panel scroll-x">
+            <Table columns={byDayCols} rows={d.byDay} exportable exportFilename={`ndj-daily-trend-${range.value}-${today}.csv`} />
+          </div>
         </>
       )}
     </>

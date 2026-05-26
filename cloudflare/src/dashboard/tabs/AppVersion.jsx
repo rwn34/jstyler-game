@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'preact/hooks';
 import { range, loadedAt } from '../state.js';
 import { fetchJson } from '../api.js';
-import { fmtNum, fmtDate, escapeHtml } from '../format.js';
+import { fmtNum, escapeHtml } from '../format.js';
 import { Card } from '../components/Card.jsx';
 import { LineChart } from '../charts/LineChart.jsx';
+import { Table } from '../components/Table.jsx';
 import { LoadingPane } from '../components/LoadingPane.jsx';
 import { ErrorState } from '../components/ErrorState.jsx';
 
@@ -20,15 +21,22 @@ export function AppVersion({ force }) {
       .catch(setErr);
   }, [range.value, force]);
 
-  if (err) return <ErrorState error={err} />;
+  if (err) return <ErrorState error={err} onRetry={() => { loadedAt.value = { ...loadedAt.value, appversion: 0 }; setErr(null); setD(null); }} />;
   if (!d) return <LoadingPane />;
 
-  // Build uPlot series for version adoption
   const dayCount = d.versions.length > 0 ? d.versions[0].series.length : 0;
   const timestamps = Array.from({ length: dayCount }, (_, i) => {
     const startOfDay = Math.floor(Date.now() / 86400000) * 86400000;
     return (startOfDay - (dayCount - 1 - i) * 86400000) / 1000;
   });
+
+  const today = new Date().toISOString().slice(0, 10);
+  const cols = [
+    { key: 'version', label: 'Version', sortable: true, sortType: 'string', render: r => <span class="badge">{escapeHtml(r.version)}</span> },
+    { key: 'events', label: 'Events', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.events) },
+    { key: 'players', label: 'Players', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.players) },
+    { key: 'pct', label: 'Share', align: 'right', sortable: true, sortType: 'number', render: r => r.pct + '%' },
+  ];
 
   return (
     <>
@@ -38,9 +46,9 @@ export function AppVersion({ force }) {
       </div>
 
       <h2>Version Breakdown</h2>
-      <div class="panel scroll-x"><table><thead><tr><th>Version</th><th class="num">Events</th><th class="num">Players</th><th class="num">Share</th></tr></thead><tbody>
-        {d.versions.map(v => <tr key={v.version}><td><span class="badge">{escapeHtml(v.version)}</span></td><td class="num">{fmtNum(v.events)}</td><td class="num">{fmtNum(v.players)}</td><td class="num">{v.pct}%</td></tr>)}
-      </tbody></table></div>
+      <div class="panel scroll-x">
+        <Table columns={cols} rows={d.versions} defaultSort={{ key: 'events', dir: 'desc' }} exportable exportFilename={`ndj-versions-${range.value}-${today}.csv`} />
+      </div>
 
       {d.versions.length > 0 && dayCount > 1 && (
         <>

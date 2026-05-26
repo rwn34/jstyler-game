@@ -776,6 +776,7 @@ function renderProfile(){
     $('pfGold').textContent=getGoldBalance();
     $('pfSilver').textContent=silverWallet;
     $('pfMatches').textContent=globalData.matches;
+    $('pfMmyy').textContent=(typeof playerMmyy!=='undefined'&&playerMmyy)?playerMmyy:'—';
     updateSyncStatusText();
     var totalMin=Math.floor(globalData.timePlayed/60000);
     $('pfTime').textContent=Math.floor(totalMin/60)>0?Math.floor(totalMin/60)+'h '+(totalMin%60)+'m':(totalMin%60)+'m';
@@ -787,6 +788,27 @@ function renderProfile(){
     $('pfDeadSpike').textContent=globalData.deadSpike;
     $('pfDeadLaser').textContent=globalData.deadLaser;
     renderProfileRank();
+}
+function editProfileMmyy(){
+    var currentMmyy=String(playerMmyy||'');
+    var currentMonth=currentMmyy.length>=2?currentMmyy.slice(0,2):'01';
+    var currentYear=currentMmyy.length>=4?currentMmyy.slice(2,4):'00';
+    populateMmyyDropdowns('pfMonth','pfYear',playerMmyy);
+    $('pfMmyyRow').style.display='none';
+    $('pfMmyyEdit').style.display='flex';
+}
+function cancelProfileMmyy(){
+    $('pfMmyyRow').style.display='flex';
+    $('pfMmyyEdit').style.display='none';
+}
+function saveProfileMmyy(){
+    var mmyy=$('pfMonth').value+$('pfYear').value;
+    if(!/^[0-9]{4}$/.test(mmyy))return;
+    playerMmyy=mmyy;save('playerMmyy',playerMmyy);
+    $('pfMmyy').textContent=playerMmyy;
+    $('pfMmyyRow').style.display='flex';
+    $('pfMmyyEdit').style.display='none';
+    queueSync();
 }
 function renderProfileRank(){
     var info=getPlayerRankInfo();
@@ -1377,15 +1399,27 @@ function unequipCos(id,cat){equippedCosmetics[cat]=null;save('equippedCosmetics'
 function buyCon(id){var c=CONSUMABLES.find(function(x){return x.id===id;});if(!c||silverWallet<c.cost)return;if(id==='namechange'){silverWallet-=c.cost;save('silver',silverWallet);showNamePrompt(function(){renderStore();});sendMetric('purchase',{kind:'consumable',id:id,cost:c.cost,currency:'silver'});queueSync();return;}if(id==='streakfreeze'){if(streakFreezes>=maxStreakFreezes){addFloat(canvas.width/2,300,'MAX 2 FREEZES','#f80');return;}silverWallet-=c.cost;streakFreezes++;save('silver',silverWallet);save('streakFreezes',streakFreezes);sendMetric('purchase',{kind:'consumable',id:id,cost:c.cost,currency:'silver'});renderStore();queueSync();return;}silverWallet-=c.cost;consumableInv[id]=(consumableInv[id]||0)+1;save('silver',silverWallet);save('consumableInv',consumableInv);sendMetric('purchase',{kind:'consumable',id:id,cost:c.cost,currency:'silver'});renderStore();queueSync();}
 function showNamePrompt(cb){
 var ov=$('overlay');
+var currentMmyy=String(playerMmyy||'');
+var currentMonth=currentMmyy.length>=2?currentMmyy.slice(0,2):'01';
+var currentYear=currentMmyy.length>=4?currentMmyy.slice(2,4):'00';
 $('ovTitle').textContent='ENTER NAME';
 $('ovTitle').style.color='#0ff';
-$('ovMsg').innerHTML='<input id="nameInput" type="text" maxlength="10" placeholder="5-10 chars" value="'+String(playerName||'').replace(/"/g,'&quot;')+'" style="width:200px;padding:10px;font-size:1.2rem;font-family:monospace;text-align:center;background:#111;color:#0ff;border:2px solid #0ff;border-radius:8px;text-transform:uppercase;letter-spacing:2px;"><div style="font-size:0.6rem;color:#888;text-align:center;margin-top:8px;">Already have a cloud account? <a href="#" onclick="openSyncLinkPanel();return false;" style="color:#0ff;text-decoration:underline;">Link device</a></div>';
+var html='<input id="nameInput" type="text" maxlength="10" placeholder="5-10 chars" value="'+String(playerName||'').replace(/"/g,'&quot;')+'" style="width:200px;padding:10px;font-size:1.2rem;font-family:monospace;text-align:center;background:#111;color:#0ff;border:2px solid #0ff;border-radius:8px;text-transform:uppercase;letter-spacing:2px;">';
+html+='<div style="display:flex;gap:8px;margin-top:8px;justify-content:center;">';
+html+='<select id="nameMonth" style="padding:8px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.7rem;outline:none;">'+getMonthOptions(currentMonth)+'</select>';
+html+='<select id="nameYear" style="padding:8px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.7rem;outline:none;">'+getYearOptions(currentYear)+'</select>';
+html+='</div>';
+html+='<div style="font-size:0.55rem;color:#888;text-align:center;margin-top:4px;">Birthday (used for account recovery)</div>';
+html+='<div style="font-size:0.6rem;color:#888;text-align:center;margin-top:8px;">Already have a cloud account? <a href="#" onclick="openSyncLinkPanel();return false;" style="color:#0ff;text-decoration:underline;">Link device</a></div>';
+$('ovMsg').innerHTML=html;
 $('ovBtn').textContent='CONFIRM';$('ovBtn').style.display='inline-block';$('ovBtn').style.background='';
 $('ovBtnCancel').style.display='none';
 $('ovBtn').onclick=function(){
     var v=$('nameInput').value.replace(/[^a-zA-Z0-9]/g,'').slice(0,10);
     if(v.length<5){$('ovTitle').textContent='TOO SHORT (min 5)';$('ovTitle').style.color='#f05';return;}
     playerName=v.toUpperCase();save('playerName',playerName);
+    var mmyy=$('nameMonth').value+$('nameYear').value;
+    if(/^[0-9]{4}$/.test(mmyy)){playerMmyy=mmyy;save('playerMmyy',playerMmyy);}
     if(!_sessionStartSent) sendSessionStart();
     sendMetric('name_set',{name:playerName,first:false});
     queueSync();
@@ -1418,12 +1452,32 @@ function startDailyStage(){
     resize();initStars();startLvl(-1);
 }
 
+function getMonthOptions(selected){
+    var opts=[['01','Jan'],['02','Feb'],['03','Mar'],['04','Apr'],['05','May'],['06','Jun'],['07','Jul'],['08','Aug'],['09','Sep'],['10','Oct'],['11','Nov'],['12','Dec']];
+    var html='';
+    for(var i=0;i<opts.length;i++) html+='<option value="'+opts[i][0]+'"'+(opts[i][0]===selected?' selected':'')+'>'+opts[i][1]+'</option>';
+    return html;
+}
+function getYearOptions(selected){
+    var html='';
+    for(var y=0;y<=99;y++){ var ys=(y<10?'0':'')+y; html+='<option value="'+ys+'"'+(ys===selected?' selected':'')+'>'+(2000+y)+'</option>'; }
+    return html;
+}
+function populateMmyyDropdowns(monthId,yearId,defaultMmyy){
+    var mmyy=String(defaultMmyy||'');
+    var month=mmyy.length>=2?mmyy.slice(0,2):'01';
+    var year=mmyy.length>=4?mmyy.slice(2,4):'00';
+    var mel=$(monthId), yel=$(yearId);
+    if(mel) mel.innerHTML=getMonthOptions(month);
+    if(yel) yel.innerHTML=getYearOptions(year);
+}
 function showOnboard(cb){
 W._onbCb=cb;
 _onbCtrl=ctrlMode||'arrows';
 $('onbName').value=playerName||'';
 $('onbWarn').textContent='';
 selectOnbCtrl(_onbCtrl);
+populateMmyyDropdowns('onbMonth','onbYear',playerMmyy);
 $('onboard').classList.add('active');
 setTimeout(function(){$('onbName').focus();},200);
 }
@@ -1431,6 +1485,9 @@ function finishOnboard(){
 var v=$('onbName').value.replace(/[^a-zA-Z0-9]/g,'').slice(0,10);
 if(v.length<5){$('onbWarn').textContent='Name must be 5-10 characters';return;}
 playerName=v.toUpperCase();save('playerName',playerName);
+var mmyy=$('onbMonth').value+$('onbYear').value;
+if(!/^[0-9]{4}$/.test(mmyy)){$('onbWarn').textContent='Select a valid birthday.';return;}
+playerMmyy=mmyy;save('playerMmyy',playerMmyy);
 ctrlMode=_onbCtrl;save('ctrl',ctrlMode);save('ctrlPicked',true);save('tutorialDone',true);
 // Now that we have a name, fire deferred session_start (if not already) and a name_set event for funnel tracking
 if(!_sessionStartSent) sendSessionStart();
@@ -2434,6 +2491,14 @@ function submitFeedback(){
     });
 }
 
+function resetSyncLinkTab(){
+    var s1=$('syncLinkStep1'), s2=$('syncLinkStep2'), s3=$('syncLinkStep3');
+    if(s1) s1.style.display='block';
+    if(s2) s2.style.display='none';
+    if(s3) s3.style.display='none';
+    var prev=$('syncLinkPreview');
+    if(prev) prev.innerHTML='';
+}
 function openSyncPanel(){
     $('settings').classList.remove('active');
     var panel=$('syncPanel');
@@ -2451,6 +2516,11 @@ function openSyncPanel(){
     if(manageMmyy)manageMmyy.textContent=(typeof playerMmyy!=='undefined'&&playerMmyy)?playerMmyy:'—';
     var manageDev=$('syncManageDeviceId');
     if(manageDev)manageDev.textContent=(typeof syncDeviceId!=='undefined'&&syncDeviceId)?syncDeviceId:'—';
+    // Populate MMYY dropdowns
+    populateMmyyDropdowns('syncRegMonth','syncRegYear',playerMmyy);
+    populateMmyyDropdowns('syncLinkMonth','syncLinkYear',playerMmyy);
+    // Reset link tab to step 1
+    resetSyncLinkTab();
     if(typeof syncRegistered!=='undefined'&&syncRegistered){
         $('syncTabRegister').style.display='none';
         $('syncTabManage').style.display='block';
@@ -2488,6 +2558,8 @@ function openSyncLinkPanel(){
     $('syncTabRegister').style.display='none';
     $('syncTabManage').style.display='none';
     $('syncTabLink').style.display='block';
+    populateMmyyDropdowns('syncLinkMonth','syncLinkYear',playerMmyy);
+    resetSyncLinkTab();
 }
 function closeSyncPanel(){
     var panel=$('syncPanel');
@@ -2525,10 +2597,10 @@ function syncNow(){
     setTimeout(function(){if(status){status.textContent='Synced!';status.style.color='#0f8';}},2000);
 }
 function registerSync(){
-    var mmyy=$('syncMmyy').value.trim();
+    var mmyy=$('syncRegMonth').value+$('syncRegYear').value;
     var pin=$('syncPinInput').value.trim();
     var status=$('syncStatus');
-    if(!mmyy||mmyy.length!==4||!/^[0-9]{4}$/.test(mmyy)){status.textContent='Enter 4-digit MMYY birthday.';status.style.color='#f80';return;}
+    if(!mmyy||mmyy.length!==4||!/^[0-9]{4}$/.test(mmyy)){status.textContent='Select a valid birthday.';status.style.color='#f80';return;}
     if(!pin||pin.length!==6||!/^[0-9]{6}$/.test(pin)){status.textContent='Enter 6-digit PIN.';status.style.color='#f80';return;}
     if(!playerName){status.textContent='Set a player name first.';status.style.color='#f80';return;}
     status.textContent='Registering...';
@@ -2556,56 +2628,74 @@ function registerSync(){
 }
 function verifySyncCredentialsUI(){
     var username=$('syncLinkUsername').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,10);
-    var mmyy=$('syncLinkMmyy').value.trim();
+    var mmyy=$('syncLinkMonth').value+$('syncLinkYear').value;
     var pin=$('syncLinkPin').value.trim();
     var status=$('syncStatus');
     if(!username||username.length<5){status.textContent='Enter username (5-10 chars).';status.style.color='#f80';return;}
-    if(!mmyy||mmyy.length!==4||!/^[0-9]{4}$/.test(mmyy)){status.textContent='Enter 4-digit MMYY.';status.style.color='#f80';return;}
+    if(!mmyy||mmyy.length!==4||!/^[0-9]{4}$/.test(mmyy)){status.textContent='Select a valid birthday.';status.style.color='#f80';return;}
     if(!pin||pin.length!==6||!/^[0-9]{6}$/.test(pin)){status.textContent='Enter 6-digit PIN.';status.style.color='#f80';return;}
     status.textContent='Verifying...';status.style.color='#0ff';
     checkSyncCredentials(username,mmyy,pin,function(ok,d){
         if(ok&&d&&d.summary){
             var s=d.summary;
-            var lines='✅ Account found!\n';
-            lines+='👤 '+String(s.playerName||username)+'\n';
-            lines+='🏆 '+s.levelsCleared+'/'+s.totalLevels+' levels cleared\n';
-            lines+='♦ '+s.silver+' silver  ★ '+s.gold+' gold\n';
-            lines+='📱 '+s.deviceCount+' device(s) linked';
-            status.textContent=lines;status.style.color='#0f8';
+            var html='<div style="font-size:0.7rem;color:#0f8;font-weight:700;margin-bottom:6px;">✅ Account found!</div>';
+            html+='<div style="font-size:0.6rem;color:#ccc;line-height:1.6;">';
+            html+='👤 '+escapeHtml(String(s.playerName||username))+'<br>';
+            html+='🏆 '+(s.levelsCleared||0)+'/'+(s.totalLevels||0)+' levels cleared<br>';
+            html+='♦ '+(s.silver||0)+' silver &nbsp; ★ '+(s.gold||0)+' gold<br>';
+            html+='📱 '+(s.deviceCount||0)+' device(s) linked';
+            html+='</div>';
+            $('syncLinkPreview').innerHTML=html;
+            $('syncLinkStep1').style.display='none';
+            $('syncLinkStep2').style.display='block';
+            status.textContent='';
         }else if(ok){
-            status.textContent='✅ Credentials verified! Account exists.';status.style.color='#0f8';
+            $('syncLinkPreview').innerHTML='<div style="font-size:0.7rem;color:#0f8;font-weight:700;">✅ Credentials verified! Account exists.</div>';
+            $('syncLinkStep1').style.display='none';
+            $('syncLinkStep2').style.display='block';
+            status.textContent='';
         }else{
-            status.textContent='❌ '+(d&&d.error?d.error:'Verify failed. Check username, MMYY, and PIN.');status.style.color='#f80';
+            status.textContent='❌ '+(d&&d.error?d.error:'Verify failed. Check username, birthday, and PIN.');status.style.color='#f80';
         }
     });
 }
-function linkDevice(){
+function escapeHtml(str){
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function cancelLinkDevice(){
+    $('syncLinkStep2').style.display='none';
+    $('syncLinkStep1').style.display='block';
+    var status=$('syncStatus');
+    if(status){status.textContent='';}
+}
+function confirmLinkDevice(){
     var username=$('syncLinkUsername').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,10);
-    var mmyy=$('syncLinkMmyy').value.trim();
+    var mmyy=$('syncLinkMonth').value+$('syncLinkYear').value;
     var pin=$('syncLinkPin').value.trim();
     var status=$('syncStatus');
-    if(!username||username.length<5){status.textContent='Enter username (5-10 chars).';status.style.color='#f80';return;}
-    if(!mmyy||mmyy.length!==4||!/^[0-9]{4}$/.test(mmyy)){status.textContent='Enter 4-digit MMYY.';status.style.color='#f80';return;}
-    if(!pin||pin.length!==6||!/^[0-9]{6}$/.test(pin)){status.textContent='Enter 6-digit PIN.';status.style.color='#f80';return;}
     // Check if there's existing local progress to warn about
     var hasLocalProgress=(Object.keys(bestScores||{}).length>0)||(Object.keys(levelStats||{}).length>0)||(silverWallet>0)||(goldSpent>0);
     if(hasLocalProgress&&!confirm('⚠️ LINKING WILL REPLACE your current local progress with the cloud account.\n\nThis cannot be undone.\n\nContinue?')){return;}
-    status.textContent='Linking...';status.style.color='#0ff';
+    $('syncLinkStep2').style.display='none';
+    $('syncLinkStep3').style.display='block';
+    status.textContent='';status.style.color='#0ff';
     loadSync(username,mmyy,pin,function(success,d){
         if(success){
             playerName=username;save('playerName',playerName);
             playerMmyy=mmyy;save('playerMmyy',playerMmyy);
             syncPin=pin;save('syncPin',syncPin);
             syncRegistered=true;save('syncRegistered',true);
-            // Show restart prompt instead of switching tabs
+            // Show restart prompt
             var restartHtml='<div style="text-align:center;padding:12px;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.3);border-radius:8px;margin-top:8px;">';
             restartHtml+='<div style="font-size:0.75rem;color:#0f8;font-weight:700;margin-bottom:6px;">🎉 All data received!</div>';
             restartHtml+='<div style="font-size:0.6rem;color:#888;margin-bottom:10px;">Your progress has been restored from the cloud. Restart the game to apply everything.</div>';
             restartHtml+='<button onclick="restartGame()" style="width:100%;padding:10px 0;background:linear-gradient(135deg,#0a4,#062);border:none;border-radius:8px;cursor:pointer;color:#0f8;font-weight:700;font-size:0.8rem;letter-spacing:1px;">🔄 RESTART GAME</button>';
             restartHtml+='</div>';
-            status.innerHTML=restartHtml;
+            $('syncLinkStep3').innerHTML=restartHtml;
         }else{
-            status.textContent=(d&&d.error)||'Link failed. Check username, MMYY, and PIN.';status.style.color='#f80';
+            $('syncLinkStep3').style.display='none';
+            $('syncLinkStep1').style.display='block';
+            status.textContent=(d&&d.error)||'Link failed. Check username, birthday, and PIN.';status.style.color='#f80';
         }
     },true);
 }

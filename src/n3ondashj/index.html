@@ -569,7 +569,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     <canvas id="bootParticles" style="position:absolute;inset:0;z-index:2;"></canvas>
     <h1 style="z-index:1;">N3ON DashJ<span class="glitch" data-text="N3ON DashJ"></span></h1>
     <span class="sub" style="z-index:1;">jstylr</span>
-    <span style="z-index:1;font-size:.55rem;color:#444;font-family:monospace;">v1.2.52</span>
+    <span style="z-index:1;font-size:.55rem;color:#444;font-family:monospace;">v1.2.53</span>
     <div id="bootTips" style="z-index:1;font-size:0.6rem;color:#888;font-family:monospace;max-width:80vw;text-align:center;line-height:1.4;opacity:0;transition:opacity 0.5s ease;margin-top:-8px;"></div>
 </div>
 
@@ -684,7 +684,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     <!-- Cloud Sync moved to Profile panel -->
     <div style="text-align: center; margin-top: 15px; font-family: monospace;">
         <div style="display:flex;gap:6px;width:100%;">
-            <button onclick="openChangelog()" style="flex:1;padding:8px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#333,#222);border:1px solid rgba(255,255,255,0.15);color:#aaa;">📋 UPDATE LOG &nbsp; <span style='color:#666;font-size:0.6rem;'>v1.2.52</span></button>
+            <button onclick="openChangelog()" style="flex:1;padding:8px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#333,#222);border:1px solid rgba(255,255,255,0.15);color:#aaa;">📋 UPDATE LOG &nbsp; <span style='color:#666;font-size:0.6rem;'>v1.2.53</span></button>
             <button onclick="restartGame()" title="Restart the game to apply updates" style="flex:0 0 auto;padding:8px 14px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#0a4,#062);border:1px solid rgba(0,255,136,0.3);color:#0f8;">🔄 RESTART</button>
         </div>
         <button onclick="showPrivacyPolicy()" style="background:transparent; border:none; color:#444; font-size:0.6rem; font-weight:normal; text-decoration:underline; cursor:pointer; padding:5px; box-shadow:none; margin-top:2px;">🔒 Privacy Policy</button>
@@ -699,9 +699,20 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
   <button onclick="closeProfile()" style="background:rgba(255,68,68,0.2);border:1px solid #f44;color:#f44;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:monospace;font-weight:700;font-size:.65rem;letter-spacing:1px;">✕ CLOSE</button>
 </div>
 <div style="width:100%;max-width:560px;max-height:60vh;overflow-y:auto;text-align:left;padding:10px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.1);">
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
     <span id="pfRank" style="color:#ffd700;font-weight:700;font-size:0.7rem;padding:2px 8px;border:1px solid rgba(255,215,0,0.4);border-radius:4px;">—</span>
     <span id="pfName" style="color:#0ff;font-weight:900;font-size:0.9rem;letter-spacing:1px;"></span>
+  </div>
+  <div id="pfMmyyRow" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+    <span style="font-size:0.6rem;color:#888;">BIRTHDAY</span>
+    <span id="pfMmyy" style="font-size:0.7rem;color:#ccc;font-family:monospace;">—</span>
+    <button onclick="editProfileMmyy()" style="padding:2px 8px;font-size:0.55rem;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#888;cursor:pointer;">EDIT</button>
+  </div>
+  <div id="pfMmyyEdit" style="display:none;gap:8px;margin-bottom:10px;align-items:center;">
+    <select id="pfMonth" style="padding:6px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:4px;font-family:monospace;font-size:0.65rem;outline:none;"></select>
+    <select id="pfYear" style="padding:6px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:4px;font-family:monospace;font-size:0.65rem;outline:none;"></select>
+    <button onclick="saveProfileMmyy()" style="padding:4px 10px;font-size:0.6rem;background:#0f8;color:#000;border:none;border-radius:4px;cursor:pointer;font-weight:700;">SAVE</button>
+    <button onclick="cancelProfileMmyy()" style="padding:4px 10px;font-size:0.6rem;background:#333;color:#ccc;border:none;border-radius:4px;cursor:pointer;">CANCEL</button>
   </div>
   <div style="display:flex;gap:12px;align-items:center;font-size:0.75rem;margin-bottom:8px;">
     <span style="color:#ffd700;">★ <span id="pfGold">0</span></span>
@@ -741,6 +752,10 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
   <button onclick="closeChangelog()" style="background:rgba(255,68,68,0.2);border:1px solid #f44;color:#f44;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:monospace;font-weight:700;font-size:.65rem;letter-spacing:1px;">✕ CLOSE</button>
 </div>
 <div style="width:100%;max-width:360px;max-height:60vh;overflow-y:auto;text-align:left;padding:10px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.1);">
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.53</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Build</li>
+</ul>
 <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.52</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
 <li>🎲 **Daily stage variety system** — daily stages now have much more day-to-day variety</li>
@@ -865,11 +880,6 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 <li>PWA banner/button visibility now correctly tied to viewport mode — only one shows at a time</li>
 <li>Streak display consistency: `updateLsStreakBtn()` now uses same visual streak calculation as calendar</li>
 <li>HUD vertical alignment: `hudCenter`, `hudLeft`, and `hudRight` all now at `top: 64px`</li>
-</ul>
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.35</div>
-<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>iOS PWA reward now requires 60+ seconds of play after tapping install (anti-gaming)</li>
-<li>Landscape narrow mode: install button moved from floating banner to under `lsGlobalStats` in right column, centered</li>
 </ul>
 </div>
 <button onclick="closeChangelog()" style="width:100%;max-width:320px;margin-top:12px;">BACK</button>
@@ -1041,7 +1051,15 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 <div class="onb-card">
 <div class="onb-label">&#x270f;&#xfe0f; Your Name</div>
 <input id="onbName" class="onb-input" type="text" maxlength="10" placeholder="5-10 chars" onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();finishOnboard();}">
-<div style="font-size:0.6rem;color:#888;text-align:center;margin-top:6px;">Already have a cloud account? <a href="#" onclick="openSyncLinkPanel();return false;" style="color:#0ff;text-decoration:underline;">Link device</a></div>
+</div>
+
+<div class="onb-card">
+<div class="onb-label">&#x1f382; Birthday</div>
+<div style="display:flex;gap:8px;">
+<select id="onbMonth" class="onb-input" style="flex:1;padding:10px;font-size:0.75rem;"></select>
+<select id="onbYear" class="onb-input" style="flex:1;padding:10px;font-size:0.75rem;"></select>
+</div>
+<div style="font-size:0.55rem;color:#888;text-align:center;margin-top:6px;">Used for account recovery</div>
 </div>
 
 <div class="onb-card">
@@ -1158,8 +1176,11 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
                 <div id="syncUsername" style="font-size:0.7rem;color:#fff;font-family:monospace;background:rgba(0,0,0,0.3);padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);"></div>
             </div>
             <div>
-                <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">BIRTHDAY (MMYY)</div>
-                <input id="syncMmyy" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="0314" style="width:100%;padding:10px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.75rem;outline:none;text-align:center;letter-spacing:2px;">
+                <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">BIRTHDAY</div>
+                <div style="display:flex;gap:8px;">
+                    <select id="syncRegMonth" style="flex:1;padding:10px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.75rem;outline:none;"></select>
+                    <select id="syncRegYear" style="flex:1;padding:10px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.75rem;outline:none;"></select>
+                </div>
             </div>
             <div>
                 <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">PIN (6 digits)</div>
@@ -1169,21 +1190,38 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
         </div>
         <div id="syncTabLink" style="display:none;">
             <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:8px;">LINK DEVICE</div>
-            <div style="font-size:0.6rem;color:#888;margin-bottom:8px;">Already have a cloud account? Enter your credentials to restore progress on this device.</div>
-            <div>
-                <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">USERNAME</div>
-                <input id="syncLinkUsername" type="text" maxlength="10" placeholder="RUNNER99" style="width:100%;padding:10px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.75rem;outline:none;text-align:center;text-transform:uppercase;">
+            <div id="syncLinkStep1">
+                <div style="font-size:0.6rem;color:#888;margin-bottom:8px;">Already have a cloud account? Enter your credentials to verify.</div>
+                <div>
+                    <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">USERNAME</div>
+                    <input id="syncLinkUsername" type="text" maxlength="10" placeholder="RUNNER99" style="width:100%;padding:10px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.75rem;outline:none;text-align:center;text-transform:uppercase;">
+                </div>
+                <div>
+                    <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">BIRTHDAY</div>
+                    <div style="display:flex;gap:8px;">
+                        <select id="syncLinkMonth" style="flex:1;padding:10px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.75rem;outline:none;"></select>
+                        <select id="syncLinkYear" style="flex:1;padding:10px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.75rem;outline:none;"></select>
+                    </div>
+                </div>
+                <div>
+                    <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">PIN (6 digits)</div>
+                    <input id="syncLinkPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" style="width:100%;padding:10px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.75rem;outline:none;text-align:center;letter-spacing:2px;">
+                </div>
+                <button onclick="verifySyncCredentialsUI()" style="width:100%;padding:12px 0;background:linear-gradient(135deg,#333,#222);border:none;border-radius:8px;cursor:pointer;color:#aaa;font-weight:700;font-size:0.8rem;letter-spacing:1px;margin-top:6px;">✅ VERIFY CREDENTIALS</button>
             </div>
-            <div>
-                <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">BIRTHDAY (MMYY)</div>
-                <input id="syncLinkMmyy" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="0314" style="width:100%;padding:10px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.75rem;outline:none;text-align:center;letter-spacing:2px;">
+            <div id="syncLinkStep2" style="display:none;">
+                <div id="syncLinkPreview" style="background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.3);border-radius:8px;padding:10px;margin-bottom:10px;"></div>
+                <div style="display:flex;gap:8px;">
+                    <button onclick="cancelLinkDevice()" style="flex:1;padding:10px 0;background:linear-gradient(135deg,#555,#333);border:none;border-radius:8px;cursor:pointer;color:#ccc;font-weight:700;font-size:0.75rem;letter-spacing:1px;">CANCEL</button>
+                    <button onclick="confirmLinkDevice()" style="flex:1;padding:10px 0;background:linear-gradient(135deg,#0ff,#08f);border:none;border-radius:8px;cursor:pointer;color:#000;font-weight:700;font-size:0.75rem;letter-spacing:1px;">CONTINUE TO LINK</button>
+                </div>
             </div>
-            <div>
-                <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">PIN (6 digits)</div>
-                <input id="syncLinkPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" style="width:100%;padding:10px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.75rem;outline:none;text-align:center;letter-spacing:2px;">
+            <div id="syncLinkStep3" style="display:none;">
+                <div style="text-align:center;padding:20px;">
+                    <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:8px;">🔗 LINKING...</div>
+                    <div style="font-size:0.6rem;color:#888;">Restoring your cloud progress...</div>
+                </div>
             </div>
-            <button onclick="linkDevice()" style="width:100%;padding:12px 0;background:linear-gradient(135deg,#0ff,#08f);color:#000;font-weight:700;border:none;border-radius:8px;cursor:pointer;font-size:0.8rem;letter-spacing:1px;">LINK DEVICE</button>
-            <button onclick="verifySyncCredentialsUI()" style="width:100%;padding:8px 0;background:linear-gradient(135deg,#333,#222);border:none;border-radius:8px;cursor:pointer;color:#aaa;font-weight:700;font-size:0.7rem;letter-spacing:1px;margin-top:6px;">✅ VERIFY CREDENTIALS</button>
         </div>
         <div id="syncTabManage" style="display:none;">
             <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:8px;">MANAGE SYNC</div>

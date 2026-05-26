@@ -20,7 +20,7 @@ export function Engagement({ force }) {
       .catch(setErr);
   }, [range.value, force]);
 
-  if (err) return <ErrorState error={err} />;
+  if (err) return <ErrorState error={err} onRetry={() => { loadedAt.value = { ...loadedAt.value, engagement: 0 }; setErr(null); setD(null); }} />;
   if (!d) return <LoadingPane />;
 
   const displayTotal = (d.displayMode || []).reduce((s, r) => s + r.c, 0);

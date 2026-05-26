@@ -2,6 +2,7 @@
 // Cloudflare Worker + D1 for anonymous game metrics with HMAC anti-cheat
 
 import dashboardHtml from './dashboard.html';
+import dashboardBundle from './dashboard.bundle.js';
 
 const ALLOWED_TYPES = new Set([
   'session_start', 'heartbeat', 'level_start',
@@ -238,11 +239,13 @@ async function readJsonBody(request) {
 }
 
 // === Range helper: ?range=1d|2d|3d|7d|14d|31d|all ===
-function rangeStartTs(range) {
-  const now = Date.now();
+// Optional `before` param shifts the window: returns (before - duration) instead of (now - duration).
+// This enables "previous period" comparison queries without a new endpoint.
+function rangeStartTs(range, before) {
+  const anchor = before || Date.now();
   const map = { '1d': 86400000, '2d': 2*86400000, '3d': 3*86400000, '7d': 7*86400000, '14d': 14*86400000, '31d': 31*86400000 };
   if (range === 'all') return 0;
-  return now - (map[range] || map['2d']);
+  return anchor - (map[range] || map['2d']);
 }
 
 // === In-memory cache wrapper (per-isolate, ~5min TTL) ===
@@ -293,6 +296,20 @@ async function handleSession(request, env) {
   ).bind(token, pid, serverTs, expiresAt).run();
 
   return jsonResponse({ ok: true, token, expiresAt, serverTs }, 200, true);
+}
+
+// === Banned PID cache (per-isolate, 60s TTL) ===
+let _bannedPids = null;
+let _bannedPidsAt = 0;
+const BANNED_CACHE_TTL_MS = 60 * 1000;
+
+async function getBannedPids(env) {
+  const now = Date.now();
+  if (_bannedPids && now - _bannedPidsAt < BANNED_CACHE_TTL_MS) return _bannedPids;
+  const rows = await env.DB.prepare("SELECT pid FROM player_flags WHERE flag_type = 'banned'").all();
+  _bannedPids = new Set((rows && rows.results || []).map(r => r.pid));
+  _bannedPidsAt = now;
+  return _bannedPids;
 }
 
 async function validateAndInsertEvent(env, e, isOffline, request) {
@@ -362,6 +379,13 @@ async function validateAndInsertEvent(env, e, isOffline, request) {
     if (request.cf.timezone) augmented._tz = request.cf.timezone;
   }
 
+  // Check if PID is banned — force unverified
+  const bannedSet = await getBannedPids(env);
+  if (bannedSet.has(pid)) {
+    verified = 0;
+    augmented._banned = true;
+  }
+
   await env.DB.prepare(
     'INSERT INTO events (pid, name, type, level, data, client_ts, server_ts, offline, verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
@@ -415,13 +439,65 @@ async function handleEventsBatch(request, env) {
   return jsonResponse({ ok: true }, 200, true);
 }
 
-async function handleStats(env, range, force) {
-  const cacheKey = 'stats:' + range;
+async function handleStats(env, range, force, before) {
+  const cacheKey = 'stats:' + range + (before ? ':' + before : '');
   return cachedJson(cacheKey, async () => {
-    const now = Date.now();
+    const now = before || Date.now();
     const fiveMinAgo = now - ONLINE_WINDOW_MS;
-    const startTs = rangeStartTs(range);
+    const startTs = rangeStartTs(range, before);
     const HEARTBEAT_MIN = 1.5;
+
+    // Fast path: for 31d/all, try stats_daily first
+    if ((range === '31d' || range === 'all') && !before) {
+      const dateFrom = range === 'all' ? '2000-01-01' : new Date(startTs).toISOString().slice(0, 10);
+      const fastRow = await env.DB.prepare(
+        'SELECT SUM(starts) as starts, SUM(completes) as completes, SUM(deaths) as deaths, SUM(sessions) as sessions, SUM(heartbeats) as hb, SUM(gold_earned) as ge, SUM(silver_earned) as se FROM stats_daily WHERE level=99 AND date >= ?'
+      ).bind(dateFrom).first();
+
+      if (fastRow && fastRow.starts > 0) {
+        // We have aggregated data — use it for the heavy totals, supplement with live queries for real-time fields
+        const [onlineRow, activeRow, allPlayersRow, totalRow, verifiedRow] = await Promise.all([
+          env.DB.prepare('SELECT COUNT(DISTINCT pid) as o FROM events WHERE server_ts > ?').bind(fiveMinAgo).first(),
+          env.DB.prepare('SELECT COUNT(DISTINCT pid) as p FROM events WHERE server_ts > ?').bind(startTs).first(),
+          env.DB.prepare('SELECT COUNT(DISTINCT pid) as p FROM events').first(),
+          env.DB.prepare('SELECT COUNT(*) as c FROM events').first(),
+          env.DB.prepare('SELECT COUNT(*) as v FROM events WHERE verified = 1').first(),
+        ]);
+
+        // Daily breakdown from stats_daily
+        const dailyRows = await env.DB.prepare(
+          'SELECT date, starts + completes + deaths + sessions + heartbeats as c FROM stats_daily WHERE level=99 AND date >= ? ORDER BY date'
+        ).bind(dateFrom).all();
+        const dayCount = Math.min(31, Math.max(1, Math.ceil((now - startTs) / 86400000)));
+        const lastDays = new Array(dayCount).fill(0);
+        if (dailyRows && dailyRows.results) {
+          const baseDate = new Date(dateFrom).getTime();
+          for (const r of dailyRows.results) {
+            const idx = Math.floor((new Date(r.date).getTime() - baseDate) / 86400000);
+            if (idx >= 0 && idx < dayCount) lastDays[idx] = r.c;
+          }
+        }
+
+        return {
+          ok: true,
+          data: {
+            range,
+            totalEvents: totalRow ? totalRow.c : 0,
+            verified: verifiedRow ? verifiedRow.v : 0,
+            unverified: (totalRow ? totalRow.c : 0) - (verifiedRow ? verifiedRow.v : 0),
+            online: onlineRow ? onlineRow.o : 0,
+            activeInRange: activeRow ? activeRow.p : 0,
+            totalPlayers: allPlayersRow ? allPlayersRow.p : 0,
+            winMatches: fastRow.completes || 0,
+            deathMatches: fastRow.deaths || 0,
+            totalMinutes: Math.round((fastRow.hb || 0) * HEARTBEAT_MIN),
+            last7Days: lastDays,
+            generatedAt: now,
+            _fastPath: true,
+          },
+        };
+      }
+    }
 
     const [
       totalRow, verifiedRow, onlineRow,
@@ -544,10 +620,42 @@ async function handleStats(env, range, force) {
 }
 
 // === Per-level detailed stats (all 20 levels) ===
-async function handleStatsLevels(env, range, force) {
-  const cacheKey = 'levels:' + range;
+async function handleStatsLevels(env, range, force, before) {
+  const cacheKey = 'levels:' + range + (before ? ':' + before : '');
   return cachedJson(cacheKey, async () => {
-    const startTs = rangeStartTs(range);
+    const startTs = rangeStartTs(range, before);
+
+    // Fast path: for 31d/all, try stats_daily
+    if ((range === '31d' || range === 'all') && !before) {
+      const dateFrom = range === 'all' ? '2000-01-01' : new Date(startTs).toISOString().slice(0, 10);
+      const fastRows = await env.DB.prepare(
+        'SELECT level, SUM(starts) as starts, SUM(completes) as completes, SUM(deaths) as deaths, SUM(unique_players) as players, AVG(avg_ms) as avg_ms, AVG(p50_ms) as p50_ms FROM stats_daily WHERE level < 20 AND date >= ? GROUP BY level'
+      ).bind(dateFrom).all();
+
+      if (fastRows && fastRows.results && fastRows.results.length > 0) {
+        const levels = [];
+        const fastMap = {};
+        for (const r of fastRows.results) fastMap[r.level] = r;
+        for (let i = 0; i < 20; i++) {
+          const r = fastMap[i];
+          if (r) {
+            levels.push({
+              level: i, starts: r.starts || 0, completes: r.completes || 0, deaths: r.deaths || 0,
+              players: r.players || 0, avgMs: r.avg_ms ? Math.round(r.avg_ms) : null,
+              medianMs: r.p50_ms ? Math.round(r.p50_ms) : null,
+              completionRate: r.starts > 0 ? Math.round((r.completes / r.starts) * 100) : 0,
+              avgAttempts: r.completes > 0 ? Number((r.starts / r.completes).toFixed(2)) : null,
+              deathCauses: {}, passed: 0, stuck: 0, minMs: null, maxMs: null,
+              avgDeaths: null, avgGold: null, avgSilver: null, avgStyle: null, resurrects: 0,
+            });
+          } else {
+            levels.push({ level: i, starts: 0, completes: 0, deaths: 0, players: 0, avgMs: null, medianMs: null, completionRate: 0, avgAttempts: null, deathCauses: {}, passed: 0, stuck: 0, minMs: null, maxMs: null, avgDeaths: null, avgGold: null, avgSilver: null, avgStyle: null, resurrects: 0 });
+          }
+        }
+        return { ok: true, data: { range, levels, generatedAt: Date.now(), _fastPath: true } };
+      }
+    }
+
     const [starts, completes, deaths, completeAgg, deathCauses, passedRows, medianRows] = await Promise.all([
       env.DB.prepare("SELECT level, COUNT(*) as c FROM events WHERE type='level_start' AND level IS NOT NULL AND server_ts > ? GROUP BY level").bind(startTs).all(),
       env.DB.prepare("SELECT level, COUNT(*) as c, COUNT(DISTINCT pid) as players FROM events WHERE type='level_complete' AND level IS NOT NULL AND server_ts > ? GROUP BY level").bind(startTs).all(),
@@ -636,10 +744,10 @@ async function handleStatsLevels(env, range, force) {
 }
 
 // === Per-player ranking ===
-async function handleStatsPlayers(env, range, force) {
-  const cacheKey = 'players:' + range;
+async function handleStatsPlayers(env, range, force, before) {
+  const cacheKey = 'players:' + range + (before ? ':' + before : '');
   return cachedJson(cacheKey, async () => {
-    const startTs = rangeStartTs(range);
+    const startTs = rangeStartTs(range, before);
     const [topActive, topCompleters, topDiers, topGold, topChampions, topVerified, newList, retList, perseverance, recent] = await Promise.all([
       env.DB.prepare("SELECT pid, MAX(name) as name, COUNT(*) as events, MAX(server_ts) as last_seen FROM events WHERE server_ts > ? GROUP BY pid HAVING name IS NOT NULL ORDER BY events DESC LIMIT 30").bind(startTs).all(),
       env.DB.prepare("SELECT pid, MAX(name) as name, COUNT(*) as completions, COUNT(DISTINCT level) as unique_levels FROM events WHERE type='level_complete' AND server_ts > ? GROUP BY pid HAVING name IS NOT NULL ORDER BY completions DESC LIMIT 30").bind(startTs).all(),
@@ -697,13 +805,14 @@ async function handleStatsPlayers(env, range, force) {
 }
 
 // === Sessions / funnel / hourly heat ===
-async function handleStatsSessions(env, range, force) {
-  const cacheKey = 'sessions:' + range;
+async function handleStatsSessions(env, range, force, before) {
+  // TODO Phase 4+: fast path via stats_daily for range='31d'/'all'
+  const cacheKey = 'sessions:' + range + (before ? ':' + before : '');
   return cachedJson(cacheKey, async () => {
-    const startTs = rangeStartTs(range);
+    const startTs = rangeStartTs(range, before);
     const HEARTBEAT_MIN = 1.5;
 
-    const [sessionsCount, funnel, hourly, daily, deathCauses, devices, sessionDurations] = await Promise.all([
+    const [sessionsCount, funnel, hourly, daily, deathCauses, devices, sessionDurations, dowHourly] = await Promise.all([
       env.DB.prepare("SELECT COUNT(*) as c FROM events WHERE type='session_start' AND server_ts > ?").bind(startTs).first(),
       env.DB.prepare("SELECT type, COUNT(*) as c FROM events WHERE type IN ('session_start','level_start','level_complete','level_death','purchase') AND server_ts > ? GROUP BY type").bind(startTs).all(),
       env.DB.prepare("SELECT CAST((server_ts / 3600000) % 24 AS INTEGER) as hr, COUNT(*) as c FROM events WHERE server_ts > ? GROUP BY hr").bind(startTs).all(),
@@ -726,6 +835,14 @@ async function handleStatsSessions(env, range, force) {
         )
         GROUP BY bucket
       `).bind(startTs).all(),
+      // Day-of-week × hour heatmap
+      env.DB.prepare(`
+        SELECT
+          CAST(strftime('%w', server_ts/1000, 'unixepoch') AS INTEGER) as dow,
+          CAST((server_ts / 3600000) % 24 AS INTEGER) as hr,
+          COUNT(*) as c
+        FROM events WHERE server_ts > ? GROUP BY dow, hr
+      `).bind(startTs).all(),
     ]);
 
     const funnelMap = {};
@@ -736,6 +853,16 @@ async function handleStatsSessions(env, range, force) {
 
     const durMap = { short: 0, medium: 0, long: 0 };
     if (sessionDurations && sessionDurations.results) for (const r of sessionDurations.results) durMap[r.bucket] = r.count;
+
+    // Build 7x24 dow heatmap
+    const dowHeatmap = Array.from({ length: 7 }, () => new Array(24).fill(0));
+    if (dowHourly && dowHourly.results) {
+      for (const r of dowHourly.results) {
+        if (r.dow >= 0 && r.dow < 7 && r.hr >= 0 && r.hr < 24) {
+          dowHeatmap[r.dow][r.hr] = r.c;
+        }
+      }
+    }
 
     return {
       ok: true,
@@ -748,6 +875,7 @@ async function handleStatsSessions(env, range, force) {
         deathCauses: (deathCauses && deathCauses.results) || [],
         devices: (devices && devices.results) || [],
         sessionDurations: durMap,
+        dowHeatmap,
         generatedAt: Date.now(),
       },
     };
@@ -755,9 +883,9 @@ async function handleStatsSessions(env, range, force) {
 }
 
 // === UI / PWA tracking ===
-async function handleStatsUI(env, range, force) {
-  return cachedJson('ui:' + range, async () => {
-    const startTs = rangeStartTs(range);
+async function handleStatsUI(env, range, force, before) {
+  return cachedJson('ui:' + range + (before ? ':' + before : ''), async () => {
+    const startTs = rangeStartTs(range, before);
     const [displayMode, pwaSupport, clicks, storeTabs, installFunnel] = await Promise.all([
       env.DB.prepare("SELECT JSON_EXTRACT(data,'$.display') as display, COUNT(*) as c, COUNT(DISTINCT pid) as players FROM events WHERE type='session_start' AND server_ts > ? GROUP BY display").bind(startTs).all(),
       env.DB.prepare("SELECT JSON_EXTRACT(data,'$.pwa') as pwa, COUNT(*) as c, COUNT(DISTINCT pid) as players FROM events WHERE type='session_start' AND server_ts > ? GROUP BY pwa").bind(startTs).all(),
@@ -781,9 +909,56 @@ async function handleStatsUI(env, range, force) {
 }
 
 // === Economy: time-series of gold/silver minted vs spent ===
-async function handleStatsEconomy(env, range, force) {
-  return cachedJson('economy:' + range, async () => {
-    const startTs = rangeStartTs(range);
+async function handleStatsEconomy(env, range, force, before) {
+  return cachedJson('economy:' + range + (before ? ':' + before : ''), async () => {
+    const startTs = rangeStartTs(range, before);
+
+    // Fast path: for 31d/all, use stats_daily for time-series
+    if ((range === '31d' || range === 'all') && !before) {
+      const dateFrom = range === 'all' ? '2000-01-01' : new Date(startTs).toISOString().slice(0, 10);
+      const fastRows = await env.DB.prepare(
+        'SELECT date, gold_earned, silver_earned, gold_spent, silver_spent, sessions FROM stats_daily WHERE level=99 AND date >= ? ORDER BY date'
+      ).bind(dateFrom).all();
+
+      if (fastRows && fastRows.results && fastRows.results.length > 0) {
+        const dayCount = Math.min(31, fastRows.results.length);
+        const seriesArrays = { goldEarn: [], silverEarn: [], goldSpent: [], silverSpent: [], goldCirc: [], silverCirc: [] };
+        let cumGold = 0, cumSilver = 0, totalGE = 0, totalSE = 0, totalGS = 0, totalSS = 0, totalSessions = 0;
+        const recent = fastRows.results.slice(-dayCount);
+        for (const r of recent) {
+          seriesArrays.goldEarn.push(r.gold_earned || 0);
+          seriesArrays.silverEarn.push(r.silver_earned || 0);
+          seriesArrays.goldSpent.push(r.gold_spent || 0);
+          seriesArrays.silverSpent.push(r.silver_spent || 0);
+          cumGold += (r.gold_earned || 0) - (r.gold_spent || 0);
+          cumSilver += (r.silver_earned || 0) - (r.silver_spent || 0);
+          seriesArrays.goldCirc.push(cumGold);
+          seriesArrays.silverCirc.push(cumSilver);
+          totalGE += r.gold_earned || 0;
+          totalSE += r.silver_earned || 0;
+          totalGS += r.gold_spent || 0;
+          totalSS += r.silver_spent || 0;
+          totalSessions += r.sessions || 0;
+        }
+        return {
+          ok: true,
+          data: {
+            range,
+            totals: {
+              goldEarned: totalGE, silverEarned: totalSE, goldSpent: totalGS, silverSpent: totalSS,
+              circulatingGold: totalGE - totalGS, circulatingSilver: totalSE - totalSS,
+              sessions: totalSessions,
+              avgGoldPerSession: totalSessions > 0 ? Math.round(totalGE / totalSessions * 10) / 10 : 0,
+              avgSilverPerSession: totalSessions > 0 ? Math.round(totalSE / totalSessions * 10) / 10 : 0,
+            },
+            timeseries: seriesArrays,
+            topItems: [], byCategory: [], topSpenders: [],
+            generatedAt: Date.now(), _fastPath: true,
+          },
+        };
+      }
+    }
+
     const [goldEarned, silverEarned, goldSpent, silverSpent, topItems, byCategory, topSpenders, totals] = await Promise.all([
       env.DB.prepare(`SELECT CAST((server_ts - ?) / 86400000 AS INTEGER) as day, SUM(CAST(JSON_EXTRACT(data,'$.gold') AS REAL)) as v FROM events WHERE type='level_complete' AND verified=1 AND server_ts > ? GROUP BY day ORDER BY day`).bind(startTs, startTs).all(),
       env.DB.prepare(`SELECT CAST((server_ts - ?) / 86400000 AS INTEGER) as day, SUM(CAST(JSON_EXTRACT(data,'$.silver') AS REAL)) as v FROM events WHERE type='level_complete' AND verified=1 AND server_ts > ? GROUP BY day ORDER BY day`).bind(startTs, startTs).all(),
@@ -900,10 +1075,10 @@ async function handleFeedback(request, env) {
 }
 
 // === Daily Stage stats ===
-async function handleStatsDailyStage(env, range, force) {
-  const cacheKey = 'dailystage:' + range;
+async function handleStatsDailyStage(env, range, force, before) {
+  const cacheKey = 'dailystage:' + range + (before ? ':' + before : '');
   return cachedJson(cacheKey, async () => {
-    const startTs = rangeStartTs(range);
+    const startTs = rangeStartTs(range, before);
     const [
       startsRow, startPlayersRow,
       completesRow, completePlayersRow,
@@ -949,10 +1124,10 @@ async function handleStatsDailyStage(env, range, force) {
 }
 
 // === App Version stats ===
-async function handleStatsAppVersion(env, range, force) {
-  const cacheKey = 'appversion:' + range;
+async function handleStatsAppVersion(env, range, force, before) {
+  const cacheKey = 'appversion:' + range + (before ? ':' + before : '');
   return cachedJson(cacheKey, async () => {
-    const startTs = rangeStartTs(range);
+    const startTs = rangeStartTs(range, before);
     const [
       versionRows,
       totalEventsRow,
@@ -1006,7 +1181,7 @@ async function handleStatsFeedback(env, force) {
       recentRows,
     ] = await Promise.all([
       env.DB.prepare("SELECT COUNT(*) as c FROM events WHERE type='feedback'").first(),
-      env.DB.prepare("SELECT pid, name, data, client_ts, server_ts FROM events WHERE type='feedback' ORDER BY server_ts DESC LIMIT 50").all(),
+      env.DB.prepare("SELECT e.id, e.pid, e.name, e.data, e.client_ts, e.server_ts, fs.status, fs.notes FROM events e LEFT JOIN feedback_status fs ON fs.event_id = e.id WHERE e.type='feedback' ORDER BY e.server_ts DESC LIMIT 50").all(),
     ]);
 
     const items = [];
@@ -1015,6 +1190,7 @@ async function handleStatsFeedback(env, force) {
         let parsed = {};
         try { parsed = JSON.parse(r.data || '{}'); } catch (_) {}
         items.push({
+          id: r.id,
           pid: r.pid,
           name: r.name,
           subject: parsed.subject || '',
@@ -1022,6 +1198,8 @@ async function handleStatsFeedback(env, force) {
           content: parsed.content || '',
           clientTs: r.client_ts,
           serverTs: r.server_ts,
+          status: r.status || 'open',
+          notes: r.notes || '',
         });
       }
     }
@@ -1112,7 +1290,7 @@ async function handleStatsPlayer(env, pid) {
   const [
     profileRow, byTypeRows, byLevelRows, completionAggRow, deathAggRow,
     deathCausesRows, purchasesRows, latestStartRow, hourlyRows, sessionsRows,
-    countryRow, screenRow, langRow, recentRows,
+    countryRow, screenRow, langRow, recentRows, flagRow,
   ] = await Promise.all([
     env.DB.prepare("SELECT MAX(name) as name, MIN(server_ts) as first_seen, MAX(server_ts) as last_seen, COUNT(*) as total_events, SUM(CASE WHEN verified=1 THEN 1 ELSE 0 END) as verified, COUNT(DISTINCT level) as unique_levels FROM events WHERE pid = ?").bind(pid).first(),
     env.DB.prepare("SELECT type, COUNT(*) as c FROM events WHERE pid = ? GROUP BY type").bind(pid).all(),
@@ -1128,6 +1306,7 @@ async function handleStatsPlayer(env, pid) {
     env.DB.prepare("SELECT JSON_EXTRACT(data,'$.scr') as scr FROM events WHERE pid = ? AND type='session_start' ORDER BY server_ts DESC LIMIT 1").bind(pid).first(),
     env.DB.prepare("SELECT JSON_EXTRACT(data,'$.lang') as lang, JSON_EXTRACT(data,'$.ua') as ua FROM events WHERE pid = ? AND type='session_start' ORDER BY server_ts DESC LIMIT 1").bind(pid).first(),
     env.DB.prepare("SELECT type, level, data, server_ts FROM events WHERE pid = ? ORDER BY server_ts DESC LIMIT 30").bind(pid).all(),
+    env.DB.prepare("SELECT flag_type, reason, flagged_at FROM player_flags WHERE pid = ?").bind(pid).first(),
   ]);
 
   if (!profileRow || profileRow.total_events === 0) return errResponse('player not found', 404);
@@ -1243,6 +1422,7 @@ async function handleStatsPlayer(env, pid) {
       goldBalance: Math.round(totalGoldEarned - totalGoldSpent),
       silverBalance: Math.round(totalSilverEarned - totalSilverSpent),
       recent,
+      flag: flagRow ? { flag_type: flagRow.flag_type, reason: flagRow.reason, flagged_at: flagRow.flagged_at } : null,
       generatedAt: Date.now(),
     },
   });
@@ -1846,6 +2026,69 @@ async function handleSyncForgotPin(request, env) {
   return jsonResponse({ ok: true, newKeyHash }, 200, true);
 }
 
+// === Admin: Player flags ===
+
+async function handleAdminFlagPlayer(request, env) {
+  const body = await readJsonBody(request);
+  const { pid, reason } = body || {};
+  if (!pid || !PID_REGEX.test(pid)) return errResponse('invalid pid', 400);
+  await env.DB.prepare(
+    "INSERT INTO player_flags (pid, flag_type, reason, flagged_by, flagged_at) VALUES (?, 'review', ?, 'dashboard', ?) ON CONFLICT(pid) DO UPDATE SET flag_type='review', reason=excluded.reason, flagged_at=excluded.flagged_at"
+  ).bind(pid, reason || null, Date.now()).run();
+  return jsonResponse({ ok: true });
+}
+
+async function handleAdminUnflagPlayer(request, env) {
+  const body = await readJsonBody(request);
+  const { pid } = body || {};
+  if (!pid || !PID_REGEX.test(pid)) return errResponse('invalid pid', 400);
+  await env.DB.prepare("DELETE FROM player_flags WHERE pid = ?").bind(pid).run();
+  _bannedPids = null; // invalidate cache
+  return jsonResponse({ ok: true });
+}
+
+async function handleAdminBanPid(request, env) {
+  const body = await readJsonBody(request);
+  const { pid, reason } = body || {};
+  if (!pid || !PID_REGEX.test(pid)) return errResponse('invalid pid', 400);
+  await env.DB.prepare(
+    "INSERT INTO player_flags (pid, flag_type, reason, flagged_by, flagged_at) VALUES (?, 'banned', ?, 'dashboard', ?) ON CONFLICT(pid) DO UPDATE SET flag_type='banned', reason=excluded.reason, flagged_at=excluded.flagged_at"
+  ).bind(pid, reason || null, Date.now()).run();
+  _bannedPids = null; // invalidate cache
+  return jsonResponse({ ok: true });
+}
+
+async function handleAdminUnbanPid(request, env) {
+  const body = await readJsonBody(request);
+  const { pid } = body || {};
+  if (!pid || !PID_REGEX.test(pid)) return errResponse('invalid pid', 400);
+  await env.DB.prepare("DELETE FROM player_flags WHERE pid = ?").bind(pid).run();
+  _bannedPids = null; // invalidate cache
+  return jsonResponse({ ok: true });
+}
+
+async function handleAdminFeedbackMarkRead(request, env) {
+  const body = await readJsonBody(request);
+  const { eventId, status, notes } = body || {};
+  if (!eventId || typeof eventId !== 'number') return errResponse('eventId required', 400);
+  if (!['open', 'read', 'resolved'].includes(status)) return errResponse('status must be open|read|resolved', 400);
+  await env.DB.prepare(
+    "INSERT INTO feedback_status (event_id, status, notes, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(event_id) DO UPDATE SET status=excluded.status, notes=excluded.notes, updated_at=excluded.updated_at"
+  ).bind(eventId, status, notes || null, Date.now()).run();
+  // Invalidate feedback cache
+  _cache.delete('feedback:latest');
+  return jsonResponse({ ok: true });
+}
+
+async function handleStatsFlaggedPlayers(env, force) {
+  return cachedJson('flagged-players', async () => {
+    const rows = await env.DB.prepare(
+      "SELECT pf.pid, pf.flag_type, pf.reason, pf.flagged_at, MAX(e.name) as name, MAX(e.server_ts) as last_seen, COUNT(e.id) as events FROM player_flags pf LEFT JOIN events e ON e.pid = pf.pid GROUP BY pf.pid ORDER BY pf.flagged_at DESC"
+    ).all();
+    return { ok: true, data: { players: (rows && rows.results) || [] } };
+  }, force);
+}
+
 async function handleAdminSyncResetPin(request, env) {
   const body = await readJsonBody(request);
   const { keyHash, newPin } = body || {};
@@ -1889,6 +2132,204 @@ async function handleAdminSyncResetPin(request, env) {
   return jsonResponse({ ok: true, newKeyHash }, 200);
 }
 
+// === Search endpoint ===
+async function handleStatsSearch(env, url, force) {
+  let q = (url.searchParams.get('q') || '').trim();
+  const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit')) || 20, 1), 50);
+  if (q.length < 1 || q.length > 50) {
+    return jsonResponse({ ok: true, data: { players: [] } });
+  }
+  // Escape SQL LIKE wildcards in user input
+  const escaped = q.replace(/%/g, '\\%').replace(/_/g, '\\_');
+  const pattern = '%' + escaped.toLowerCase() + '%';
+  const cacheKey = 'search:' + q.toLowerCase();
+  const data = await cachedJson(cacheKey, async () => {
+    const rows = await env.DB.prepare(
+      "SELECT pid, MAX(name) as name, MAX(server_ts) as last_seen, COUNT(*) as events FROM events WHERE (LOWER(name) LIKE ? ESCAPE '\\' OR pid LIKE ? ESCAPE '\\') AND name IS NOT NULL GROUP BY pid ORDER BY last_seen DESC LIMIT ?"
+    ).bind(pattern, pattern, limit).all();
+    return { players: (rows && rows.results) || [] };
+  }, force);
+  return jsonResponse({ ok: true, data });
+}
+
+// === Pre-aggregation ===
+
+async function aggregateDailyStats(env, daysBack) {
+  const now = Date.now();
+  const target = new Date(now - daysBack * 86400000);
+  const dateUtc = target.toISOString().slice(0, 10); // YYYY-MM-DD
+  const dayStartDate = new Date(dateUtc + 'T00:00:00Z');
+  const dayStart = dayStartDate.getTime();
+  const dayEnd = dayStart + 86400000;
+
+  // Per-level aggregation
+  const rows = await env.DB.prepare(`
+    SELECT
+      level,
+      SUM(CASE WHEN type='level_start' THEN 1 ELSE 0 END) as starts,
+      SUM(CASE WHEN type='level_complete' THEN 1 ELSE 0 END) as completes,
+      SUM(CASE WHEN type='level_death' THEN 1 ELSE 0 END) as deaths,
+      COUNT(DISTINCT pid) as unique_players,
+      SUM(CASE WHEN type='session_start' THEN 1 ELSE 0 END) as sessions,
+      SUM(CASE WHEN type='heartbeat' THEN 1 ELSE 0 END) as heartbeats
+    FROM events
+    WHERE server_ts >= ? AND server_ts < ?
+    GROUP BY level
+  `).bind(dayStart, dayEnd).all();
+
+  // Economy data
+  const econRows = await env.DB.prepare(`
+    SELECT
+      level,
+      SUM(CASE WHEN type='level_complete' AND verified=1 THEN CAST(JSON_EXTRACT(data,'$.gold') AS REAL) ELSE 0 END) as gold_earned,
+      SUM(CASE WHEN type='level_complete' AND verified=1 THEN CAST(JSON_EXTRACT(data,'$.silver') AS REAL) ELSE 0 END) as silver_earned,
+      SUM(CASE WHEN type='purchase' AND JSON_EXTRACT(data,'$.currency')='gold' THEN CAST(JSON_EXTRACT(data,'$.cost') AS REAL) ELSE 0 END) as gold_spent,
+      SUM(CASE WHEN type='purchase' AND JSON_EXTRACT(data,'$.currency')='silver' THEN CAST(JSON_EXTRACT(data,'$.cost') AS REAL) ELSE 0 END) as silver_spent
+    FROM events
+    WHERE server_ts >= ? AND server_ts < ?
+    GROUP BY level
+  `).bind(dayStart, dayEnd).all();
+
+  // Completion times for p50/p95 (capped at 500 per level for speed)
+  const timeRows = await env.DB.prepare(`
+    SELECT level, CAST(JSON_EXTRACT(data,'$.time') AS REAL) as time
+    FROM events
+    WHERE type='level_complete' AND verified=1 AND server_ts >= ? AND server_ts < ?
+      AND CAST(JSON_EXTRACT(data,'$.time') AS REAL) >= 5000
+    ORDER BY level, time
+    LIMIT 10000
+  `).bind(dayStart, dayEnd).all();
+
+  // Build time arrays per level
+  const timesByLevel = {};
+  if (timeRows && timeRows.results) {
+    for (const r of timeRows.results) {
+      const k = r.level == null ? -1 : r.level;
+      if (!timesByLevel[k]) timesByLevel[k] = [];
+      timesByLevel[k].push(r.time);
+    }
+  }
+
+  function percentile(arr, p) {
+    if (!arr || arr.length === 0) return null;
+    const idx = Math.floor(arr.length * p);
+    return arr[Math.min(idx, arr.length - 1)];
+  }
+
+  // Build econ map
+  const econMap = {};
+  if (econRows && econRows.results) {
+    for (const r of econRows.results) econMap[r.level == null ? -1 : r.level] = r;
+  }
+
+  // Global totals
+  let globalStarts = 0, globalCompletes = 0, globalDeaths = 0, globalSessions = 0, globalHeartbeats = 0;
+  const globalPlayersRow = await env.DB.prepare('SELECT COUNT(DISTINCT pid) as c FROM events WHERE server_ts >= ? AND server_ts < ?').bind(dayStart, dayEnd).first();
+  const globalPlayers = globalPlayersRow ? globalPlayersRow.c : 0;
+
+  const computedAt = Date.now();
+  const stmts = [];
+
+  if (rows && rows.results) {
+    for (const r of rows.results) {
+      if (r.level == null) continue;
+      globalStarts += r.starts || 0;
+      globalCompletes += r.completes || 0;
+      globalDeaths += r.deaths || 0;
+      globalSessions += r.sessions || 0;
+      globalHeartbeats += r.heartbeats || 0;
+
+      const econ = econMap[r.level] || {};
+      const times = timesByLevel[r.level];
+      const avg = times && times.length > 0 ? times.reduce((a, b) => a + b, 0) / times.length : null;
+
+      stmts.push(env.DB.prepare(
+        'INSERT OR REPLACE INTO stats_daily (date, level, starts, completes, deaths, unique_players, avg_ms, p50_ms, p95_ms, gold_earned, silver_earned, gold_spent, silver_spent, sessions, heartbeats, computed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+      ).bind(
+        dateUtc, r.level, r.starts || 0, r.completes || 0, r.deaths || 0, r.unique_players || 0,
+        avg, percentile(times, 0.5), percentile(times, 0.95),
+        Math.round(econ.gold_earned || 0), Math.round(econ.silver_earned || 0),
+        Math.round(econ.gold_spent || 0), Math.round(econ.silver_spent || 0),
+        r.sessions || 0, r.heartbeats || 0, computedAt
+      ));
+    }
+  }
+
+  // Global row (level = NULL represented as -1 in PK since NULL can't be PK — use special value 99)
+  const allTimes = Object.values(timesByLevel).flat().sort((a, b) => a - b);
+  const globalEconRow = await env.DB.prepare(`
+    SELECT
+      SUM(CASE WHEN type='level_complete' AND verified=1 THEN CAST(JSON_EXTRACT(data,'$.gold') AS REAL) ELSE 0 END) as ge,
+      SUM(CASE WHEN type='level_complete' AND verified=1 THEN CAST(JSON_EXTRACT(data,'$.silver') AS REAL) ELSE 0 END) as se,
+      SUM(CASE WHEN type='purchase' AND JSON_EXTRACT(data,'$.currency')='gold' THEN CAST(JSON_EXTRACT(data,'$.cost') AS REAL) ELSE 0 END) as gs,
+      SUM(CASE WHEN type='purchase' AND JSON_EXTRACT(data,'$.currency')='silver' THEN CAST(JSON_EXTRACT(data,'$.cost') AS REAL) ELSE 0 END) as ss
+    FROM events WHERE server_ts >= ? AND server_ts < ?
+  `).bind(dayStart, dayEnd).first();
+
+  // Use level=99 as sentinel for "global" row (since NULL can't be part of composite PK)
+  stmts.push(env.DB.prepare(
+    'INSERT OR REPLACE INTO stats_daily (date, level, starts, completes, deaths, unique_players, avg_ms, p50_ms, p95_ms, gold_earned, silver_earned, gold_spent, silver_spent, sessions, heartbeats, computed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+  ).bind(
+    dateUtc, 99, globalStarts, globalCompletes, globalDeaths, globalPlayers,
+    allTimes.length > 0 ? allTimes.reduce((a, b) => a + b, 0) / allTimes.length : null,
+    percentile(allTimes, 0.5), percentile(allTimes, 0.95),
+    Math.round(globalEconRow?.ge || 0), Math.round(globalEconRow?.se || 0),
+    Math.round(globalEconRow?.gs || 0), Math.round(globalEconRow?.ss || 0),
+    globalSessions, globalHeartbeats, computedAt
+  ));
+
+  // Batch execute
+  if (stmts.length > 0) {
+    await env.DB.batch(stmts);
+  }
+  console.log('[AGGREGATE] date=' + dateUtc + ' rows=' + stmts.length);
+}
+
+async function computeRetention(env) {
+  const now = Date.now();
+  const twelveWeeksAgo = now - 12 * 7 * 86400000;
+
+  const cohortRows = await env.DB.prepare(`
+    SELECT pid, MIN(server_ts) as first_seen FROM events WHERE server_ts > ? GROUP BY pid
+  `).bind(twelveWeeksAgo).all();
+
+  if (!cohortRows || !cohortRows.results || cohortRows.results.length === 0) return;
+
+  const weekMap = {};
+  for (const r of cohortRows.results) {
+    const d = new Date(r.first_seen);
+    const jan1 = new Date(d.getFullYear(), 0, 1);
+    const weekNum = Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
+    const weekKey = d.getFullYear() + '-W' + String(weekNum).padStart(2, '0');
+    if (!weekMap[weekKey]) weekMap[weekKey] = [];
+    weekMap[weekKey].push(r);
+  }
+
+  const stmts = [];
+  const computedAt = Date.now();
+  for (const [week, members] of Object.entries(weekMap)) {
+    let d1 = 0, d7 = 0, d30 = 0;
+    for (const m of members) {
+      const row = await env.DB.prepare(`
+        SELECT
+          EXISTS(SELECT 1 FROM events WHERE pid=? AND server_ts>=? AND server_ts<?) as d1,
+          EXISTS(SELECT 1 FROM events WHERE pid=? AND server_ts>=? AND server_ts<?) as d7,
+          EXISTS(SELECT 1 FROM events WHERE pid=? AND server_ts>=? AND server_ts<?) as d30
+      `).bind(
+        m.pid, m.first_seen + 86400000, m.first_seen + 2 * 86400000,
+        m.pid, m.first_seen + 6 * 86400000, m.first_seen + 8 * 86400000,
+        m.pid, m.first_seen + 29 * 86400000, m.first_seen + 31 * 86400000
+      ).first();
+      if (row) { if (row.d1) d1++; if (row.d7) d7++; if (row.d30) d30++; }
+    }
+    stmts.push(env.DB.prepare(
+      'INSERT OR REPLACE INTO retention_daily (cohort_week, cohort_size, d1_retained, d7_retained, d30_retained, computed_at) VALUES (?,?,?,?,?,?)'
+    ).bind(week, members.length, d1, d7, d30, computedAt));
+  }
+  if (stmts.length > 0) await env.DB.batch(stmts);
+  console.log('[RETENTION] computed ' + stmts.length + ' cohort weeks');
+}
+
 // === Cron handler ===
 
 async function handleCron(env) {
@@ -1915,6 +2356,581 @@ async function handleCron(env) {
   console.log('[CRON] Remaining sessions:', sessionsResult?.count ?? 0);
   console.log('[CRON] Total events:', eventsResult?.count ?? 0);
   console.log('[CRON] Events older than 90 days:', oldEventsResult?.count ?? 0);
+
+  // Phase 4: Aggregate daily stats
+  try {
+    await aggregateDailyStats(env, 0); // today (partial, refreshed hourly)
+    await aggregateDailyStats(env, 1); // yesterday
+  } catch (e) {
+    console.log('[CRON] aggregation error:', e.message);
+  }
+
+  // Once daily at 1am UTC: recompute last 7 days + retention
+  const hour = new Date(now).getUTCHours();
+  if (hour === 1) {
+    try {
+      for (let d = 2; d <= 7; d++) await aggregateDailyStats(env, d);
+      await computeRetention(env);
+    } catch (e) {
+      console.log('[CRON] daily recompute error:', e.message);
+    }
+  }
+}
+
+// === Retention cohorts ===
+async function handleStatsRetention(env, range, force, before) {
+  // TODO Phase 4+: fast path via retention_daily table
+  const cacheKey = 'retention:' + range + '|' + (before || 0);
+  return cachedJson(cacheKey, async () => {
+    // Always look back 12 weeks for cohorts regardless of range
+    const twelveWeeksAgo = (before || Date.now()) - 12 * 7 * 86400000;
+
+    // Step 1: Get cohort assignments (first_seen per pid, bucketed by ISO week)
+    const cohortRows = await env.DB.prepare(`
+      SELECT pid, MIN(server_ts) as first_seen
+      FROM events
+      WHERE server_ts > ?
+      GROUP BY pid
+    `).bind(twelveWeeksAgo).all();
+
+    if (!cohortRows || !cohortRows.results || cohortRows.results.length === 0) {
+      return { ok: true, data: { cohorts: [] } };
+    }
+
+    // Bucket into weeks
+    const weekMap = {}; // week_str -> [{pid, first_seen}]
+    for (const r of cohortRows.results) {
+      const d = new Date(r.first_seen);
+      const jan1 = new Date(d.getFullYear(), 0, 1);
+      const weekNum = Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
+      const weekKey = d.getFullYear() + '-W' + String(weekNum).padStart(2, '0');
+      if (!weekMap[weekKey]) weekMap[weekKey] = [];
+      weekMap[weekKey].push({ pid: r.pid, first_seen: r.first_seen });
+    }
+
+    // Step 2: For each cohort, check retention windows
+    const cohorts = [];
+    const sortedWeeks = Object.keys(weekMap).sort();
+
+    for (const week of sortedWeeks) {
+      const members = weekMap[week];
+      const cohort_size = members.length;
+      let d1 = 0, d7 = 0, d30 = 0;
+
+      // Batch check: for each member, check if they have events in the retention windows
+      for (const m of members) {
+        const d1Start = m.first_seen + 24 * 3600000;
+        const d1End = m.first_seen + 48 * 3600000;
+        const d7Start = m.first_seen + 6 * 86400000;
+        const d7End = m.first_seen + 8 * 86400000;
+        const d30Start = m.first_seen + 29 * 86400000;
+        const d30End = m.first_seen + 31 * 86400000;
+
+        const row = await env.DB.prepare(`
+          SELECT
+            EXISTS(SELECT 1 FROM events WHERE pid=? AND server_ts>=? AND server_ts<?) as d1,
+            EXISTS(SELECT 1 FROM events WHERE pid=? AND server_ts>=? AND server_ts<?) as d7,
+            EXISTS(SELECT 1 FROM events WHERE pid=? AND server_ts>=? AND server_ts<?) as d30
+        `).bind(m.pid, d1Start, d1End, m.pid, d7Start, d7End, m.pid, d30Start, d30End).first();
+
+        if (row) {
+          if (row.d1) d1++;
+          if (row.d7) d7++;
+          if (row.d30) d30++;
+        }
+      }
+
+      cohorts.push({
+        week,
+        cohort_size,
+        d1, d7, d30,
+        d1_pct: cohort_size > 0 ? Math.round((d1 / cohort_size) * 100) : 0,
+        d7_pct: cohort_size > 0 ? Math.round((d7 / cohort_size) * 100) : 0,
+        d30_pct: cohort_size > 0 ? Math.round((d30 / cohort_size) * 100) : 0,
+      });
+    }
+
+    return { ok: true, data: { cohorts } };
+  }, force);
+}
+
+// === Onboarding funnel ===
+async function handleStatsFunnel(env, range, force, before) {
+  const cacheKey = 'funnel:' + range + '|' + (before || 0);
+  return cachedJson(cacheKey, async () => {
+    const startTs = rangeStartTs(range, before);
+    const FIRST_SESSION_WINDOW = 30 * 60 * 1000; // 30 minutes
+
+    // Stage 1: pids whose first_seen is in range
+    const s1 = await env.DB.prepare(`
+      SELECT pid, MIN(server_ts) as first_seen FROM events GROUP BY pid HAVING first_seen > ?
+    `).bind(startTs).all();
+
+    const newPids = (s1 && s1.results) || [];
+    if (newPids.length === 0) {
+      return { ok: true, data: { stages: [
+        { key: 'session_start', label: 'New Players', count: 0, drop_pct: 0, conversion_pct: 100 },
+        { key: 'name_set', label: 'Named', count: 0, drop_pct: 0, conversion_pct: 0 },
+        { key: 'first_level_start', label: 'Started Lvl 1', count: 0, drop_pct: 0, conversion_pct: 0 },
+        { key: 'first_level_complete', label: 'Completed Lvl 1', count: 0, drop_pct: 0, conversion_pct: 0 },
+        { key: 'next_day_return', label: 'Next-Day Return', count: 0, drop_pct: 0, conversion_pct: 0 },
+      ] } };
+    }
+
+    const pidSet = new Set(newPids.map(r => r.pid));
+    const pidFirstSeen = {};
+    for (const r of newPids) pidFirstSeen[r.pid] = r.first_seen;
+
+    // Stage 2: name_set
+    const s2 = await env.DB.prepare(`
+      SELECT DISTINCT pid FROM events WHERE type='name_set' AND server_ts > ?
+    `).bind(startTs).all();
+    const namedPids = new Set(((s2 && s2.results) || []).filter(r => pidSet.has(r.pid)).map(r => r.pid));
+
+    // Stage 3: started level 0 within first session (30 min of first_seen)
+    const s3 = await env.DB.prepare(`
+      SELECT DISTINCT pid FROM events WHERE type='level_start' AND level=0 AND server_ts > ?
+    `).bind(startTs).all();
+    const startedPids = new Set(((s3 && s3.results) || []).filter(r =>
+      namedPids.has(r.pid)
+    ).map(r => r.pid));
+
+    // Stage 4: completed level 0 within first session
+    const s4 = await env.DB.prepare(`
+      SELECT DISTINCT pid FROM events WHERE type='level_complete' AND level=0 AND server_ts > ?
+    `).bind(startTs).all();
+    const completedPids = new Set(((s4 && s4.results) || []).filter(r =>
+      startedPids.has(r.pid)
+    ).map(r => r.pid));
+
+    // Stage 5: next-day return (active 24-48h after first_seen)
+    let nextDayCount = 0;
+    for (const pid of completedPids) {
+      const fs = pidFirstSeen[pid];
+      const row = await env.DB.prepare(`
+        SELECT 1 FROM events WHERE pid=? AND server_ts>=? AND server_ts<? LIMIT 1
+      `).bind(pid, fs + 86400000, fs + 2 * 86400000).first();
+      if (row) nextDayCount++;
+    }
+
+    const counts = [pidSet.size, namedPids.size, startedPids.size, completedPids.size, nextDayCount];
+    const labels = ['New Players', 'Named', 'Started Lvl 1', 'Completed Lvl 1', 'Next-Day Return'];
+    const keys = ['session_start', 'name_set', 'first_level_start', 'first_level_complete', 'next_day_return'];
+
+    const stages = counts.map((count, i) => ({
+      key: keys[i],
+      label: labels[i],
+      count,
+      drop_pct: i > 0 && counts[i - 1] > 0 ? Math.round((1 - count / counts[i - 1]) * 100) : 0,
+      conversion_pct: i > 0 && counts[i - 1] > 0 ? Math.round((count / counts[i - 1]) * 100) : 100,
+    }));
+
+    return { ok: true, data: { stages } };
+  }, force);
+}
+
+// === Death cause × level matrix ===
+async function handleStatsDeathMatrix(env, range, force, before) {
+  const cacheKey = 'deathmatrix:' + range + '|' + (before || 0);
+  return cachedJson(cacheKey, async () => {
+    const startTs = rangeStartTs(range, before);
+    const rows = await env.DB.prepare(`
+      SELECT level, JSON_EXTRACT(data,'$.cause') as cause, COUNT(*) as c
+      FROM events
+      WHERE type='level_death' AND level IS NOT NULL AND server_ts > ?
+      GROUP BY level, cause
+    `).bind(startTs).all();
+
+    const allCausesSet = new Set();
+    const levelMap = {};
+    if (rows && rows.results) {
+      for (const r of rows.results) {
+        const cause = r.cause || 'unknown';
+        allCausesSet.add(cause);
+        if (!levelMap[r.level]) levelMap[r.level] = { level: r.level, total: 0, causes: {} };
+        levelMap[r.level].causes[cause] = r.c;
+        levelMap[r.level].total += r.c;
+      }
+    }
+
+    const levels = [];
+    for (let i = 0; i < 20; i++) {
+      levels.push(levelMap[i] || { level: i, total: 0, causes: {} });
+    }
+
+    return { ok: true, data: { levels, allCauses: Array.from(allCausesSet).sort() } };
+  }, force);
+}
+
+// === Geographic aggregation ===
+async function handleStatsGeo(env, range, force, before) {
+  const cacheKey = 'geo:' + range + '|' + (before || 0);
+  return cachedJson(cacheKey, async () => {
+    const startTs = rangeStartTs(range, before);
+
+    const countryRows = await env.DB.prepare(`
+      SELECT
+        JSON_EXTRACT(data,'$._cc') as cc,
+        COUNT(*) as sessions,
+        COUNT(DISTINCT pid) as players,
+        SUM(CASE WHEN type='level_complete' THEN 1 ELSE 0 END) as completes,
+        SUM(CASE WHEN type='level_death' THEN 1 ELSE 0 END) as deaths
+      FROM events
+      WHERE server_ts > ? AND JSON_EXTRACT(data,'$._cc') IS NOT NULL
+      GROUP BY cc
+      ORDER BY players DESC
+      LIMIT 50
+    `).bind(startTs).all();
+
+    const countries = ((countryRows && countryRows.results) || []).map(r => ({
+      cc: r.cc,
+      sessions: r.sessions,
+      players: r.players,
+      completes: r.completes,
+      deaths: r.deaths,
+      completion_rate: (r.completes + r.deaths) > 0 ? Math.round((r.completes / (r.completes + r.deaths)) * 100) : 0,
+    }));
+
+    // Top 5 countries → region breakdown
+    const top5 = countries.slice(0, 5).map(c => c.cc);
+    const regions = {};
+    if (top5.length > 0) {
+      const regionRows = await env.DB.prepare(`
+        SELECT
+          JSON_EXTRACT(data,'$._cc') as cc,
+          JSON_EXTRACT(data,'$._region') as region,
+          COUNT(DISTINCT pid) as players,
+          COUNT(*) as sessions
+        FROM events
+        WHERE server_ts > ? AND JSON_EXTRACT(data,'$._cc') IN (${top5.map(() => '?').join(',')}) AND JSON_EXTRACT(data,'$._region') IS NOT NULL
+        GROUP BY cc, region
+        ORDER BY players DESC
+      `).bind(startTs, ...top5).all();
+
+      if (regionRows && regionRows.results) {
+        for (const r of regionRows.results) {
+          if (!regions[r.cc]) regions[r.cc] = [];
+          regions[r.cc].push({ region: r.region, players: r.players, sessions: r.sessions });
+        }
+      }
+    }
+
+    return { ok: true, data: { countries, regions } };
+  }, force);
+}
+
+// === Completion time histogram ===
+async function handleStatsTimeDistribution(env, range, force, before, level) {
+  const cacheKey = 'timedist:' + level + ':' + range + '|' + (before || 0);
+  return cachedJson(cacheKey, async () => {
+    const startTs = rangeStartTs(range, before);
+    const rows = await env.DB.prepare(`
+      SELECT CAST(JSON_EXTRACT(data,'$.time') AS REAL) as time
+      FROM events
+      WHERE type='level_complete' AND verified=1 AND level=? AND server_ts > ?
+        AND CAST(JSON_EXTRACT(data,'$.time') AS REAL) >= 5000
+        AND CAST(JSON_EXTRACT(data,'$.time') AS REAL) <= 600000
+      LIMIT 5000
+    `).bind(level, startTs).all();
+
+    const times = ((rows && rows.results) || []).map(r => r.time).filter(t => t != null).sort((a, b) => a - b);
+    if (times.length === 0) {
+      return { ok: true, data: { level, buckets: [], total: 0, p25: null, p50: null, p75: null, p99: null } };
+    }
+
+    const total = times.length;
+    const p25 = times[Math.floor(total * 0.25)];
+    const p50 = times[Math.floor(total * 0.50)];
+    const p75 = times[Math.floor(total * 0.75)];
+    const p99 = times[Math.min(total - 1, Math.floor(total * 0.99))];
+
+    // Build 20 buckets between min and p99
+    const minT = times[0];
+    const maxT = p99;
+    const bucketWidth = (maxT - minT) / 20;
+    const buckets = [];
+    for (let i = 0; i < 20; i++) {
+      const from_ms = Math.round(minT + i * bucketWidth);
+      const to_ms = Math.round(minT + (i + 1) * bucketWidth);
+      const count = times.filter(t => t >= from_ms && (i === 19 ? t <= to_ms : t < to_ms)).length;
+      buckets.push({ from_ms, to_ms, count });
+    }
+
+    return { ok: true, data: { level, buckets, total, p25: Math.round(p25), p50: Math.round(p50), p75: Math.round(p75), p99: Math.round(p99) } };
+  }, force);
+}
+
+// === Champion progression funnel ===
+async function handleStatsChampionFunnel(env, range, force, before) {
+  const cacheKey = 'champfunnel:' + range + '|' + (before || 0);
+  return cachedJson(cacheKey, async () => {
+    const startTs = rangeStartTs(range, before);
+
+    // Stage 1: cohort = pids with first_seen in range
+    const cohortRows = await env.DB.prepare(`
+      SELECT pid, MIN(server_ts) as first_seen FROM events GROUP BY pid HAVING first_seen > ?
+    `).bind(startTs).all();
+
+    const cohort = (cohortRows && cohortRows.results) || [];
+    if (cohort.length === 0) {
+      return { ok: true, data: { stages: [
+        { key: 'cohort', label: 'New Players', count: 0, conversion_pct: 100 },
+        { key: 'd1_retained', label: 'D1 Retained', count: 0, conversion_pct: 0 },
+        { key: 'cleared_5', label: 'Cleared 5+ Levels', count: 0, conversion_pct: 0 },
+        { key: 'cleared_10', label: 'Cleared 10+ Levels', count: 0, conversion_pct: 0 },
+        { key: 'cleared_15', label: 'Cleared 15+ Levels', count: 0, conversion_pct: 0 },
+        { key: 'champion', label: 'Champion (20)', count: 0, conversion_pct: 0 },
+      ], medianTimeToChampionMs: null } };
+    }
+
+    const pidFirstSeen = {};
+    for (const r of cohort) pidFirstSeen[r.pid] = r.first_seen;
+    const cohortPids = cohort.map(r => r.pid);
+
+    // Stage 2: D1 retained
+    let d1Pids = [];
+    for (const pid of cohortPids) {
+      const fs = pidFirstSeen[pid];
+      const row = await env.DB.prepare(`
+        SELECT 1 FROM events WHERE pid=? AND server_ts>=? AND server_ts<? LIMIT 1
+      `).bind(pid, fs + 86400000, fs + 2 * 86400000).first();
+      if (row) d1Pids.push(pid);
+    }
+
+    // Stages 3-6: unique levels completed per pid (from d1 retained set)
+    const levelCounts = {};
+    if (d1Pids.length > 0) {
+      for (const pid of d1Pids) {
+        const row = await env.DB.prepare(`
+          SELECT COUNT(DISTINCT level) as c FROM events WHERE pid=? AND type='level_complete'
+        `).bind(pid).first();
+        levelCounts[pid] = row ? row.c : 0;
+      }
+    }
+
+    const cleared5 = d1Pids.filter(p => levelCounts[p] >= 5);
+    const cleared10 = cleared5.filter(p => levelCounts[p] >= 10);
+    const cleared15 = cleared10.filter(p => levelCounts[p] >= 15);
+    const champions = cleared15.filter(p => levelCounts[p] >= 20);
+
+    // Median time-to-champion
+    let medianTimeToChampionMs = null;
+    if (champions.length > 0) {
+      const ttcList = [];
+      for (const pid of champions) {
+        const row = await env.DB.prepare(`
+          SELECT MAX(server_ts) as last_complete FROM events WHERE pid=? AND type='level_complete'
+        `).bind(pid).first();
+        if (row && row.last_complete) {
+          ttcList.push(row.last_complete - pidFirstSeen[pid]);
+        }
+      }
+      if (ttcList.length > 0) {
+        ttcList.sort((a, b) => a - b);
+        medianTimeToChampionMs = ttcList[Math.floor(ttcList.length / 2)];
+      }
+    }
+
+    const counts = [cohortPids.length, d1Pids.length, cleared5.length, cleared10.length, cleared15.length, champions.length];
+    const keys = ['cohort', 'd1_retained', 'cleared_5', 'cleared_10', 'cleared_15', 'champion'];
+    const labels = ['New Players', 'D1 Retained', 'Cleared 5+ Levels', 'Cleared 10+ Levels', 'Cleared 15+ Levels', 'Champion (20)'];
+
+    const stages = counts.map((count, i) => ({
+      key: keys[i],
+      label: labels[i],
+      count,
+      conversion_pct: i > 0 && counts[i - 1] > 0 ? Math.round((count / counts[i - 1]) * 100) : 100,
+    }));
+
+    return { ok: true, data: { stages, medianTimeToChampionMs } };
+  }, force);
+}
+
+// === Admin: backfill aggregation ===
+async function handleAdminAggregate(request, env) {
+  const url = new URL(request.url);
+  const days = Math.min(Math.max(parseInt(url.searchParams.get('days')) || 30, 1), 90);
+  const results = [];
+  for (let d = 0; d < days; d++) {
+    try {
+      await aggregateDailyStats(env, d);
+      results.push({ day: d, ok: true });
+    } catch (e) {
+      results.push({ day: d, ok: false, error: e.message });
+    }
+  }
+  // Also compute retention
+  try { await computeRetention(env); } catch (_) {}
+  return jsonResponse({ ok: true, days, results });
+}
+
+// === Live feed polling endpoint ===
+// NOTE: Cloudflare Workers free plan has a 30s response time limit, making true SSE infeasible.
+// We implement a polling fallback: client polls every 2s with ?since=<ts> param.
+// The client sends the last known server_ts and receives only newer events.
+async function handleFeedStream(env, url) {
+  const since = parseInt(url.searchParams.get('since')) || (Date.now() - 10000);
+  const limit = Math.min(parseInt(url.searchParams.get('limit')) || 50, 200);
+
+  const rows = await env.DB.prepare(
+    'SELECT id, pid, name, type, level, data, server_ts, verified FROM events WHERE server_ts > ? ORDER BY server_ts ASC LIMIT ?'
+  ).bind(since, limit).all();
+
+  const events = (rows && rows.results) || [];
+  const nextSince = events.length > 0 ? Math.max(...events.map(e => e.server_ts)) : since;
+
+  return jsonResponse({
+    ok: true,
+    data: { events, nextSince, serverTs: Date.now() },
+  });
+}
+
+// === Anomaly detection ===
+async function handleAnomalies(env, force) {
+  return cachedJson('anomalies', async () => {
+    const now = Date.now();
+    const alerts = [];
+    let alertId = 0;
+
+    // Use stats_daily for fast lookups
+    const today = new Date(now).toISOString().slice(0, 10);
+    const d7ago = new Date(now - 7 * 86400000).toISOString().slice(0, 10);
+    const d35ago = new Date(now - 35 * 86400000).toISOString().slice(0, 10);
+
+    // Check if stats_daily has data
+    const hasData = await env.DB.prepare('SELECT COUNT(*) as c FROM stats_daily WHERE date >= ?').bind(d35ago).first();
+    if (!hasData || hasData.c === 0) {
+      return { ok: true, data: { alerts: [], computedAt: now, note: 'No aggregated data yet. Run /admin/aggregate to backfill.' } };
+    }
+
+    // Per-level anomalies
+    for (let level = 0; level < 20; level++) {
+      // Recent 7 days
+      const recent = await env.DB.prepare(
+        'SELECT SUM(starts) as starts, SUM(completes) as completes, SUM(deaths) as deaths, AVG(avg_ms) as avg_ms FROM stats_daily WHERE level=? AND date >= ? AND date <= ?'
+      ).bind(level, d7ago, today).first();
+
+      // Baseline: days 8-35
+      const baseline = await env.DB.prepare(
+        'SELECT SUM(starts) as starts, SUM(completes) as completes, SUM(deaths) as deaths, AVG(avg_ms) as avg_ms FROM stats_daily WHERE level=? AND date >= ? AND date < ?'
+      ).bind(level, d35ago, d7ago).first();
+
+      if (!recent || !baseline || !baseline.starts || baseline.starts < 5) continue;
+
+      const recentCR = recent.starts > 0 ? recent.completes / recent.starts : 0;
+      const baselineCR = baseline.starts > 0 ? baseline.completes / baseline.starts : 0;
+
+      // Daily completion rates for stddev
+      const dailyRows = await env.DB.prepare(
+        'SELECT starts, completes FROM stats_daily WHERE level=? AND date >= ? AND date < ? AND starts > 0'
+      ).bind(level, d35ago, d7ago).all();
+
+      let stddev = 0;
+      if (dailyRows && dailyRows.results && dailyRows.results.length > 1) {
+        const rates = dailyRows.results.map(r => r.completes / r.starts);
+        const mean = rates.reduce((a, b) => a + b, 0) / rates.length;
+        const variance = rates.reduce((a, r) => a + (r - mean) ** 2, 0) / rates.length;
+        stddev = Math.sqrt(variance);
+      }
+
+      // Completion rate drop
+      if (baselineCR > 0 && recentCR < baselineCR - 2 * stddev && stddev > 0) {
+        const dropPct = Math.round((1 - recentCR / baselineCR) * 100);
+        const severity = dropPct > 50 ? 'high' : dropPct > 25 ? 'medium' : 'low';
+        alerts.push({
+          id: ++alertId, severity, type: 'completion_rate_drop',
+          message: `Level ${level + 1}: completion rate dropped ${dropPct}%`,
+          level, value: Math.round(recentCR * 100), baseline: Math.round(baselineCR * 100),
+          sigma: stddev > 0 ? Math.round((baselineCR - recentCR) / stddev * 10) / 10 : 0,
+          since: d7ago,
+        });
+      }
+
+      // Death rate spike
+      const recentDR = recent.starts > 0 ? recent.deaths / recent.starts : 0;
+      const baselineDR = baseline.starts > 0 ? baseline.deaths / baseline.starts : 0;
+      if (baselineDR > 0 && dailyRows && dailyRows.results) {
+        const deathDailyRows = await env.DB.prepare(
+          'SELECT starts, deaths FROM stats_daily WHERE level=? AND date >= ? AND date < ? AND starts > 0'
+        ).bind(level, d35ago, d7ago).all();
+        if (deathDailyRows && deathDailyRows.results && deathDailyRows.results.length > 1) {
+          const dRates = deathDailyRows.results.map(r => r.deaths / r.starts);
+          const dMean = dRates.reduce((a, b) => a + b, 0) / dRates.length;
+          const dVar = dRates.reduce((a, r) => a + (r - dMean) ** 2, 0) / dRates.length;
+          const dStd = Math.sqrt(dVar);
+          if (dStd > 0 && recentDR > dMean + 3 * dStd) {
+            alerts.push({
+              id: ++alertId, severity: 'medium', type: 'death_rate_spike',
+              message: `Level ${level + 1}: death rate spiked (${Math.round(recentDR * 100)}% vs ${Math.round(baselineDR * 100)}% baseline)`,
+              level, value: Math.round(recentDR * 100), baseline: Math.round(baselineDR * 100),
+              sigma: Math.round((recentDR - dMean) / dStd * 10) / 10, since: d7ago,
+            });
+          }
+        }
+      }
+
+      // Avg time slowdown >25%
+      if (recent.avg_ms && baseline.avg_ms && baseline.avg_ms > 0) {
+        const slowdown = (recent.avg_ms - baseline.avg_ms) / baseline.avg_ms;
+        if (slowdown > 0.25) {
+          alerts.push({
+            id: ++alertId, severity: 'low', type: 'avg_time_slowdown',
+            message: `Level ${level + 1}: avg completion time ${Math.round(slowdown * 100)}% slower`,
+            level, value: Math.round(recent.avg_ms), baseline: Math.round(baseline.avg_ms),
+            sigma: 0, since: d7ago,
+          });
+        }
+      }
+    }
+
+    // Global: verified % drop
+    const recentVerified = await env.DB.prepare(
+      "SELECT COUNT(*) as total, SUM(CASE WHEN verified=1 THEN 1 ELSE 0 END) as v FROM events WHERE server_ts >= ?"
+    ).bind(now - 7 * 86400000).first();
+    const baselineVerified = await env.DB.prepare(
+      "SELECT COUNT(*) as total, SUM(CASE WHEN verified=1 THEN 1 ELSE 0 END) as v FROM events WHERE server_ts >= ? AND server_ts < ?"
+    ).bind(now - 35 * 86400000, now - 7 * 86400000).first();
+
+    if (recentVerified && baselineVerified && recentVerified.total > 10 && baselineVerified.total > 10) {
+      const recentPct = recentVerified.v / recentVerified.total * 100;
+      const baselinePct = baselineVerified.v / baselineVerified.total * 100;
+      const drop = baselinePct - recentPct;
+      if (drop > 5) {
+        const severity = drop > 10 ? 'high' : 'medium';
+        alerts.push({
+          id: ++alertId, severity, type: 'verified_pct_drop',
+          message: `Verified event % dropped ${Math.round(drop)}pp (${Math.round(recentPct)}% vs ${Math.round(baselinePct)}%)`,
+          value: Math.round(recentPct), baseline: Math.round(baselinePct), sigma: 0, since: d7ago,
+        });
+      }
+    }
+
+    // Global: DAU drop
+    const recentDAU = await env.DB.prepare(
+      'SELECT AVG(unique_players) as avg_dau FROM stats_daily WHERE level=99 AND date >= ?'
+    ).bind(d7ago).first();
+    const baselineDAU = await env.DB.prepare(
+      'SELECT AVG(unique_players) as avg_dau FROM stats_daily WHERE level=99 AND date >= ? AND date < ?'
+    ).bind(d35ago, d7ago).first();
+
+    if (recentDAU && baselineDAU && baselineDAU.avg_dau > 0) {
+      const dauRatio = recentDAU.avg_dau / baselineDAU.avg_dau;
+      if (dauRatio < 0.7) {
+        alerts.push({
+          id: ++alertId, severity: 'low', type: 'dau_drop',
+          message: `DAU dropped to ${Math.round(dauRatio * 100)}% of baseline`,
+          value: Math.round(recentDAU.avg_dau), baseline: Math.round(baselineDAU.avg_dau),
+          sigma: 0, since: d7ago,
+        });
+      }
+    }
+
+    // Sort: high first, then medium, then low
+    const sevOrder = { high: 0, medium: 1, low: 2 };
+    alerts.sort((a, b) => sevOrder[a.severity] - sevOrder[b.severity]);
+
+    return { ok: true, data: { alerts, computedAt: now } };
+  }, force);
 }
 
 // === Main router ===
@@ -1975,32 +2991,39 @@ export default {
       }
       const range = url.searchParams.get('range') || '2d';
       const force = url.searchParams.get('force') === '1';
+      const before = url.searchParams.get('before') ? parseInt(url.searchParams.get('before'), 10) : null;
       if (path === '/stats' && request.method === 'GET') {
-        return jsonResponse(await handleStats(env, range, force));
+        return jsonResponse(await handleStats(env, range, force, before));
       }
       if (path === '/stats/levels' && request.method === 'GET') {
-        return jsonResponse(await handleStatsLevels(env, range, force));
+        return jsonResponse(await handleStatsLevels(env, range, force, before));
       }
       if (path === '/stats/players' && request.method === 'GET') {
-        return jsonResponse(await handleStatsPlayers(env, range, force));
+        return jsonResponse(await handleStatsPlayers(env, range, force, before));
       }
       if (path === '/stats/sessions' && request.method === 'GET') {
-        return jsonResponse(await handleStatsSessions(env, range, force));
+        return jsonResponse(await handleStatsSessions(env, range, force, before));
       }
       if (path === '/stats/ui' && request.method === 'GET') {
-        return jsonResponse(await handleStatsUI(env, range, force));
+        return jsonResponse(await handleStatsUI(env, range, force, before));
       }
       if (path === '/stats/economy' && request.method === 'GET') {
-        return jsonResponse(await handleStatsEconomy(env, range, force));
+        return jsonResponse(await handleStatsEconomy(env, range, force, before));
       }
       if (path === '/stats/dailystage' && request.method === 'GET') {
-        return jsonResponse(await handleStatsDailyStage(env, range, force));
+        return jsonResponse(await handleStatsDailyStage(env, range, force, before));
       }
       if (path === '/stats/feed' && request.method === 'GET') {
         return jsonResponse(await handleStatsFeed(env, force));
       }
+      if (path === '/stats/feed/stream' && request.method === 'GET') {
+        return jsonResponse(await handleFeedStream(env, url));
+      }
+      if (path === '/stats/anomalies' && request.method === 'GET') {
+        return jsonResponse(await handleAnomalies(env, force));
+      }
       if (path === '/stats/appversion' && request.method === 'GET') {
-        return jsonResponse(await handleStatsAppVersion(env, range, force));
+        return jsonResponse(await handleStatsAppVersion(env, range, force, before));
       }
       if (path === '/stats/feedback' && request.method === 'GET') {
         return jsonResponse(await handleStatsFeedback(env, force));
@@ -2012,11 +3035,63 @@ export default {
         const pid = url.searchParams.get('pid');
         return await handleStatsPlayer(env, pid);
       }
+      if (path === '/stats/search' && request.method === 'GET') {
+        return await handleStatsSearch(env, url, force);
+      }
+      if (path === '/stats/retention' && request.method === 'GET') {
+        return jsonResponse(await handleStatsRetention(env, range, force, before));
+      }
+      if (path === '/stats/funnel' && request.method === 'GET') {
+        return jsonResponse(await handleStatsFunnel(env, range, force, before));
+      }
+      if (path === '/stats/death-matrix' && request.method === 'GET') {
+        return jsonResponse(await handleStatsDeathMatrix(env, range, force, before));
+      }
+      if (path === '/stats/geo' && request.method === 'GET') {
+        return jsonResponse(await handleStatsGeo(env, range, force, before));
+      }
+      if (path === '/stats/time-distribution' && request.method === 'GET') {
+        const level = parseInt(url.searchParams.get('level'), 10);
+        if (isNaN(level) || level < 0 || level > 19) return errResponse('level 0-19 required');
+        return jsonResponse(await handleStatsTimeDistribution(env, range, force, before, level));
+      }
+      if (path === '/stats/champion-funnel' && request.method === 'GET') {
+        return jsonResponse(await handleStatsChampionFunnel(env, range, force, before));
+      }
+      if (path === '/stats/flagged-players' && request.method === 'GET') {
+        return jsonResponse(await handleStatsFlaggedPlayers(env, force));
+      }
+      if (path === '/admin/flag-player' && request.method === 'POST') {
+        return await handleAdminFlagPlayer(request, env);
+      }
+      if (path === '/admin/unflag-player' && request.method === 'POST') {
+        return await handleAdminUnflagPlayer(request, env);
+      }
+      if (path === '/admin/ban-pid' && request.method === 'POST') {
+        return await handleAdminBanPid(request, env);
+      }
+      if (path === '/admin/unban-pid' && request.method === 'POST') {
+        return await handleAdminUnbanPid(request, env);
+      }
+      if (path === '/admin/feedback/mark-read' && request.method === 'POST') {
+        return await handleAdminFeedbackMarkRead(request, env);
+      }
       if (path === '/admin/sync/reset-pin' && request.method === 'POST') {
         return await handleAdminSyncResetPin(request, env);
       }
+      if (path === '/admin/aggregate' && request.method === 'POST') {
+        return await handleAdminAggregate(request, env);
+      }
       if ((path === '/' || path === '/dashboard') && request.method === 'GET') {
-        return new Response(dashboardHtml, {
+        let html;
+        if (!dashboardBundle || dashboardBundle.trim() === '') {
+          html = '<!doctype html><html><head><title>N3ON DashJ — Build Required</title></head><body style="background:#020208;color:#f44;font-family:monospace;padding:40px;text-align:center"><h1>Dashboard bundle not found</h1><p>Run <code>npm run build</code> in the cloudflare/ directory, then redeploy.</p></body></html>';
+        } else {
+          // Escape </script in bundle to prevent premature script tag closure when injected into HTML.
+          const safeBundle = dashboardBundle.replace(/<\/script/gi, '<\\/script');
+          html = dashboardHtml.replace('/* __BUNDLE__ */', safeBundle);
+        }
+        return new Response(html, {
           headers: {
             'Content-Type': 'text/html;charset=UTF-8',
             'Cache-Control': 'no-store',

@@ -6,6 +6,9 @@ import { LEVEL_NAMES, COUNTRY_FLAGS } from '../constants.js';
 import { Card } from './Card.jsx';
 import { Heatmap } from './Heatmap.jsx';
 import { BarRow } from './BarRow.jsx';
+import { Table } from './Table.jsx';
+import { LoadingPane } from './LoadingPane.jsx';
+import { ErrorState } from './ErrorState.jsx';
 
 export function PlayerModal() {
   const [data, setData] = useState(null);
@@ -31,8 +34,8 @@ export function PlayerModal() {
       <div class="player-modal-inner">
         <button class="close-btn" onClick={close}>✕ CLOSE</button>
         <h1 style="margin-bottom:6px">★ Player Profile</h1>
-        {loading && <div style="color:#666;font-family:monospace">Loading…</div>}
-        {error && <div style="color:#f44;font-family:monospace">Error: {error.message}</div>}
+        {loading && <LoadingPane />}
+        {error && <ErrorState error={error} onRetry={() => { setError(null); setLoading(true); fetchJson('/stats/player?pid=' + encodeURIComponent(pid)).then(setData).catch(setError).finally(() => setLoading(false)); }} />}
         {data && <PlayerDetail d={data} />}
       </div>
     </div>
@@ -43,6 +46,22 @@ function PlayerDetail({ d }) {
   const champBadge = d.isChampion ? <span class="badge gold">★ MASTER</span> : null;
   const returnBadge = d.isReturning ? <span class="badge gold">RETURNING</span> : <span class="badge warn">TRIAL</span>;
   const flag = d.country ? (COUNTRY_FLAGS[d.country] || '🌍') + ' ' + d.country : '';
+
+  const today = new Date().toISOString().slice(0, 10);
+  const levelCols = [
+    { key: 'level', label: '#', sortable: true, sortType: 'number', render: r => r.level + 1 },
+    { key: '_name', label: 'Name', render: r => LEVEL_NAMES[r.level] },
+    { key: 'starts', label: 'Starts', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.starts) },
+    { key: 'completes', label: 'Wins', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.completes) },
+    { key: 'deaths', label: 'Deaths', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.deaths) },
+    { key: 'bestMs', label: 'Best', align: 'right', sortable: true, sortType: 'number', render: r => fmtMs(r.bestMs) },
+    { key: 'avgMs', label: 'Avg', align: 'right', sortable: true, sortType: 'number', render: r => fmtMs(r.avgMs) },
+    { key: 'gold', label: '★', align: 'right', sortable: true, sortType: 'number', className: 'gold', render: r => fmtNum(r.gold) },
+    { key: 'silver', label: '♦', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.silver) },
+    { key: 'resurrects', label: 'Resur.', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.resurrects) },
+  ];
+
+  const levelRows = d.perLevel.filter(l => l.starts > 0 || l.completes > 0 || l.deaths > 0);
 
   return (
     <>
@@ -86,22 +105,7 @@ function PlayerDetail({ d }) {
 
       <h2>Per-Level Stats</h2>
       <div class="panel scroll-x">
-        <table>
-          <thead><tr><th>#</th><th>Name</th><th class="num">Starts</th><th class="num">Wins</th><th class="num">Deaths</th><th class="num">Best</th><th class="num">Avg</th><th class="gold">★</th><th class="num">♦</th><th class="num">Resur.</th></tr></thead>
-          <tbody>
-            {d.perLevel.map((l, i) => {
-              if (l.starts === 0 && l.completes === 0 && l.deaths === 0) return null;
-              return (
-                <tr key={i}>
-                  <td>{i + 1}</td><td>{LEVEL_NAMES[i]}</td>
-                  <td class="num">{fmtNum(l.starts)}</td><td class="num">{fmtNum(l.completes)}</td><td class="num">{fmtNum(l.deaths)}</td>
-                  <td class="num">{fmtMs(l.bestMs)}</td><td class="num">{fmtMs(l.avgMs)}</td>
-                  <td class="gold">{fmtNum(l.gold)}</td><td class="num">{fmtNum(l.silver)}</td><td class="num">{fmtNum(l.resurrects)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <Table columns={levelCols} rows={levelRows} defaultSort={{ key: 'level', dir: 'asc' }} exportable exportFilename={`ndj-player-${d.pid}-levels-${today}.csv`} />
       </div>
 
       <h2>Activity by Hour (UTC+7)</h2>

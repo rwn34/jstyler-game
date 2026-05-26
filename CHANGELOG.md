@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.2.53 — May 26, 2026
+
+### Changed
+- Build
+## v1.2.53 — May 26, 2026
+
+### Added
+- 🎂 **MMYY birthday pickers** — all MMYY inputs replaced with month + year dropdowns
+  - Onboarding: name card now followed by birthday card (Month + Year, default Jan 2000)
+  - Name-change prompt: inline month/year dropdowns below the name field
+  - Profile panel: birthday displayed with **EDIT** button; inline dropdowns to change
+  - Cloud Sync Register tab: text input replaced with month/year dropdowns
+  - Cloud Sync Link Device tab: text input replaced with month/year dropdowns
+
+### Changed
+- **Link Device flow redesigned**:
+  - Step 1: Enter username, birthday, PIN → click **Verify Credentials**
+  - Step 2: Account preview shown with **Cancel** and **Continue to Link** buttons
+  - Step 3: While linking, all unrelated fields hidden; only "Linking..." status shown
+  - Old `linkDevice()` button removed; replaced by `confirmLinkDevice()` after verification
+- `playerMmyy` changes in profile now trigger `queueSync()` to push to worker
+
+### Fixed
+- Build script `zipgame.ps1` — `$currentVersion` no longer overwritten by changelog parsing loop
+
 ## v1.2.52 — May 26, 2026
 
 ### Added
