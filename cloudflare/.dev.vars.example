@@ -1,0 +1,6 @@
+# Local development overrides for wrangler dev.
+# Copy this to .dev.vars and fill in real values. Never commit .dev.vars.
+# These values are also configured for production via `wrangler secret put`.
+DASHBOARD_KEY=replace-with-strong-password
+ENCRYPTION_KEY=replace-with-64-hex-chars
+SYNC_SALT=replace-with-random-string

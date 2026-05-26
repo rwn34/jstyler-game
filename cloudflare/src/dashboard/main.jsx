@@ -10,7 +10,7 @@ style.textContent = css;
 document.head.appendChild(style);
 
 // Initialize state from URL hash
-const VALID_TABS = ['overview','levels','players','sessions','engagement','economy','dailystage','feed','appversion','feedback','sync'];
+const VALID_TABS = ['overview','levels','players','watchlist','retention','sessions','geo','engagement','economy','dailystage','feed','alerts','appversion','feedback','sync'];
 const VALID_RANGES = ['1d','2d','3d','7d','14d','31d','all'];
 
 function applyHash() {

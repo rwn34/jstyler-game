@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.2.54 — May 26, 2026
+
+### Changed
+- Build
+## v1.2.54 — May 26, 2026
+
+### Fixed
+- **Blank page bug** — `src\n3ondashj\index.html` had a leading `?` before `<!DOCTYPE html>` (introduced in v1.2.0), forcing browsers into quirks mode and causing a blank screen on some renderers. Removed the stray character.
+
 ## v1.2.53 — May 26, 2026
 
 ### Changed

@@ -1,8 +1,21 @@
 # Dashboard Overhaul Plan — N3ON DashJ Metrics
 
-**Status:** in progress (Phase 1 starting)
+**Status:** ALL 5 PHASES SHIPPED ✓
 **Scope:** ~10 workstreams across `cloudflare/` (worker + dashboard)
 **Excluded:** secret management & auth hardening (deferred per user)
+
+## Shipped Changelog
+
+| Phase | Status | Bundle | What shipped |
+|-------|--------|--------|--------------|
+| **1 — Foundation** | ✓ | 127KB / 45KB gz | Preact + htm + signals + uPlot, esbuild build pipeline, modular tabs in `dashboard/`, D1 indices migration (001), `/stats/search` endpoint, search bar UI, dashboard refactored from single-file SPA |
+| **2 — Operator Workflow** | ✓ | 135KB | Sortable + filterable Table component, RFC 4180 CSV export, hash routing (deep-link tabs + range + player), Loading/Empty/Error state components, range comparison toggle (delta cards via `?before=` param) |
+| **3 — Missing Analytics** | ✓ | 147KB | 6 new endpoints (retention cohorts, onboarding funnel, death matrix, geo, time-distribution histogram, champion funnel), day-of-week heatmap, new Retention + Geo tabs, Levels tab gets death matrix + per-level histogram drill-down |
+| **4 — Real-Time + Alerts** | ✓ | ~155KB | Migration 002 (stats_daily, retention_daily, player_flags, feedback_status tables), `aggregateDailyStats` + extended cron, `POST /admin/aggregate` backfill, fast-path routing for 31d/all ranges, polling-based feed stream (SSE infeasible on free CF plan), event-type filter chips, Pause/Resume on Feed, anomaly detection with Z-score baselines, new Alerts tab |
+| **5 — Polish** | ✓ | 165KB | Container-query table-to-card mobile layout, full WCAG/ARIA pass (tabs, tables, search, modal), focus trap + skip link + visible focus rings, `prefers-reduced-motion`, 6 admin endpoints (flag/unflag/ban/unban/feedback-mark-read/flagged-players), banned-PID enforcement in event ingestion, new Watchlist tab, Feedback tab with status filter + inline actions + editable notes |
+
+## User-Selected Tech Decisions (chosen 2026-05-26)
+(continued below…)
 
 ## User-Selected Tech Decisions
 

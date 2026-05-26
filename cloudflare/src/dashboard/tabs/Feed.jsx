@@ -118,15 +118,15 @@ export function Feed({ force }) {
       <div class="feed-controls">
         <div class="filter-chips">
           {FILTER_CHIPS.map(c => (
-            <button key={c.id} class={`chip${filters.has(c.id) ? ' active' : ''}`} onClick={() => toggleFilter(c.id)}>
+            <button key={c.id} class={`chip${filters.has(c.id) ? ' active' : ''}`} onClick={() => toggleFilter(c.id)} aria-pressed={filters.has(c.id)}>
               {c.label}
             </button>
           ))}
         </div>
         <div class="feed-actions">
-          <span class={`conn-dot ${connCls}`}>●</span>
+          <span class={`conn-dot ${connCls}`} aria-hidden="true">●</span>
           <span class="conn-label">{connLabel}</span>
-          <button class="chip" onClick={() => setPaused(!paused)}>
+          <button class="chip" onClick={() => setPaused(!paused)} aria-pressed={paused} aria-label={paused ? 'Resume live feed' : 'Pause live feed'}>
             {paused ? '▶ Resume' : '⏸ Pause'}
           </button>
         </div>

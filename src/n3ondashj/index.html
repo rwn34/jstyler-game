@@ -1,4 +1,4 @@
-?<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -569,7 +569,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     <canvas id="bootParticles" style="position:absolute;inset:0;z-index:2;"></canvas>
     <h1 style="z-index:1;">N3ON DashJ<span class="glitch" data-text="N3ON DashJ"></span></h1>
     <span class="sub" style="z-index:1;">jstylr</span>
-    <span style="z-index:1;font-size:.55rem;color:#444;font-family:monospace;">v1.2.53</span>
+    <span style="z-index:1;font-size:.55rem;color:#444;font-family:monospace;">v1.2.54</span>
     <div id="bootTips" style="z-index:1;font-size:0.6rem;color:#888;font-family:monospace;max-width:80vw;text-align:center;line-height:1.4;opacity:0;transition:opacity 0.5s ease;margin-top:-8px;"></div>
 </div>
 
@@ -684,7 +684,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     <!-- Cloud Sync moved to Profile panel -->
     <div style="text-align: center; margin-top: 15px; font-family: monospace;">
         <div style="display:flex;gap:6px;width:100%;">
-            <button onclick="openChangelog()" style="flex:1;padding:8px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#333,#222);border:1px solid rgba(255,255,255,0.15);color:#aaa;">📋 UPDATE LOG &nbsp; <span style='color:#666;font-size:0.6rem;'>v1.2.53</span></button>
+            <button onclick="openChangelog()" style="flex:1;padding:8px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#333,#222);border:1px solid rgba(255,255,255,0.15);color:#aaa;">📋 UPDATE LOG &nbsp; <span style='color:#666;font-size:0.6rem;'>v1.2.54</span></button>
             <button onclick="restartGame()" title="Restart the game to apply updates" style="flex:0 0 auto;padding:8px 14px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#0a4,#062);border:1px solid rgba(0,255,136,0.3);color:#0f8;">🔄 RESTART</button>
         </div>
         <button onclick="showPrivacyPolicy()" style="background:transparent; border:none; color:#444; font-size:0.6rem; font-weight:normal; text-decoration:underline; cursor:pointer; padding:5px; box-shadow:none; margin-top:2px;">🔒 Privacy Policy</button>
@@ -752,9 +752,29 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
   <button onclick="closeChangelog()" style="background:rgba(255,68,68,0.2);border:1px solid #f44;color:#f44;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:monospace;font-weight:700;font-size:.65rem;letter-spacing:1px;">✕ CLOSE</button>
 </div>
 <div style="width:100%;max-width:360px;max-height:60vh;overflow-y:auto;text-align:left;padding:10px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.1);">
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.54</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Build</li>
+</ul>
 <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.53</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
 <li>Build</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.53</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>🎂 **MMYY birthday pickers** — all MMYY inputs replaced with month + year dropdowns</li>
+<li>→ Onboarding: name card now followed by birthday card (Month + Year, default Jan 2000)</li>
+<li>→ Name-change prompt: inline month/year dropdowns below the name field</li>
+<li>→ Profile panel: birthday displayed with **EDIT** button; inline dropdowns to change</li>
+<li>→ Cloud Sync Register tab: text input replaced with month/year dropdowns</li>
+<li>→ Cloud Sync Link Device tab: text input replaced with month/year dropdowns</li>
+<li>**Link Device flow redesigned**:</li>
+<li>→ Step 1: Enter username, birthday, PIN → click **Verify Credentials**</li>
+<li>→ Step 2: Account preview shown with **Cancel** and **Continue to Link** buttons</li>
+<li>→ Step 3: While linking, all unrelated fields hidden; only "Linking..." status shown</li>
+<li>→ Old `linkDevice()` button removed; replaced by `confirmLinkDevice()` after verification</li>
+<li>`playerMmyy` changes in profile now trigger `queueSync()` to push to worker</li>
+<li>Build script `zipgame.ps1` — `$currentVersion` no longer overwritten by changelog parsing loop</li>
 </ul>
 <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.52</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
@@ -869,17 +889,6 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.38</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
 <li>Build</li>
-</ul>
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.37</div>
-<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>Build</li>
-</ul>
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.36</div>
-<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>PWA install button now shows fallback message when `beforeinstallprompt` isn't available (Android non-Chrome)</li>
-<li>PWA banner/button visibility now correctly tied to viewport mode — only one shows at a time</li>
-<li>Streak display consistency: `updateLsStreakBtn()` now uses same visual streak calculation as calendar</li>
-<li>HUD vertical alignment: `hudCenter`, `hudLeft`, and `hudRight` all now at `top: 64px`</li>
 </ul>
 </div>
 <button onclick="closeChangelog()" style="width:100%;max-width:320px;margin-top:12px;">BACK</button>

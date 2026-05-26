@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useState, useRef, useCallback } from 'preact/hooks';
 import { currentPlayerPid } from '../state.js';
 import { fetchJson } from '../api.js';
 import { fmtNum, fmtMs, fmtAgo, fmtDateTime, escapeHtml, truncatePid } from '../format.js';
@@ -14,10 +14,14 @@ export function PlayerModal() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const modalRef = useRef(null);
+  const closeRef = useRef(null);
+  const triggerRef = useRef(null);
   const pid = currentPlayerPid.value;
 
   useEffect(() => {
     if (!pid) { setData(null); return; }
+    triggerRef.current = document.activeElement;
     setLoading(true); setError(null);
     fetchJson('/stats/player?pid=' + encodeURIComponent(pid))
       .then(d => setData(d))
@@ -25,24 +29,79 @@ export function PlayerModal() {
       .finally(() => setLoading(false));
   }, [pid]);
 
+  // Focus trap + Esc close
+  useEffect(() => {
+    if (!pid) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') { close(); return; }
+      if (e.key !== 'Tab') return;
+      const modal = modalRef.current;
+      if (!modal) return;
+      const focusable = modal.querySelectorAll('button,input,textarea,a[href],[tabindex]:not([tabindex="-1"])');
+      if (focusable.length === 0) return;
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKey);
+    setTimeout(() => { if (closeRef.current) closeRef.current.focus(); }, 50);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [pid]);
+
   if (!pid) return null;
 
-  function close() { currentPlayerPid.value = null; }
+  function close() {
+    currentPlayerPid.value = null;
+    if (triggerRef.current && triggerRef.current.focus) triggerRef.current.focus();
+  }
 
   return (
-    <div class="player-modal open">
+    <div class="player-modal open" ref={modalRef} role="dialog" aria-modal="true" aria-label="Player profile">
       <div class="player-modal-inner">
-        <button class="close-btn" onClick={close}>✕ CLOSE</button>
+        <button class="close-btn" ref={closeRef} onClick={close} aria-label="Close player profile">✕ CLOSE</button>
         <h1 style="margin-bottom:6px">★ Player Profile</h1>
         {loading && <LoadingPane />}
         {error && <ErrorState error={error} onRetry={() => { setError(null); setLoading(true); fetchJson('/stats/player?pid=' + encodeURIComponent(pid)).then(setData).catch(setError).finally(() => setLoading(false)); }} />}
-        {data && <PlayerDetail d={data} />}
+        {data && <PlayerDetail d={data} pid={pid} setData={setData} />}
       </div>
     </div>
   );
 }
 
-function PlayerDetail({ d }) {
+function PlayerActions({ d, pid, setData }) {
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function doAction(endpoint) {
+    setBusy(true);
+    try {
+      await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ pid, reason: reason || undefined }) });
+      // Re-fetch player data
+      const d = await fetchJson('/stats/player?pid=' + encodeURIComponent(pid));
+      setData(d);
+      setReason('');
+    } catch (_) {}
+    setBusy(false);
+  }
+
+  const flag = d.flag;
+  const isFlagged = flag && flag.flag_type === 'review';
+  const isBanned = flag && flag.flag_type === 'banned';
+
+  return (
+    <div class="player-actions">
+      {isFlagged && <span class="badge warn">⚠ Under Review</span>}
+      {isBanned && <span class="badge bad">⛔ Banned</span>}
+      <input class="reason-input" type="text" placeholder="Reason (optional)" value={reason} onInput={e => setReason(e.target.value)} aria-label="Reason for flag or ban" />
+      {!isFlagged && !isBanned && <button class="flag-btn" disabled={busy} onClick={() => doAction('/admin/flag-player')} aria-label="Flag player for review">⚠ Flag</button>}
+      {isFlagged && <button class="ok-btn" disabled={busy} onClick={() => doAction('/admin/unflag-player')} aria-label="Remove flag">✅ Unflag</button>}
+      {!isBanned && <button class="ban-btn" disabled={busy} onClick={() => doAction('/admin/ban-pid')} aria-label="Ban player">⛔ Ban</button>}
+      {isBanned && <button class="ok-btn" disabled={busy} onClick={() => doAction('/admin/unban-pid')} aria-label="Unban player">✅ Unban</button>}
+    </div>
+  );
+}
+
+function PlayerDetail({ d, pid, setData }) {
   const champBadge = d.isChampion ? <span class="badge gold">★ MASTER</span> : null;
   const returnBadge = d.isReturning ? <span class="badge gold">RETURNING</span> : <span class="badge warn">TRIAL</span>;
   const flag = d.country ? (COUNTRY_FLAGS[d.country] || '🌍') + ' ' + d.country : '';
@@ -65,11 +124,13 @@ function PlayerDetail({ d }) {
 
   return (
     <>
-      <div style="font-family:monospace;font-size:.75rem;color:#aaa;margin-bottom:14px">
+      <div style="font-family:monospace;font-size:.75rem;color:#bbb;margin-bottom:6px">
         <b style="color:#0ff;font-size:1.1rem">{escapeHtml(d.name) || '(anon)'}</b> {champBadge} {returnBadge}
-        <br />PID: <code style="color:#666">{d.pid}</code> • {flag}
+        <br />PID: <code style="color:#aaa">{d.pid}</code> • {flag}
         <br />First seen: {fmtDateTime(d.firstSeen)} • Last seen: {fmtDateTime(d.lastSeen)} ({fmtAgo(d.lastSeen)})
       </div>
+
+      <PlayerActions d={d} pid={pid} setData={setData} />
 
       <div class="grid">
         <Card label="Sessions" val={fmtNum(d.sessionCount)} />
@@ -125,14 +186,14 @@ function PlayerDetail({ d }) {
       <h2>Inventory & Purchases</h2>
       <div class="panel">
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
-          <div><div class="lbl">SKILLS BOUGHT ({d.ownedSkills.length})</div>{d.ownedSkills.length ? d.ownedSkills.map(s => <div key={s.id} style="font-size:.65rem;color:#0ff">⚡ {s.id} ×{s.count}</div>) : <div style="color:#666">none</div>}</div>
-          <div><div class="lbl">COSMETICS ({d.ownedCosmetics.length})</div>{d.ownedCosmetics.length ? d.ownedCosmetics.map(c => <div key={c.id} style="font-size:.65rem;color:#f0f">🎨 {c.id}</div>) : <div style="color:#666">none</div>}</div>
-          <div><div class="lbl">CONSUMABLES</div>{d.ownedConsumables.length ? d.ownedConsumables.map(c => <div key={c.id} style="font-size:.65rem;color:#0f8">💊 {c.id} ×{c.count}</div>) : <div style="color:#666">none</div>}</div>
+          <div><div class="lbl">SKILLS BOUGHT ({d.ownedSkills.length})</div>{d.ownedSkills.length ? d.ownedSkills.map(s => <div key={s.id} style="font-size:.65rem;color:#0ff">⚡ {s.id} ×{s.count}</div>) : <div style="color:#aaa">none</div>}</div>
+          <div><div class="lbl">COSMETICS ({d.ownedCosmetics.length})</div>{d.ownedCosmetics.length ? d.ownedCosmetics.map(c => <div key={c.id} style="font-size:.65rem;color:#f0f">🎨 {c.id}</div>) : <div style="color:#aaa">none</div>}</div>
+          <div><div class="lbl">CONSUMABLES</div>{d.ownedConsumables.length ? d.ownedConsumables.map(c => <div key={c.id} style="font-size:.65rem;color:#0f8">💊 {c.id} ×{c.count}</div>) : <div style="color:#aaa">none</div>}</div>
         </div>
       </div>
 
       <h2>Device & Locale</h2>
-      <div class="panel" style="font-family:monospace;font-size:.7rem;color:#aaa">
+      <div class="panel" style="font-family:monospace;font-size:.7rem;color:#bbb">
         {d.country && <div>Country: {COUNTRY_FLAGS[d.country] || '🌍'} {d.country}</div>}
         {d.screen && <div>Screen: {d.screen}</div>}
         {d.language && <div>Language: {d.language}</div>}
@@ -140,7 +201,7 @@ function PlayerDetail({ d }) {
 
       <h2>Recent Activity</h2>
       <div class="panel">
-        {(!d.recent || !d.recent.length) ? <div style="color:#666">No events</div> : d.recent.map((e, i) => {
+        {(!d.recent || !d.recent.length) ? <div style="color:#aaa">No events</div> : d.recent.map((e, i) => {
           let data = {}; try { data = JSON.parse(e.data || '{}'); } catch (_) {}
           const typeClass = e.type === 'level_complete' ? 'complete' : e.type === 'level_death' ? 'death' : e.type === 'purchase' ? 'purchase' : e.type === 'ui_event' ? 'ui_event' : '';
           let meta = '';

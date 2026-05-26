@@ -8,6 +8,7 @@ import { PlayerModal } from './components/PlayerModal.jsx';
 import { Overview } from './tabs/Overview.jsx';
 import { Levels } from './tabs/Levels.jsx';
 import { Players } from './tabs/Players.jsx';
+import { Watchlist } from './tabs/Watchlist.jsx';
 import { Retention } from './tabs/Retention.jsx';
 import { Sessions } from './tabs/Sessions.jsx';
 import { Geo } from './tabs/Geo.jsx';
@@ -41,46 +42,53 @@ export function App() {
 
   return (
     <>
-      <h1>★ N3ON DashJ <span class="sub">LIVE METRICS</span></h1>
-      <div id="status">
-        <span class="live">●</span> Live • Range {range.value.toUpperCase()} • {fmtTime(Date.now())} UTC+7
-      </div>
+      <a href={`#pane-${tab}`} class="skip-link">Skip to content</a>
 
-      <div class="toolbar">
+      <header>
+        <h1>★ N3ON DashJ <span class="sub">LIVE METRICS</span></h1>
+        <div id="status">
+          <span class="live">●</span> Live • Range {range.value.toUpperCase()} • {fmtTime(Date.now())} UTC+7
+        </div>
+      </header>
+
+      <div class="toolbar" role="toolbar" aria-label="Dashboard controls">
         <span class="label">RANGE:</span>
         {RANGES.map(r => (
-          <button key={r} class={`range-btn${range.value === r ? ' active' : ''}`} onClick={() => setRange(r)}>
+          <button key={r} class={`range-btn${range.value === r ? ' active' : ''}`} onClick={() => setRange(r)} aria-pressed={range.value === r}>
             {r.toUpperCase()}
           </button>
         ))}
         <label class="compare-toggle">
-          <input type="checkbox" checked={compareEnabled.value} onChange={e => { compareEnabled.value = e.target.checked; }} />
+          <input type="checkbox" checked={compareEnabled.value} onChange={e => { compareEnabled.value = e.target.checked; }} aria-label="Toggle period comparison" />
           <span>Compare</span>
         </label>
         <SearchBar />
-        <button class="check-btn" onClick={checkNow}>⟳ CHECK NOW</button>
+        <button class="check-btn" onClick={checkNow} aria-label="Refresh all data">⟳ CHECK NOW</button>
       </div>
 
       <Tabs />
 
-      <div key={tab + ':' + forceKey}>
-        {tab === 'overview' && <Overview force={force} />}
-        {tab === 'levels' && <Levels force={force} />}
-        {tab === 'players' && <Players force={force} />}
-        {tab === 'retention' && <Retention force={force} />}
-        {tab === 'sessions' && <Sessions force={force} />}
-        {tab === 'geo' && <Geo force={force} />}
-        {tab === 'engagement' && <Engagement force={force} />}
-        {tab === 'economy' && <Economy force={force} />}
-        {tab === 'dailystage' && <DailyStage force={force} />}
-        {tab === 'feed' && <Feed force={force} />}
-        {tab === 'alerts' && <Alerts />}
-        {tab === 'appversion' && <AppVersion force={force} />}
-        {tab === 'feedback' && <Feedback force={force} />}
-        {tab === 'sync' && <Sync force={force} />}
-      </div>
+      <main id={`pane-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`}>
+        <div key={tab + ':' + forceKey}>
+          {tab === 'overview' && <Overview force={force} />}
+          {tab === 'levels' && <Levels force={force} />}
+          {tab === 'players' && <Players force={force} />}
+          {tab === 'watchlist' && <Watchlist force={force} />}
+          {tab === 'retention' && <Retention force={force} />}
+          {tab === 'sessions' && <Sessions force={force} />}
+          {tab === 'geo' && <Geo force={force} />}
+          {tab === 'engagement' && <Engagement force={force} />}
+          {tab === 'economy' && <Economy force={force} />}
+          {tab === 'dailystage' && <DailyStage force={force} />}
+          {tab === 'feed' && <Feed force={force} />}
+          {tab === 'alerts' && <Alerts />}
+          {tab === 'appversion' && <AppVersion force={force} />}
+          {tab === 'feedback' && <Feedback force={force} />}
+          {tab === 'sync' && <Sync force={force} />}
+        </div>
+      </main>
 
-      <div class="footer">N3ON DashJ Metrics • 5-min cache • Times in UTC+7</div>
+      <footer class="footer">© N3ON DashJ Metrics — Phase 5 complete • 5-min cache • Times in UTC+7</footer>
 
       <PlayerModal />
     </>
