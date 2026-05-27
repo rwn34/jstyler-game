@@ -1,18 +1,36 @@
 # Changelog
 
-## v1.2.54 — May 26, 2026
+## v1.2.59 — May 27, 2026
+
+### Changed
+- In-game changelog now shows all historical versions (limit raised from 15 to 100)
+- Fixed mojibake (garbled Unicode) caused by PowerShell encoding corruption
+## v1.2.58 — May 27, 2026
+
+### Fixed
+- Fixed mojibake (garbled Unicode characters) caused by PowerShell encoding corruption — restored emojis, symbols, and special characters throughout the game UI
+## v1.2.57 — May 26, 2026
 
 ### Changed
 - Build
+## v1.2.56 — May 26, 2026
+
+### Changed
+- Build
+
+## v1.2.55 — May 26, 2026
+
+### Changed
+- **Device limit raised** from 3 to 5 per cloud sync account
+
+### Fixed
+- Mobile tables keep real column layout with horizontal scroll instead of card stacking
+
 ## v1.2.54 — May 26, 2026
 
 ### Fixed
 - **Blank page bug** — `src\n3ondashj\index.html` had a leading `?` before `<!DOCTYPE html>` (introduced in v1.2.0), forcing browsers into quirks mode and causing a blank screen on some renderers. Removed the stray character.
 
-## v1.2.53 — May 26, 2026
-
-### Changed
-- Build
 ## v1.2.53 — May 26, 2026
 
 ### Added
@@ -93,13 +111,6 @@
 - **PWA banner dismissal not persisted** — `dismissPwaBanner()` saved `pwaBannerDismissed=true` but `showPwaInstallBanner()` never checked it, causing the banner to reappear every time the player returned to stage select.
 - **PWA banner hidden on iOS** — The banner required `deferredPrompt` to be truthy, but iOS Safari never fires `beforeinstallprompt`. Removed the `deferredPrompt` gate from banner visibility so iOS users see the install helper too.
 
-### Added
-- **🔗 Link Device entry points** — Added "Link device" hyperlink in:
-  - First-time onboarding modal (below the name input)
-  - Name-change prompt overlay (below the input field)
-  - Clicking it opens the Cloud Sync panel focused on the **Link Device** tab
-  - Onboarding/overlay is temporarily hidden while the sync panel is open, then restored on close
-
 ## v1.2.47 — May 25, 2026
 
 ### Added
@@ -108,14 +119,12 @@
 - `replaceSyncData()` client helper for full-replace sync load
 ## v1.2.46 — May 25, 2026
 
-### Fixed
-- PWA install banner no longer blocked by aggressive CSS `!important` rule
-- PIN and birthday inputs now use `inputmode="numeric"` for mobile numeric keypad
+### Changed
+- Build
 ## v1.2.45 — May 25, 2026
 
 ### Fixed
 - Client-worker compatibility — sync load response now handles both old and new field names
-- Cloud Sync status text now updates correctly when opening Settings panel
 ## v1.2.44 — May 25, 2026
 
 ### Added

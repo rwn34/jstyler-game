@@ -33,8 +33,17 @@ const SYNC_RATE_LIMIT_LOAD_WINDOW_MS = 60 * 1000;   // 1 minute
 const SYNC_RATE_LIMIT_LOAD_MAX = 10;                // 10 loads per min per IP
 const SYNC_LOCKOUT_THRESHOLD = 10;                  // 10 fails = lockout
 const SYNC_LOCKOUT_DURATION_MS = 60 * 60 * 1000;    // 1 hour lockout
-const SYNC_MAX_DEVICES = 3;
+const SYNC_MAX_DEVICES = 5;
 const SYNC_HISTORY_MAX = 5;
+
+// === Security constants ===
+const PBKDF2_ITERATIONS = 100000;
+const PBKDF2_SALT_BYTES = 16;
+const PBKDF2_HASH_BYTES = 32;
+// LEGACY_FORGOT_PIN controlled via env var/secretion (no deploy needed to flip)
+function legacyForgotPinEnabled(env) {
+  return env.LEGACY_FORGOT_PIN === 'true';
+}
 
 // === Helpers ===
 
@@ -90,14 +99,25 @@ async function aesEncrypt(plainText, keyHex) {
   return bytesToHex(combined);
 }
 
-async function aesDecrypt(cipherHex, keyHex) {
+async function aesDecrypt(cipherHex, keyHex, legacyKeyHex) {
   try {
-    const key = await crypto.subtle.importKey('raw', hexToBytes(keyHex), { name: 'AES-GCM' }, false, ['decrypt']);
     const combined = hexToBytes(cipherHex);
     const iv = combined.slice(0, 12);
     const ciphertext = combined.slice(12);
-    const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
-    return new TextDecoder().decode(decrypted);
+    // Try primary key first
+    try {
+      const key = await crypto.subtle.importKey('raw', hexToBytes(keyHex), { name: 'AES-GCM' }, false, ['decrypt']);
+      const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+      return new TextDecoder().decode(decrypted);
+    } catch (_) {
+      // Fall back to legacy key during rotation window
+      if (legacyKeyHex) {
+        const key = await crypto.subtle.importKey('raw', hexToBytes(legacyKeyHex), { name: 'AES-GCM' }, false, ['decrypt']);
+        const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+        return new TextDecoder().decode(decrypted);
+      }
+      return null;
+    }
   } catch (e) {
     return null;
   }
@@ -108,6 +128,31 @@ async function hashSyncKey(username, mmyy, pin, salt) {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(salt), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(msg));
   return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Constant-time comparison to prevent timing attacks on secrets
+function constantTimeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let acc = 0;
+  for (let i = 0; i < a.length; i++) acc |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return acc === 0;
+}
+
+async function sha256Hex(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return bytesToHex(new Uint8Array(buf));
+}
+
+// PBKDF2 password hashing (Web Crypto API)
+async function pbkdf2Hash(password, saltHex) {
+  const salt = hexToBytes(saltHex);
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), { name: 'PBKDF2' }, false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' }, key, PBKDF2_HASH_BYTES * 8);
+  return bytesToHex(new Uint8Array(bits));
+}
+
+async function generateSalt() {
+  return bytesToHex(crypto.getRandomValues(new Uint8Array(PBKDF2_SALT_BYTES)));
 }
 
 // === Rate limiting (in-memory per-isolate) ===
@@ -201,7 +246,7 @@ async function verifyAuthCookie(value, secret) {
   const sig = value.slice(dot + 1);
   if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) return false;
   const expected = await hmacSHA256(secret, String(expiresAt));
-  return expected === sig;
+  return constantTimeEqual(expected, sig);
 }
 
 async function isAuthed(request, env) {
@@ -211,12 +256,13 @@ async function isAuthed(request, env) {
   return await verifyAuthCookie(cookies[AUTH_COOKIE], key);
 }
 
-const LOGIN_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>N3ON DashJ Metrics — Locked</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;background:linear-gradient(180deg,#020208,#0a0a1a 50%,#1a0a2a);color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}h1{font-size:1.4rem;font-weight:900;letter-spacing:3px;background:linear-gradient(90deg,#0ff,#08f);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:0 0 8px rgba(0,255,255,.3);margin-bottom:8px}.sub{font-size:.55rem;letter-spacing:5px;color:#888;margin-left:8px;-webkit-text-fill-color:#888}.hint{font-size:.7rem;color:#888;font-family:monospace;margin-bottom:24px;letter-spacing:1px}#pw{width:280px;padding:12px 16px;font-size:1rem;font-family:monospace;text-align:center;background:#111;color:#0ff;border:2px solid #0ff;border-radius:8px;letter-spacing:4px;outline:none}#err{color:#f44;font-family:monospace;font-size:.7rem;margin-top:8px;height:14px}#go{margin-top:14px;padding:10px 30px;background:linear-gradient(135deg,#0ff,#08f);color:#000;font-weight:900;border:none;border-radius:8px;cursor:pointer;font-family:inherit;letter-spacing:2px;font-size:.8rem}</style></head><body><h1>★ N3ON DashJ <span class="sub">METRICS ACCESS</span></h1><div class="hint">Enter keyword to view dashboard</div><input id="pw" type="password" autocomplete="off" placeholder="••••••••••" /><div id="err"></div><button id="go">UNLOCK</button><script>(function(){var pw=document.getElementById('pw'),err=document.getElementById('err');function go(){var v=pw.value;if(!v)return;fetch('/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:v})}).then(function(r){if(r.ok){location.href='/dashboard';}else{err.textContent='Incorrect keyword';pw.value='';pw.focus();setTimeout(function(){err.textContent='';},2000);}}).catch(function(){err.textContent='Network error';});}document.getElementById('go').addEventListener('click',go);pw.addEventListener('keydown',function(e){if(e.key==='Enter')go();});pw.focus();})();</script></body></html>`;
+const LOGIN_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>N3ON DashJ Metrics — Locked</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;background:linear-gradient(180deg,#020208,#0a0a1a 50%,#1a0a2a);color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}h1{font-size:1.4rem;font-weight:900;letter-spacing:3px;color:#0ff;background:linear-gradient(90deg,#0ff,#08f);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:0 0 8px rgba(0,255,255,.3);margin-bottom:8px}.sub{font-size:.55rem;letter-spacing:5px;color:#888;margin-left:8px;-webkit-text-fill-color:#888}.hint{font-size:.7rem;color:#888;font-family:monospace;margin-bottom:24px;letter-spacing:1px}#pw{width:280px;padding:12px 16px;font-size:1rem;font-family:monospace;text-align:center;background:#111;color:#0ff;border:2px solid #0ff;border-radius:8px;letter-spacing:4px;outline:none}#err{color:#f44;font-family:monospace;font-size:.7rem;margin-top:8px;height:14px}#go{margin-top:14px;padding:10px 30px;background:linear-gradient(135deg,#0ff,#08f);color:#000;font-weight:900;border:none;border-radius:8px;cursor:pointer;font-family:inherit;letter-spacing:2px;font-size:.8rem}</style></head><body><h1>★ N3ON DashJ <span class="sub">METRICS ACCESS</span></h1><div class="hint">Enter keyword to view dashboard</div><input id="pw" type="password" autocomplete="off" placeholder="••••••••••" /><div id="err"></div><button id="go">UNLOCK</button><script>(function(){var pw=document.getElementById('pw'),err=document.getElementById('err');function go(){var v=pw.value;if(!v)return;fetch('/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:v})}).then(function(r){if(r.ok){location.href='/dashboard';}else{err.textContent='Incorrect keyword';pw.value='';pw.focus();setTimeout(function(){err.textContent='';},2000);}}).catch(function(){err.textContent='Network error';});}document.getElementById('go').addEventListener('click',go);pw.addEventListener('keydown',function(e){if(e.key==='Enter')go();});pw.focus();})();</script></body></html>`;
 
 async function handleAuth(request, env) {
   const body = await readJsonBody(request);
   const { password } = body || {};
-  if (!password || password !== env.DASHBOARD_KEY) {
+  // Hash both sides to eliminate variable-length timing leak
+  if (!password || !constantTimeEqual(await sha256Hex(password), await sha256Hex(env.DASHBOARD_KEY || ''))) {
     return errResponse('invalid keyword', 401);
   }
   const cookieVal = await makeAuthCookie(env.DASHBOARD_KEY);
@@ -306,6 +352,9 @@ const BANNED_CACHE_TTL_MS = 60 * 1000;
 async function getBannedPids(env) {
   const now = Date.now();
   if (_bannedPids && now - _bannedPidsAt < BANNED_CACHE_TTL_MS) return _bannedPids;
+  try {
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS player_flags (pid TEXT PRIMARY KEY, flag_type TEXT, reason TEXT, flagged_by TEXT, flagged_at INTEGER)").run();
+  } catch (_) {}
   const rows = await env.DB.prepare("SELECT pid FROM player_flags WHERE flag_type = 'banned'").all();
   _bannedPids = new Set((rows && rows.results || []).map(r => r.pid));
   _bannedPidsAt = now;
@@ -314,11 +363,21 @@ async function getBannedPids(env) {
 
 async function validateAndInsertEvent(env, e, isOffline, request) {
   if (!e || typeof e !== 'object') return;
-  const { pid, name, type, data, ts, token, sig } = e;
+  const { pid, name, type, data, ts, token, sig, event_uuid } = e;
 
   if (!pid || !PID_REGEX.test(pid)) return;
   if (!ALLOWED_TYPES.has(type)) return;
   if (typeof ts !== 'number') return;
+
+  // Deduplicate by event_uuid (silently ignore duplicates)
+  if (event_uuid && typeof event_uuid === 'string') {
+    try {
+      const dup = await env.DB.prepare('SELECT 1 FROM events WHERE event_uuid = ?').bind(event_uuid).first();
+      if (dup) return;
+    } catch (_) {
+      // Column may not exist yet on older deployments — continue with insert
+    }
+  }
 
   const serverTs = Date.now();
   if (Math.abs(serverTs - ts) > CLIENT_CLOCK_TOLERANCE_MS) return;
@@ -335,7 +394,7 @@ async function validateAndInsertEvent(env, e, isOffline, request) {
       verified = 0;
     } else {
       const expectedSig = await hmacSHA256(token, JSON.stringify(data || {}) + ts);
-      if (expectedSig !== sig) verified = 0;
+      if (!constantTimeEqual(expectedSig, sig)) verified = 0;
     }
   } else {
     // No HMAC = unverified but still recorded for stats
@@ -386,19 +445,42 @@ async function validateAndInsertEvent(env, e, isOffline, request) {
     augmented._banned = true;
   }
 
-  await env.DB.prepare(
-    'INSERT INTO events (pid, name, type, level, data, client_ts, server_ts, offline, verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(
-    pid,
-    sanitizeName(name),
-    type,
-    level,
-    JSON.stringify(augmented),
-    ts,
-    serverTs,
-    isOffline ? 1 : 0,
-    verified
-  ).run();
+  // Insert with event_uuid (dups ignored via partial unique index)
+  try {
+    await env.DB.prepare(
+      'INSERT OR IGNORE INTO events (pid, name, type, level, data, client_ts, server_ts, offline, verified, event_uuid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      pid,
+      sanitizeName(name),
+      type,
+      level,
+      JSON.stringify(augmented),
+      ts,
+      serverTs,
+      isOffline ? 1 : 0,
+      verified,
+      event_uuid || null
+    ).run();
+  } catch (err) {
+    // Only fall back if column literally doesn't exist (pre-migration schema)
+    if (err && err.message && err.message.includes('no such column')) {
+      await env.DB.prepare(
+        'INSERT INTO events (pid, name, type, level, data, client_ts, server_ts, offline, verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(
+        pid,
+        sanitizeName(name),
+        type,
+        level,
+        JSON.stringify(augmented),
+        ts,
+        serverTs,
+        isOffline ? 1 : 0,
+        verified
+      ).run();
+    } else {
+      throw err;
+    }
+  }
 }
 
 async function handleEvent(request, env) {
@@ -451,7 +533,7 @@ async function handleStats(env, range, force, before) {
     if ((range === '31d' || range === 'all') && !before) {
       const dateFrom = range === 'all' ? '2000-01-01' : new Date(startTs).toISOString().slice(0, 10);
       const fastRow = await env.DB.prepare(
-        'SELECT SUM(starts) as starts, SUM(completes) as completes, SUM(deaths) as deaths, SUM(sessions) as sessions, SUM(heartbeats) as hb, SUM(gold_earned) as ge, SUM(silver_earned) as se FROM stats_daily WHERE level=99 AND date >= ?'
+        'SELECT SUM(starts) as starts, SUM(completes) as completes, SUM(deaths) as deaths, SUM(sessions) as sessions, SUM(heartbeats) as hb, SUM(gold_earned) as ge, SUM(silver_earned) as se FROM stats_daily WHERE level=-1 AND date >= ?'
       ).bind(dateFrom).first();
 
       if (fastRow && fastRow.starts > 0) {
@@ -466,7 +548,7 @@ async function handleStats(env, range, force, before) {
 
         // Daily breakdown from stats_daily
         const dailyRows = await env.DB.prepare(
-          'SELECT date, starts + completes + deaths + sessions + heartbeats as c FROM stats_daily WHERE level=99 AND date >= ? ORDER BY date'
+          'SELECT date, starts + completes + deaths + sessions + heartbeats as c FROM stats_daily WHERE level=-1 AND date >= ? ORDER BY date'
         ).bind(dateFrom).all();
         const dayCount = Math.min(31, Math.max(1, Math.ceil((now - startTs) / 86400000)));
         const lastDays = new Array(dayCount).fill(0);
@@ -917,7 +999,7 @@ async function handleStatsEconomy(env, range, force, before) {
     if ((range === '31d' || range === 'all') && !before) {
       const dateFrom = range === 'all' ? '2000-01-01' : new Date(startTs).toISOString().slice(0, 10);
       const fastRows = await env.DB.prepare(
-        'SELECT date, gold_earned, silver_earned, gold_spent, silver_spent, sessions FROM stats_daily WHERE level=99 AND date >= ? ORDER BY date'
+        'SELECT date, gold_earned, silver_earned, gold_spent, silver_spent, sessions FROM stats_daily WHERE level=-1 AND date >= ? ORDER BY date'
       ).bind(dateFrom).all();
 
       if (fastRows && fastRows.results && fastRows.results.length > 0) {
@@ -1176,6 +1258,9 @@ async function handleStatsAppVersion(env, range, force, before) {
 // === Feedback stats ===
 async function handleStatsFeedback(env, force) {
   return cachedJson('feedback:latest', async () => {
+    try {
+      await env.DB.prepare('CREATE TABLE IF NOT EXISTS feedback_status (event_id INTEGER PRIMARY KEY, status TEXT, notes TEXT, updated_at INTEGER)').run();
+    } catch (_) {}
     const [
       totalRow,
       recentRows,
@@ -1223,11 +1308,13 @@ async function handleStatsSync(env, force) {
       totalDevicesRow,
       recentRows,
       deviceDistRow,
+      lastSyncRow,
     ] = await Promise.all([
       env.DB.prepare('SELECT COUNT(*) as c FROM sync_states').first(),
       env.DB.prepare("SELECT SUM(JSON_ARRAY_LENGTH(device_ids)) as total_devices, AVG(JSON_ARRAY_LENGTH(device_ids)) as avg_devices FROM sync_states").first(),
-      env.DB.prepare('SELECT key_hash, pid, device_ids, updated_at FROM sync_states ORDER BY updated_at DESC LIMIT 50').all(),
+      env.DB.prepare('SELECT s.key_hash, s.pid, s.device_ids, s.updated_at, l.username FROM sync_states s LEFT JOIN sync_lookup l ON l.key_hash = s.key_hash ORDER BY s.updated_at DESC LIMIT 50').all(),
       env.DB.prepare("SELECT JSON_ARRAY_LENGTH(device_ids) as dcount, COUNT(*) as c FROM sync_states GROUP BY dcount ORDER BY dcount").all(),
+      env.DB.prepare('SELECT MAX(updated_at) as last_sync FROM sync_states').first(),
     ]);
 
     const items = [];
@@ -1238,6 +1325,7 @@ async function handleStatsSync(env, force) {
         items.push({
           keyHash: r.key_hash,
           pid: r.pid,
+          username: r.username || '',
           devices: devices.length,
           updatedAt: r.updated_at,
         });
@@ -1250,6 +1338,7 @@ async function handleStatsSync(env, force) {
         totalAccounts: totalRow ? totalRow.c : 0,
         totalDevices: totalDevicesRow ? totalDevicesRow.total_devices || 0 : 0,
         avgDevicesPerAccount: totalDevicesRow ? Math.round((totalDevicesRow.avg_devices || 0) * 10) / 10 : 0,
+        lastSyncAt: lastSyncRow ? lastSyncRow.last_sync || 0 : 0,
         items,
         deviceDistribution: (deviceDistRow && deviceDistRow.results) || [],
         generatedAt: Date.now(),
@@ -1479,242 +1568,304 @@ async function handleSyncSave(request, env) {
 
   const serverTs = Date.now();
 
-  // Load existing sync state
-  const existing = await env.DB.prepare('SELECT pid, data_json, rewards_json, purchase_json, device_ids FROM sync_states WHERE key_hash = ?').bind(keyHash).first();
+  // Optimistic concurrency: retry up to 3 times if another device modified the row
+  let attempt = 0;
+  const MAX_SAVE_RETRIES = 3;
+  let approvedPurchases = [];
+  let rejectedPurchases = [];
+  while (attempt < MAX_SAVE_RETRIES) {
+    attempt++;
 
-  let mergedData = { ...data };
-  let rewardsLog = {};
-  let purchaseLog = [];
-  let deviceIds = [];
-  let existingPid = data.pid || null;
+    // Load existing sync state (including updated_at for optimistic lock)
+    const existing = await env.DB.prepare('SELECT pid, data_json, rewards_json, purchase_json, device_ids, updated_at FROM sync_states WHERE key_hash = ?').bind(keyHash).first();
+    const readUpdatedAt = existing ? existing.updated_at : null;
 
-  if (existing) {
-    existingPid = existing.pid;
-    try {
-      const decrypted = await aesDecrypt(existing.data_json, env.ENCRYPTION_KEY);
-      if (decrypted) {
-        const parsed = JSON.parse(decrypted);
-        // Deep clone parsed as base so we don't lose any keys
-        mergedData = JSON.parse(JSON.stringify(parsed));
+    let mergedData = { ...data };
+    let rewardsLog = {};
+    let purchaseLog = [];
+    let deviceIds = [];
+    let existingPid = data.pid || null;
 
-        // Bring in brand-new top-level fields from data
-        for (const key in data) {
-          if (!(key in parsed)) {
-            mergedData[key] = data[key];
-          }
-        }
+    if (existing) {
+      existingPid = existing.pid;
+      try {
+        const decrypted = await aesDecrypt(existing.data_json, env.ENCRYPTION_KEY, env.ENCRYPTION_KEY_LEGACY);
+        if (decrypted) {
+          const parsed = JSON.parse(decrypted);
+          // Deep clone parsed as base so we don't lose any keys
+          mergedData = JSON.parse(JSON.stringify(parsed));
 
-        // Scores: per-level max (iterate ALL keys from BOTH)
-        if (parsed.scores || data.scores) {
-          mergedData.scores = mergedData.scores || {};
-          const allKeys = new Set([...Object.keys(parsed.scores || {}), ...Object.keys(data.scores || {})]);
-          for (const k of allKeys) {
-            const pv = (parsed.scores && parsed.scores[k]) || 0;
-            const dv = (data.scores && data.scores[k]) || 0;
-            mergedData.scores[k] = Math.max(pv, dv);
-          }
-        }
-
-        // Times: per-level min
-        if (parsed.times || data.times) {
-          mergedData.times = mergedData.times || {};
-          const allKeys = new Set([...Object.keys(parsed.times || {}), ...Object.keys(data.times || {})]);
-          for (const k of allKeys) {
-            const pv = (parsed.times && parsed.times[k]) || Infinity;
-            const dv = (data.times && data.times[k]) || Infinity;
-            mergedData.times[k] = Math.min(pv, dv);
-          }
-        }
-
-        // Chips: per-level OR
-        if (parsed.chips || data.chips) {
-          mergedData.chips = mergedData.chips || {};
-          const allKeys = new Set([...Object.keys(parsed.chips || {}), ...Object.keys(data.chips || {})]);
-          for (const k of allKeys) {
-            const pa = (parsed.chips && parsed.chips[k]) || [];
-            const da = (data.chips && data.chips[k]) || [];
-            const maxLen = Math.max(pa.length, da.length);
-            const merged = [];
-            for (let i = 0; i < maxLen; i++) {
-              merged[i] = !!pa[i] || !!da[i];
+          // Bring in brand-new top-level fields from data
+          for (const key in data) {
+            if (!(key in parsed)) {
+              mergedData[key] = data[key];
             }
-            mergedData.chips[k] = merged;
           }
-        }
 
-        // Stats: per-level deep merge
-        if (parsed.stats || data.stats) {
-          mergedData.stats = mergedData.stats || {};
-          const allKeys = new Set([...Object.keys(parsed.stats || {}), ...Object.keys(data.stats || {})]);
-          for (const k of allKeys) {
-            const ps = (parsed.stats && parsed.stats[k]) || {};
-            const ds = (data.stats && data.stats[k]) || {};
-            mergedData.stats[k] = {
-              ...ps,
-              ...ds,
-              attempts: Math.max(ps.attempts || 0, ds.attempts || 0),
-              completions: Math.max(ps.completions || 0, ds.completions || 0),
-              hazards: Math.max(ps.hazards || 0, ds.hazards || 0),
-              silver: Math.max(ps.silver || 0, ds.silver || 0),
-              timePlayed: Math.max(ps.timePlayed || 0, ds.timePlayed || 0),
-              contentVersion: Math.max(ps.contentVersion || 0, ds.contentVersion || 0),
-              masterGems: Array.isArray(ds.masterGems) ? ds.masterGems.slice() : (Array.isArray(ps.masterGems) ? ps.masterGems.slice() : []),
+          // Scores: per-level max (iterate ALL keys from BOTH)
+          if (parsed.scores || data.scores) {
+            mergedData.scores = mergedData.scores || {};
+            const allKeys = new Set([...Object.keys(parsed.scores || {}), ...Object.keys(data.scores || {})]);
+            for (const k of allKeys) {
+              const pv = (parsed.scores && parsed.scores[k]) || 0;
+              const dv = (data.scores && data.scores[k]) || 0;
+              mergedData.scores[k] = Math.max(pv, dv);
+            }
+          }
+
+          // Times: per-level min
+          if (parsed.times || data.times) {
+            mergedData.times = mergedData.times || {};
+            const allKeys = new Set([...Object.keys(parsed.times || {}), ...Object.keys(data.times || {})]);
+            for (const k of allKeys) {
+              const pv = (parsed.times && parsed.times[k]) || Infinity;
+              const dv = (data.times && data.times[k]) || Infinity;
+              mergedData.times[k] = Math.min(pv, dv);
+            }
+          }
+
+          // Chips: per-level OR
+          if (parsed.chips || data.chips) {
+            mergedData.chips = mergedData.chips || {};
+            const allKeys = new Set([...Object.keys(parsed.chips || {}), ...Object.keys(data.chips || {})]);
+            for (const k of allKeys) {
+              const pa = (parsed.chips && parsed.chips[k]) || [];
+              const da = (data.chips && data.chips[k]) || [];
+              const maxLen = Math.max(pa.length, da.length);
+              const merged = [];
+              for (let i = 0; i < maxLen; i++) {
+                merged[i] = !!pa[i] || !!da[i];
+              }
+              mergedData.chips[k] = merged;
+            }
+          }
+
+          // Stats: per-level deep merge
+          if (parsed.stats || data.stats) {
+            mergedData.stats = mergedData.stats || {};
+            const allKeys = new Set([...Object.keys(parsed.stats || {}), ...Object.keys(data.stats || {})]);
+            for (const k of allKeys) {
+              const ps = (parsed.stats && parsed.stats[k]) || {};
+              const ds = (data.stats && data.stats[k]) || {};
+              mergedData.stats[k] = {
+                ...ps,
+                ...ds,
+                attempts: Math.max(ps.attempts || 0, ds.attempts || 0),
+                completions: Math.max(ps.completions || 0, ds.completions || 0),
+                hazards: Math.max(ps.hazards || 0, ds.hazards || 0),
+                silver: Math.max(ps.silver || 0, ds.silver || 0),
+                timePlayed: Math.max(ps.timePlayed || 0, ds.timePlayed || 0),
+                contentVersion: Math.max(ps.contentVersion || 0, ds.contentVersion || 0),
+                masterGems: Array.isArray(ds.masterGems) ? ds.masterGems.slice() : (Array.isArray(ps.masterGems) ? ps.masterGems.slice() : []),
+              };
+            }
+          }
+
+          // Unlocked: union
+          if (Array.isArray(parsed.unlocked) || Array.isArray(data.unlocked)) {
+            const uSet = new Set([...(parsed.unlocked || []), ...(data.unlocked || [])]);
+            mergedData.unlocked = Array.from(uSet);
+          }
+
+          // Silver: max
+          mergedData.silver = Math.max(parsed.silver || 0, data.silver || 0);
+          // GoldSpent: max
+          mergedData.goldSpent = Math.max(parsed.goldSpent || 0, data.goldSpent || 0);
+          // BonusGold: max
+          mergedData.bonusGold = Math.max(parsed.bonusGold || 0, data.bonusGold || 0);
+
+          // Owned skills: union
+          if (Array.isArray(parsed.ownedSkills) || Array.isArray(data.ownedSkills)) {
+            mergedData.ownedSkills = Array.from(new Set([...(parsed.ownedSkills || []), ...(data.ownedSkills || [])]));
+          }
+          // Owned cosmetics: union
+          if (Array.isArray(parsed.ownedCosmetics) || Array.isArray(data.ownedCosmetics)) {
+            mergedData.ownedCosmetics = Array.from(new Set([...(parsed.ownedCosmetics || []), ...(data.ownedCosmetics || [])]));
+          }
+          // Equipped skills: cloud wins (latest device)
+          if (Array.isArray(data.equippedSkills)) {
+            mergedData.equippedSkills = data.equippedSkills.slice(0, 3);
+          }
+          // Equipped cosmetics: cloud wins
+          if (data.equippedCosmetics && typeof data.equippedCosmetics === 'object') {
+            mergedData.equippedCosmetics = { ...data.equippedCosmetics };
+          }
+
+          // Consumables: per-item max
+          if (parsed.consumableInv || data.consumableInv) {
+            mergedData.consumableInv = mergedData.consumableInv || {};
+            const allKeys = new Set([...Object.keys(parsed.consumableInv || {}), ...Object.keys(data.consumableInv || {})]);
+            for (const k of allKeys) {
+              const pv = (parsed.consumableInv && parsed.consumableInv[k]) || 0;
+              const dv = (data.consumableInv && data.consumableInv[k]) || 0;
+              mergedData.consumableInv[k] = Math.max(pv, dv);
+            }
+          }
+
+          // globalData: per-key max (cumulative stats)
+          if (parsed.globalData || data.globalData) {
+            mergedData.globalData = mergedData.globalData || {};
+            const allKeys = new Set([...Object.keys(parsed.globalData || {}), ...Object.keys(data.globalData || {})]);
+            for (const k of allKeys) {
+              const pv = (parsed.globalData && parsed.globalData[k]) || 0;
+              const dv = (data.globalData && data.globalData[k]) || 0;
+              mergedData.globalData[k] = Math.max(pv, dv);
+            }
+          }
+
+          // Champion status: OR
+          if (parsed.championStatus || data.championStatus) {
+            mergedData.championStatus = {
+              ...(parsed.championStatus || {}),
+              ...(data.championStatus || {}),
+              unlocked: !!((parsed.championStatus && parsed.championStatus.unlocked) || (data.championStatus && data.championStatus.unlocked)),
             };
           }
-        }
 
-        // Unlocked: union
-        if (Array.isArray(parsed.unlocked) || Array.isArray(data.unlocked)) {
-          const uSet = new Set([...(parsed.unlocked || []), ...(data.unlocked || [])]);
-          mergedData.unlocked = Array.from(uSet);
-        }
-
-        // Silver: max
-        mergedData.silver = Math.max(parsed.silver || 0, data.silver || 0);
-        // GoldSpent: max
-        mergedData.goldSpent = Math.max(parsed.goldSpent || 0, data.goldSpent || 0);
-        // BonusGold: max
-        mergedData.bonusGold = Math.max(parsed.bonusGold || 0, data.bonusGold || 0);
-
-        // Owned skills: union
-        if (Array.isArray(parsed.ownedSkills) || Array.isArray(data.ownedSkills)) {
-          mergedData.ownedSkills = Array.from(new Set([...(parsed.ownedSkills || []), ...(data.ownedSkills || [])]));
-        }
-        // Owned cosmetics: union
-        if (Array.isArray(parsed.ownedCosmetics) || Array.isArray(data.ownedCosmetics)) {
-          mergedData.ownedCosmetics = Array.from(new Set([...(parsed.ownedCosmetics || []), ...(data.ownedCosmetics || [])]));
-        }
-        // Equipped skills: cloud wins (latest device)
-        if (Array.isArray(data.equippedSkills)) {
-          mergedData.equippedSkills = data.equippedSkills.slice(0, 3);
-        }
-        // Equipped cosmetics: cloud wins
-        if (data.equippedCosmetics && typeof data.equippedCosmetics === 'object') {
-          mergedData.equippedCosmetics = { ...data.equippedCosmetics };
-        }
-
-        // Consumables: per-item max
-        if (parsed.consumableInv || data.consumableInv) {
-          mergedData.consumableInv = mergedData.consumableInv || {};
-          const allKeys = new Set([...Object.keys(parsed.consumableInv || {}), ...Object.keys(data.consumableInv || {})]);
-          for (const k of allKeys) {
-            const pv = (parsed.consumableInv && parsed.consumableInv[k]) || 0;
-            const dv = (data.consumableInv && data.consumableInv[k]) || 0;
-            mergedData.consumableInv[k] = Math.max(pv, dv);
+          // Settings: cloud wins (latest device)
+          const settingsKeys = ['sfx', 'mus', 'ctrl', 'vibrate', 'orient', 'visualQuality', 'ghostsEnabled', 'showFps', 'autoRetryDelay'];
+          for (const sk of settingsKeys) {
+            if (sk in data) mergedData[sk] = data[sk];
           }
+
+          // Daily/streak: cloud wins
+          if ('dailyStreak' in data) mergedData.dailyStreak = data.dailyStreak;
+          if ('streakFreezes' in data) mergedData.streakFreezes = data.streakFreezes;
+          if (Array.isArray(data.frozenDays)) mergedData.frozenDays = data.frozenDays;
+          if ('lastChest' in data) mergedData.lastChest = data.lastChest;
+          if ('lastResurrect' in data) mergedData.lastResurrect = data.lastResurrect;
+          if (Array.isArray(data.hintsSeen)) mergedData.hintsSeen = data.hintsSeen;
+          if ('tutorialDone' in data) mergedData.tutorialDone = data.tutorialDone;
+          if ('ctrlPicked' in data) mergedData.ctrlPicked = data.ctrlPicked;
+        }
+      } catch (_) {}
+
+      try { rewardsLog = JSON.parse(existing.rewards_json) || {}; } catch (_) {}
+      try { purchaseLog = JSON.parse(existing.purchase_json) || []; } catch (_) {}
+      try { deviceIds = JSON.parse(existing.device_ids) || []; } catch (_) {}
+    }
+
+    // Deduplicate rewards
+    const approvedRewards = [];
+    if (Array.isArray(rewards)) {
+      for (const r of rewards) {
+        const key = r.type;
+        if (rewardsLog[key] && rewardsLog[key].date === r.date) continue; // duplicate
+        rewardsLog[key] = { date: r.date, silver: r.silver, reward: r.reward, claimedAt: serverTs };
+        approvedRewards.push(r);
+      }
+    }
+
+    // Deduplicate and validate purchases
+    approvedPurchases = [];
+    rejectedPurchases = [];
+    if (Array.isArray(pendingPurchases)) {
+      for (const p of pendingPurchases) {
+        // Deduplicate by id + ts
+        if (purchaseLog.find(x => x.id === p.id && x.ts === p.ts)) {
+          rejectedPurchases.push({ ...p, reason: 'duplicate' });
+          continue;
         }
 
-        // globalData: per-key max (cumulative stats)
-        if (parsed.globalData || data.globalData) {
-          mergedData.globalData = mergedData.globalData || {};
-          const allKeys = new Set([...Object.keys(parsed.globalData || {}), ...Object.keys(data.globalData || {})]);
-          for (const k of allKeys) {
-            const pv = (parsed.globalData && parsed.globalData[k]) || 0;
-            const dv = (data.globalData && data.globalData[k]) || 0;
-            mergedData.globalData[k] = Math.max(pv, dv);
-          }
+        // Simple balance check: compute total earned vs total spent
+        const totalSilverEarned = Object.values(mergedData.stats || {}).reduce((s, st) => s + (st.silver || 0), 0) +
+          Object.values(rewardsLog).reduce((s, r) => s + (r.silver || 0), 0);
+        const totalGoldEarned = Object.values(mergedData.scores || {}).reduce((s, sc) => s + Math.floor((sc || 0) / 50), 0) + (mergedData.bonusGold || 0);
+        const totalSilverSpent = purchaseLog.filter(x => x.currency === 'silver').reduce((s, x) => s + (x.cost || 0), 0);
+        const totalGoldSpent = purchaseLog.filter(x => x.currency === 'gold').reduce((s, x) => s + (x.cost || 0), 0);
+
+        if (p.currency === 'silver' && totalSilverEarned - totalSilverSpent < p.cost) {
+          rejectedPurchases.push({ ...p, reason: 'insufficient_silver' });
+          continue;
+        }
+        if (p.currency === 'gold' && totalGoldEarned - totalGoldSpent < p.cost) {
+          rejectedPurchases.push({ ...p, reason: 'insufficient_gold' });
+          continue;
         }
 
-        // Champion status: OR
-        if (parsed.championStatus || data.championStatus) {
-          mergedData.championStatus = {
-            ...(parsed.championStatus || {}),
-            ...(data.championStatus || {}),
-            unlocked: !!((parsed.championStatus && parsed.championStatus.unlocked) || (data.championStatus && data.championStatus.unlocked)),
-          };
-        }
+        purchaseLog.push(p);
+        approvedPurchases.push(p);
+      }
+    }
 
-        // Settings: cloud wins (latest device)
-        const settingsKeys = ['sfx', 'mus', 'ctrl', 'vibrate', 'orient', 'visualQuality', 'ghostsEnabled', 'showFps', 'autoRetryDelay'];
-        for (const sk of settingsKeys) {
-          if (sk in data) mergedData[sk] = data[sk];
-        }
+    // Device limit
+    if (deviceId && !deviceIds.includes(deviceId)) {
+      if (deviceIds.length >= SYNC_MAX_DEVICES) {
+        return errResponse('device limit reached (max 5)', 403, true);
+      }
+      deviceIds.push(deviceId);
+    }
 
-        // Daily/streak: cloud wins
-        if ('dailyStreak' in data) mergedData.dailyStreak = data.dailyStreak;
-        if ('streakFreezes' in data) mergedData.streakFreezes = data.streakFreezes;
-        if (Array.isArray(data.frozenDays)) mergedData.frozenDays = data.frozenDays;
-        if ('lastChest' in data) mergedData.lastChest = data.lastChest;
-        if ('lastResurrect' in data) mergedData.lastResurrect = data.lastResurrect;
-        if (Array.isArray(data.hintsSeen)) mergedData.hintsSeen = data.hintsSeen;
-        if ('tutorialDone' in data) mergedData.tutorialDone = data.tutorialDone;
-        if ('ctrlPicked' in data) mergedData.ctrlPicked = data.ctrlPicked;
+    // Encrypt and save
+    const encrypted = await aesEncrypt(JSON.stringify(mergedData), env.ENCRYPTION_KEY);
+
+    // Build PBKDF2 hash for new accounts (or if missing)
+    let pinSalt = null;
+    let pinHash = null;
+    let pinHashAlgo = null;
+    try {
+      const existingHashRow = await env.DB.prepare('SELECT pin_hash_algo FROM sync_states WHERE key_hash = ?').bind(keyHash).first();
+      if (!existingHashRow || !existingHashRow.pin_hash_algo) {
+        pinSalt = await generateSalt();
+        pinHash = await pbkdf2Hash(String(pin), pinSalt);
+        pinHashAlgo = 'pbkdf2';
       }
     } catch (_) {}
 
-    try { rewardsLog = JSON.parse(existing.rewards_json) || {}; } catch (_) {}
-    try { purchaseLog = JSON.parse(existing.purchase_json) || []; } catch (_) {}
-    try { deviceIds = JSON.parse(existing.device_ids) || []; } catch (_) {}
-  }
+    // Atomic batch: all writes succeed or fail together
+    const batchStmts = [];
 
-  // Deduplicate rewards
-  const approvedRewards = [];
-  if (Array.isArray(rewards)) {
-    for (const r of rewards) {
-      const key = r.type;
-      if (rewardsLog[key] && rewardsLog[key].date === r.date) continue; // duplicate
-      rewardsLog[key] = { date: r.date, silver: r.silver, reward: r.reward, claimedAt: serverTs };
-      approvedRewards.push(r);
+    // Archive to history
+    if (existing) {
+      batchStmts.push(env.DB.prepare(
+        'INSERT INTO sync_history (key_hash, version, data_json, created_at) VALUES (?, (SELECT COALESCE(MAX(version), 0) + 1 FROM sync_history WHERE key_hash = ?), ?, ?)'
+      ).bind(keyHash, keyHash, existing.data_json, serverTs));
+      // Trim old history
+      batchStmts.push(env.DB.prepare(
+        'DELETE FROM sync_history WHERE key_hash = ? AND version <= (SELECT MAX(version) - ? FROM sync_history WHERE key_hash = ?)'
+      ).bind(keyHash, SYNC_HISTORY_MAX, keyHash));
     }
-  }
 
-  // Deduplicate and validate purchases
-  const approvedPurchases = [];
-  const rejectedPurchases = [];
-  if (Array.isArray(pendingPurchases)) {
-    for (const p of pendingPurchases) {
-      // Deduplicate by id + ts
-      if (purchaseLog.find(x => x.id === p.id && x.ts === p.ts)) {
-        rejectedPurchases.push({ ...p, reason: 'duplicate' });
+    // Upsert sync_states with optional PBKDF2 columns and optimistic concurrency
+    if (existing) {
+      if (pinHashAlgo) {
+        batchStmts.push(env.DB.prepare(
+          'UPDATE sync_states SET pid = ?, data_json = ?, rewards_json = ?, purchase_json = ?, device_ids = ?, updated_at = ?, pin_hash_algo = ?, pin_salt = ?, pin_hash = ? WHERE key_hash = ? AND updated_at = ?'
+        ).bind(existingPid, encrypted, JSON.stringify(rewardsLog), JSON.stringify(purchaseLog), JSON.stringify(deviceIds), serverTs, pinHashAlgo, pinSalt, pinHash, keyHash, readUpdatedAt));
+      } else {
+        batchStmts.push(env.DB.prepare(
+          'UPDATE sync_states SET pid = ?, data_json = ?, rewards_json = ?, purchase_json = ?, device_ids = ?, updated_at = ? WHERE key_hash = ? AND updated_at = ?'
+        ).bind(existingPid, encrypted, JSON.stringify(rewardsLog), JSON.stringify(purchaseLog), JSON.stringify(deviceIds), serverTs, keyHash, readUpdatedAt));
+      }
+    } else {
+      if (pinHashAlgo) {
+        batchStmts.push(env.DB.prepare(
+          'INSERT INTO sync_states (key_hash, pid, data_json, rewards_json, purchase_json, device_ids, updated_at, pin_hash_algo, pin_salt, pin_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ).bind(keyHash, existingPid, encrypted, JSON.stringify(rewardsLog), JSON.stringify(purchaseLog), JSON.stringify(deviceIds), serverTs, pinHashAlgo, pinSalt, pinHash));
+      } else {
+        batchStmts.push(env.DB.prepare(
+          'INSERT INTO sync_states (key_hash, pid, data_json, rewards_json, purchase_json, device_ids, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).bind(keyHash, existingPid, encrypted, JSON.stringify(rewardsLog), JSON.stringify(purchaseLog), JSON.stringify(deviceIds), serverTs));
+      }
+    }
+
+    const batchResults = await env.DB.batch(batchStmts);
+
+    // Check if UPDATE succeeded (optimistic concurrency)
+    const updateResult = batchResults[batchResults.length - 1];
+    if (existing && updateResult && updateResult.meta && updateResult.meta.changes === 0) {
+      // Conflict: another device wrote between our read and write. Retry with backoff.
+      if (attempt < MAX_SAVE_RETRIES) {
+        const backoff = 50 * Math.pow(2, attempt - 1); // 50ms, 100ms, 200ms
+        await new Promise(r => setTimeout(r, backoff));
         continue;
       }
-
-      // Simple balance check: compute total earned vs total spent
-      const totalSilverEarned = Object.values(mergedData.stats || {}).reduce((s, st) => s + (st.silver || 0), 0) +
-        Object.values(rewardsLog).reduce((s, r) => s + (r.silver || 0), 0);
-      const totalGoldEarned = Object.values(mergedData.scores || {}).reduce((s, sc) => s + Math.floor((sc || 0) / 50), 0) + (mergedData.bonusGold || 0);
-      const totalSilverSpent = purchaseLog.filter(x => x.currency === 'silver').reduce((s, x) => s + (x.cost || 0), 0);
-      const totalGoldSpent = purchaseLog.filter(x => x.currency === 'gold').reduce((s, x) => s + (x.cost || 0), 0);
-
-      if (p.currency === 'silver' && totalSilverEarned - totalSilverSpent < p.cost) {
-        rejectedPurchases.push({ ...p, reason: 'insufficient_silver' });
-        continue;
-      }
-      if (p.currency === 'gold' && totalGoldEarned - totalGoldSpent < p.cost) {
-        rejectedPurchases.push({ ...p, reason: 'insufficient_gold' });
-        continue;
-      }
-
-      purchaseLog.push(p);
-      approvedPurchases.push(p);
+      return errResponse('conflict — another device modified the account, please retry', 409, true);
     }
+
+    // Success — exit retry loop
+    break;
   }
-
-  // Device limit
-  if (deviceId && !deviceIds.includes(deviceId)) {
-    if (deviceIds.length >= SYNC_MAX_DEVICES) {
-      return errResponse('device limit reached (max 3)', 403, true);
-    }
-    deviceIds.push(deviceId);
-  }
-
-  // Encrypt and save
-  const encrypted = await aesEncrypt(JSON.stringify(mergedData), env.ENCRYPTION_KEY);
-
-  // Archive to history
-  if (existing) {
-    await env.DB.prepare(
-      'INSERT INTO sync_history (key_hash, version, data_json, created_at) VALUES (?, (SELECT COALESCE(MAX(version), 0) + 1 FROM sync_history WHERE key_hash = ?), ?, ?)'
-    ).bind(keyHash, keyHash, existing.data_json, serverTs).run();
-    // Trim old history
-    await env.DB.prepare(
-      'DELETE FROM sync_history WHERE key_hash = ? AND version <= (SELECT MAX(version) - ? FROM sync_history WHERE key_hash = ?)'
-    ).bind(keyHash, SYNC_HISTORY_MAX, keyHash).run();
-  }
-
-  await env.DB.prepare(
-    'INSERT INTO sync_states (key_hash, pid, data_json, rewards_json, purchase_json, device_ids, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(key_hash) DO UPDATE SET pid = excluded.pid, data_json = excluded.data_json, rewards_json = excluded.rewards_json, purchase_json = excluded.purchase_json, device_ids = excluded.device_ids, updated_at = excluded.updated_at'
-  ).bind(keyHash, existingPid, encrypted, JSON.stringify(rewardsLog), JSON.stringify(purchaseLog), JSON.stringify(deviceIds), serverTs).run();
 
   // Upsert username+mmyy lookup for forgot-pin support
   try {
@@ -1761,10 +1912,54 @@ async function handleSyncLoad(request, env) {
     });
   }
 
-  const row = await env.DB.prepare('SELECT pid, data_json, rewards_json, purchase_json, device_ids, updated_at FROM sync_states WHERE key_hash = ?').bind(keyHash).first();
+  let row = await env.DB.prepare('SELECT key_hash, pid, data_json, rewards_json, purchase_json, device_ids, updated_at, pin_hash_algo, pin_salt, pin_hash, recovery_code_hash FROM sync_states WHERE key_hash = ?').bind(keyHash).first();
+
+  // If no direct keyHash match, try PBKDF2 lookup by username+mmyy (for migrated accounts)
+  let usedFallback = false;
+  let actualKeyHash = keyHash;
+  if (!row) {
+    try {
+      const lookup = await env.DB.prepare('SELECT key_hash FROM sync_lookup WHERE username = ? AND mmyy = ?').bind(String(username).toUpperCase(), String(mmyy)).first();
+      if (lookup && lookup.key_hash) {
+        usedFallback = true;
+        actualKeyHash = lookup.key_hash;
+        row = await env.DB.prepare('SELECT key_hash, pid, data_json, rewards_json, purchase_json, device_ids, updated_at, pin_hash_algo, pin_salt, pin_hash, recovery_code_hash FROM sync_states WHERE key_hash = ?').bind(lookup.key_hash).first();
+      }
+    } catch (_) {}
+  }
+
   if (!row) {
     await recordSyncFail(keyHash, env);
     return errResponse('invalid credentials', 401, true);
+  }
+
+  // PIN verification — MUST pass before any decrypt or migration
+  if (row.pin_hash_algo === 'pbkdf2' && row.pin_salt && row.pin_hash) {
+    // PBKDF2 account: verify against stored hash
+    const derived = await pbkdf2Hash(String(pin), row.pin_salt);
+    if (!constantTimeEqual(derived, row.pin_hash)) {
+      await recordSyncFail(keyHash, env);
+      return errResponse('invalid credentials', 401, true);
+    }
+  } else if (usedFallback) {
+    // Legacy account found via fallback: verify PIN by recomputing keyHash
+    const expectedKeyHash = await hashSyncKey(username, mmyy, pin, env.SYNC_SALT);
+    if (!constantTimeEqual(expectedKeyHash, row.key_hash)) {
+      await recordSyncFail(keyHash, env);
+      return errResponse('invalid credentials', 401, true);
+    }
+  }
+  // If direct keyHash match and legacy: the keyHash equality already proved the PIN
+
+  // Lazy migration: compute PBKDF2 hash on first successful legacy login
+  if (!row.pin_hash_algo || row.pin_hash_algo === 'hmac') {
+    try {
+      const newSalt = await generateSalt();
+      const newHash = await pbkdf2Hash(String(pin), newSalt);
+      await env.DB.prepare(
+        'UPDATE sync_states SET pin_hash_algo = ?, pin_salt = ?, pin_hash = ? WHERE key_hash = ?'
+      ).bind('pbkdf2', newSalt, newHash, actualKeyHash).run();
+    } catch (_) {}
   }
 
   // Validate device
@@ -1779,7 +1974,7 @@ async function handleSyncLoad(request, env) {
     await env.DB.prepare('UPDATE sync_states SET device_ids = ? WHERE key_hash = ?').bind(JSON.stringify(deviceIds), keyHash).run();
   }
 
-  const decrypted = await aesDecrypt(row.data_json, env.ENCRYPTION_KEY);
+  const decrypted = await aesDecrypt(row.data_json, env.ENCRYPTION_KEY, env.ENCRYPTION_KEY_LEGACY);
   if (!decrypted) {
     return errResponse('decryption failed', 500, true);
   }
@@ -1818,6 +2013,7 @@ async function handleSyncLoad(request, env) {
     purchaseLog,
     deviceIds,
     updatedAt: row.updated_at,
+    requiresRecoveryCodeSetup: !row.recovery_code_hash,
   }, 200, true);
 }
 
@@ -1847,7 +2043,7 @@ async function handleSyncCheck(request, env) {
   // Try to decrypt for a data summary
   let summary = {};
   try {
-    const decrypted = await aesDecrypt(row.data_json, env.ENCRYPTION_KEY);
+    const decrypted = await aesDecrypt(row.data_json, env.ENCRYPTION_KEY, env.ENCRYPTION_KEY_LEGACY);
     if (decrypted) {
       const d = JSON.parse(decrypted);
       const levelsCleared = Object.keys(d.stats || {}).filter(k => d.stats[k] && d.stats[k].completions > 0).length;
@@ -1884,7 +2080,7 @@ async function handleSyncChangePin(request, env) {
   }
 
   const oldKeyHash = await hashSyncKey(username, mmyy, oldPin, env.SYNC_SALT);
-  const row = await env.DB.prepare('SELECT pid, data_json, rewards_json, purchase_json, updated_at FROM sync_states WHERE key_hash = ?').bind(oldKeyHash).first();
+  const row = await env.DB.prepare('SELECT pid, data_json, rewards_json, purchase_json, updated_at, recovery_code_hash, recovery_code_salt FROM sync_states WHERE key_hash = ?').bind(oldKeyHash).first();
   if (!row) {
     return errResponse('invalid credentials', 401, true);
   }
@@ -1895,10 +2091,14 @@ async function handleSyncChangePin(request, env) {
     return errResponse('new pin collision, try another', 409, true);
   }
 
-  // Move row to new key hash, clear device IDs
+  // Generate new PBKDF2 hash for the new PIN
+  const newPinSalt = await generateSalt();
+  const newPinHash = await pbkdf2Hash(String(newPin), newPinSalt);
+
+  // Move row to new key hash, clear device IDs, update PBKDF2 hash, preserve recovery code
   await env.DB.prepare(
-    'INSERT INTO sync_states (key_hash, pid, data_json, rewards_json, purchase_json, device_ids, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).bind(newKeyHash, row.pid, row.data_json, row.rewards_json, row.purchase_json, '[]', Date.now()).run();
+    'INSERT INTO sync_states (key_hash, pid, data_json, rewards_json, purchase_json, device_ids, updated_at, pin_hash_algo, pin_salt, pin_hash, recovery_code_hash, recovery_code_salt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(newKeyHash, row.pid, row.data_json, row.rewards_json, row.purchase_json, '[]', Date.now(), 'pbkdf2', newPinSalt, newPinHash, row.recovery_code_hash || null, row.recovery_code_salt || null).run();
 
   await env.DB.prepare('DELETE FROM sync_states WHERE key_hash = ?').bind(oldKeyHash).run();
   await env.DB.prepare('DELETE FROM sync_attempts WHERE key_hash = ?').bind(oldKeyHash).run();
@@ -1915,7 +2115,7 @@ async function handleSyncChangePin(request, env) {
 
 async function handleSyncForgotPin(request, env) {
   const body = await readJsonBody(request);
-  const { username, mmyy, newPin } = body || {};
+  const { username, mmyy, newPin, recoveryCode } = body || {};
 
   if (!username || !mmyy || !newPin) {
     return errResponse('username, mmyy, and newPin required', 400, true);
@@ -1939,47 +2139,48 @@ async function handleSyncForgotPin(request, env) {
     });
   }
 
-  // Ensure sync_lookup table exists
-  try {
-    await env.DB.prepare('CREATE TABLE IF NOT EXISTS sync_lookup (username TEXT, mmyy TEXT, key_hash TEXT PRIMARY KEY)').run();
-  } catch (_) {}
+  // DB-backed per-(username, mmyy) lockout for forgot-pin
+  const userLockKey = await hashSyncKey(username, mmyy, '', env.SYNC_SALT);
+  const userLockout = await checkSyncLockout(userLockKey, env);
+  if (userLockout.locked) {
+    return new Response(JSON.stringify({ ok: false, error: 'locked_out' }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json', 'Retry-After': String(userLockout.retryAfter), ...publicCorsHeaders() },
+    });
+  }
 
   // Lookup existing account by username+mmyy
   let lookupRow = null;
   try {
-    lookupRow = await env.DB.prepare('SELECT key_hash FROM sync_lookup WHERE username = ? AND mmyy = ?').bind(username, mmyy).first();
+    lookupRow = await env.DB.prepare('SELECT key_hash FROM sync_lookup WHERE username = ? AND mmyy = ?').bind(String(username).toUpperCase(), String(mmyy)).first();
   } catch (_) {}
-
-  // Fallback: scan sync_states for old accounts created before sync_lookup existed
-  if (!lookupRow || !lookupRow.key_hash) {
-    try {
-      const allRows = await env.DB.prepare('SELECT key_hash, data_json FROM sync_states LIMIT 500').all();
-      for (const r of allRows.results || []) {
-        try {
-          const decrypted = await aesDecrypt(r.data_json, env.ENCRYPTION_KEY);
-          if (decrypted) {
-            const parsed = JSON.parse(decrypted);
-            if (parsed.playerName === String(username).toUpperCase() && parsed.playerMmyy === String(mmyy)) {
-              lookupRow = { key_hash: r.key_hash };
-              // Backfill sync_lookup for future forgot-pin calls
-              try {
-                await env.DB.prepare(
-                  'INSERT INTO sync_lookup (username, mmyy, key_hash) VALUES (?, ?, ?) ON CONFLICT(key_hash) DO UPDATE SET username = excluded.username, mmyy = excluded.mmyy'
-                ).bind(String(username).toUpperCase(), String(mmyy), r.key_hash).run();
-              } catch (_) {}
-              break;
-            }
-          }
-        } catch (_) {}
-      }
-    } catch (_) {}
-  }
 
   if (!lookupRow || !lookupRow.key_hash) {
     return errResponse('no account found with that username and birthday', 404, true);
   }
 
   const oldKeyHash = lookupRow.key_hash;
+
+  // Check recovery code requirement
+  const accountRow = await env.DB.prepare('SELECT recovery_code_hash, recovery_code_salt FROM sync_states WHERE key_hash = ?').bind(oldKeyHash).first();
+  const hasRecoveryCode = !!(accountRow && accountRow.recovery_code_hash);
+
+  if (hasRecoveryCode) {
+    if (!recoveryCode || typeof recoveryCode !== 'string') {
+      await recordSyncFail(userLockKey, env);
+      return errResponse('recovery_code_required', 403, true);
+    }
+    const normalizedCode = String(recoveryCode).toUpperCase().replace(/-/g, '');
+    const expectedHash = await pbkdf2Hash(normalizedCode, accountRow.recovery_code_salt);
+    if (!constantTimeEqual(expectedHash, accountRow.recovery_code_hash)) {
+      await recordSyncFail(userLockKey, env);
+      return errResponse('invalid recovery code', 403, true);
+    }
+  } else if (!legacyForgotPinEnabled(env)) {
+    await recordSyncFail(userLockKey, env);
+    return errResponse('recovery_code_required', 403, true);
+  }
+
   const newKeyHash = await hashSyncKey(username, mmyy, newPin, env.SYNC_SALT);
 
   // If new key hash is same as old, PIN hasn't changed
@@ -1997,10 +2198,14 @@ async function handleSyncForgotPin(request, env) {
     return errResponse('account data missing', 500, true);
   }
 
+  // Generate new PBKDF2 hash for the new PIN
+  const newPinSalt = await generateSalt();
+  const newPinHash = await pbkdf2Hash(String(newPin), newPinSalt);
+
   // Migrate to new key hash, clear device IDs, update PIN inside encrypted data
   let updatedData = row.data_json;
   try {
-    const decrypted = await aesDecrypt(row.data_json, env.ENCRYPTION_KEY);
+    const decrypted = await aesDecrypt(row.data_json, env.ENCRYPTION_KEY, env.ENCRYPTION_KEY_LEGACY);
     if (decrypted) {
       const parsed = JSON.parse(decrypted);
       parsed.syncPin = newPin; // update PIN inside data too
@@ -2009,12 +2214,17 @@ async function handleSyncForgotPin(request, env) {
   } catch (_) {}
 
   await env.DB.prepare(
-    'INSERT INTO sync_states (key_hash, pid, data_json, rewards_json, purchase_json, device_ids, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).bind(newKeyHash, row.pid, updatedData, row.rewards_json, row.purchase_json, '[]', Date.now()).run();
+    'INSERT INTO sync_states (key_hash, pid, data_json, rewards_json, purchase_json, device_ids, updated_at, pin_hash_algo, pin_salt, pin_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(newKeyHash, row.pid, updatedData, row.rewards_json, row.purchase_json, '[]', Date.now(), 'pbkdf2', newPinSalt, newPinHash).run();
 
   await env.DB.prepare('DELETE FROM sync_states WHERE key_hash = ?').bind(oldKeyHash).run();
   await env.DB.prepare('DELETE FROM sync_attempts WHERE key_hash = ?').bind(oldKeyHash).run();
-  await env.DB.prepare('DELETE FROM sync_lookup WHERE key_hash = ?').bind(oldKeyHash).run();
+  try {
+    await env.DB.prepare('DELETE FROM sync_lookup WHERE key_hash = ?').bind(oldKeyHash).run();
+  } catch (_) {}
+
+  // Clear per-user forgot-pin lockout on success
+  await clearSyncFails(userLockKey, env);
 
   // Insert new lookup row for the new key hash
   try {
@@ -2026,12 +2236,53 @@ async function handleSyncForgotPin(request, env) {
   return jsonResponse({ ok: true, newKeyHash }, 200, true);
 }
 
+async function handleSyncSetRecoveryCode(request, env) {
+  const body = await readJsonBody(request);
+  const { username, mmyy, pin, recoveryCode } = body || {};
+
+  if (!username || !mmyy || !pin || !recoveryCode) {
+    return errResponse('username, mmyy, pin, and recoveryCode required', 400, true);
+  }
+  if (String(recoveryCode).replace(/-/g, '').length < 12) {
+    return errResponse('recoveryCode must be at least 12 chars', 400, true);
+  }
+
+  const keyHash = await hashSyncKey(username, mmyy, pin, env.SYNC_SALT);
+  const lockout = await checkSyncLockout(keyHash, env);
+  if (lockout.locked) {
+    return new Response(JSON.stringify({ ok: false, error: 'too many failed attempts' }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json', 'Retry-After': String(lockout.retryAfter), ...publicCorsHeaders() },
+    });
+  }
+
+  const row = await env.DB.prepare('SELECT 1 FROM sync_states WHERE key_hash = ?').bind(keyHash).first();
+  if (!row) {
+    await recordSyncFail(keyHash, env);
+    return errResponse('invalid credentials', 401, true);
+  }
+
+  const normalizedCode = String(recoveryCode).toUpperCase().replace(/-/g, '');
+  const codeSalt = await generateSalt();
+  const codeHash = await pbkdf2Hash(normalizedCode, codeSalt);
+
+  await env.DB.prepare(
+    'UPDATE sync_states SET recovery_code_hash = ?, recovery_code_salt = ? WHERE key_hash = ?'
+  ).bind(codeHash, codeSalt, keyHash).run();
+
+  await clearSyncFails(keyHash, env);
+  return jsonResponse({ ok: true }, 200, true);
+}
+
 // === Admin: Player flags ===
 
 async function handleAdminFlagPlayer(request, env) {
   const body = await readJsonBody(request);
   const { pid, reason } = body || {};
   if (!pid || !PID_REGEX.test(pid)) return errResponse('invalid pid', 400);
+  try {
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS player_flags (pid TEXT PRIMARY KEY, flag_type TEXT, reason TEXT, flagged_by TEXT, flagged_at INTEGER)").run();
+  } catch (_) {}
   await env.DB.prepare(
     "INSERT INTO player_flags (pid, flag_type, reason, flagged_by, flagged_at) VALUES (?, 'review', ?, 'dashboard', ?) ON CONFLICT(pid) DO UPDATE SET flag_type='review', reason=excluded.reason, flagged_at=excluded.flagged_at"
   ).bind(pid, reason || null, Date.now()).run();
@@ -2051,6 +2302,9 @@ async function handleAdminBanPid(request, env) {
   const body = await readJsonBody(request);
   const { pid, reason } = body || {};
   if (!pid || !PID_REGEX.test(pid)) return errResponse('invalid pid', 400);
+  try {
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS player_flags (pid TEXT PRIMARY KEY, flag_type TEXT, reason TEXT, flagged_by TEXT, flagged_at INTEGER)").run();
+  } catch (_) {}
   await env.DB.prepare(
     "INSERT INTO player_flags (pid, flag_type, reason, flagged_by, flagged_at) VALUES (?, 'banned', ?, 'dashboard', ?) ON CONFLICT(pid) DO UPDATE SET flag_type='banned', reason=excluded.reason, flagged_at=excluded.flagged_at"
   ).bind(pid, reason || null, Date.now()).run();
@@ -2072,6 +2326,9 @@ async function handleAdminFeedbackMarkRead(request, env) {
   const { eventId, status, notes } = body || {};
   if (!eventId || typeof eventId !== 'number') return errResponse('eventId required', 400);
   if (!['open', 'read', 'resolved'].includes(status)) return errResponse('status must be open|read|resolved', 400);
+  try {
+    await env.DB.prepare('CREATE TABLE IF NOT EXISTS feedback_status (event_id INTEGER PRIMARY KEY, status TEXT, notes TEXT, updated_at INTEGER)').run();
+  } catch (_) {}
   await env.DB.prepare(
     "INSERT INTO feedback_status (event_id, status, notes, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(event_id) DO UPDATE SET status=excluded.status, notes=excluded.notes, updated_at=excluded.updated_at"
   ).bind(eventId, status, notes || null, Date.now()).run();
@@ -2082,6 +2339,9 @@ async function handleAdminFeedbackMarkRead(request, env) {
 
 async function handleStatsFlaggedPlayers(env, force) {
   return cachedJson('flagged-players', async () => {
+    try {
+      await env.DB.prepare("CREATE TABLE IF NOT EXISTS player_flags (pid TEXT PRIMARY KEY, flag_type TEXT, reason TEXT, flagged_by TEXT, flagged_at INTEGER)").run();
+    } catch (_) {}
     const rows = await env.DB.prepare(
       "SELECT pf.pid, pf.flag_type, pf.reason, pf.flagged_at, MAX(e.name) as name, MAX(e.server_ts) as last_seen, COUNT(e.id) as events FROM player_flags pf LEFT JOIN events e ON e.pid = pf.pid GROUP BY pf.pid ORDER BY pf.flagged_at DESC"
     ).all();
@@ -2097,13 +2357,13 @@ async function handleAdminSyncResetPin(request, env) {
     return errResponse('keyHash and newPin required', 400);
   }
 
-  const row = await env.DB.prepare('SELECT username FROM sync_states WHERE key_hash = ?').bind(keyHash).first();
+  const row = await env.DB.prepare('SELECT data_json FROM sync_states WHERE key_hash = ?').bind(keyHash).first();
   if (!row) {
     return errResponse('sync state not found', 404);
   }
 
   // Extract username from decrypted data to compute new hash
-  const decrypted = await aesDecrypt(row.data_json, env.ENCRYPTION_KEY);
+  const decrypted = await aesDecrypt(row.data_json, env.ENCRYPTION_KEY, env.ENCRYPTION_KEY_LEGACY);
   let username = '';
   let mmyy = '';
   try {
@@ -2118,11 +2378,17 @@ async function handleAdminSyncResetPin(request, env) {
     return errResponse('new pin collision', 409);
   }
 
-  await env.DB.prepare(
-    'UPDATE sync_states SET key_hash = ?, device_ids = ?, updated_at = ? WHERE key_hash = ?'
-  ).bind(newKeyHash, '[]', Date.now(), keyHash).run();
+  // Generate new PBKDF2 hash for the reset PIN
+  const newPinSalt = await generateSalt();
+  const newPinHash = await pbkdf2Hash(String(newPin), newPinSalt);
 
-  await env.DB.prepare('DELETE FROM sync_lookup WHERE key_hash = ?').bind(keyHash).run();
+  await env.DB.prepare(
+    'UPDATE sync_states SET key_hash = ?, device_ids = ?, updated_at = ?, pin_hash_algo = ?, pin_salt = ?, pin_hash = ? WHERE key_hash = ?'
+  ).bind(newKeyHash, '[]', Date.now(), 'pbkdf2', newPinSalt, newPinHash, keyHash).run();
+
+  try {
+    await env.DB.prepare('DELETE FROM sync_lookup WHERE key_hash = ?').bind(keyHash).run();
+  } catch (_) {}
   try {
     await env.DB.prepare(
       'INSERT INTO sync_lookup (username, mmyy, key_hash) VALUES (?, ?, ?) ON CONFLICT(key_hash) DO UPDATE SET username = excluded.username, mmyy = excluded.mmyy'
@@ -2155,6 +2421,15 @@ async function handleStatsSearch(env, url, force) {
 // === Pre-aggregation ===
 
 async function aggregateDailyStats(env, daysBack) {
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS stats_daily (
+      date TEXT, level INTEGER, starts INTEGER, completes INTEGER, deaths INTEGER,
+      unique_players INTEGER, avg_ms REAL, p50_ms REAL, p95_ms REAL,
+      gold_earned INTEGER, silver_earned INTEGER, gold_spent INTEGER, silver_spent INTEGER,
+      sessions INTEGER, heartbeats INTEGER, computed_at INTEGER,
+      PRIMARY KEY (date, level)
+    )`).run();
+  } catch (_) {}
   const now = Date.now();
   const target = new Date(now - daysBack * 86400000);
   const dateUtc = target.toISOString().slice(0, 10); // YYYY-MM-DD
@@ -2255,7 +2530,7 @@ async function aggregateDailyStats(env, daysBack) {
     }
   }
 
-  // Global row (level = NULL represented as -1 in PK since NULL can't be PK — use special value 99)
+  // Global row (level = NULL represented as -1 in PK since NULL can't be PK)
   const allTimes = Object.values(timesByLevel).flat().sort((a, b) => a - b);
   const globalEconRow = await env.DB.prepare(`
     SELECT
@@ -2266,11 +2541,11 @@ async function aggregateDailyStats(env, daysBack) {
     FROM events WHERE server_ts >= ? AND server_ts < ?
   `).bind(dayStart, dayEnd).first();
 
-  // Use level=99 as sentinel for "global" row (since NULL can't be part of composite PK)
+  // Use level=-1 as sentinel for "global" row (since NULL can't be part of composite PK)
   stmts.push(env.DB.prepare(
     'INSERT OR REPLACE INTO stats_daily (date, level, starts, completes, deaths, unique_players, avg_ms, p50_ms, p95_ms, gold_earned, silver_earned, gold_spent, silver_spent, sessions, heartbeats, computed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
   ).bind(
-    dateUtc, 99, globalStarts, globalCompletes, globalDeaths, globalPlayers,
+    dateUtc, -1, globalStarts, globalCompletes, globalDeaths, globalPlayers,
     allTimes.length > 0 ? allTimes.reduce((a, b) => a + b, 0) / allTimes.length : null,
     percentile(allTimes, 0.5), percentile(allTimes, 0.95),
     Math.round(globalEconRow?.ge || 0), Math.round(globalEconRow?.se || 0),
@@ -2286,6 +2561,12 @@ async function aggregateDailyStats(env, daysBack) {
 }
 
 async function computeRetention(env) {
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS retention_daily (
+      cohort_week TEXT PRIMARY KEY, cohort_size INTEGER,
+      d1_retained INTEGER, d7_retained INTEGER, d30_retained INTEGER, computed_at INTEGER
+    )`).run();
+  } catch (_) {}
   const now = Date.now();
   const twelveWeeksAgo = now - 12 * 7 * 86400000;
 
@@ -2357,9 +2638,8 @@ async function handleCron(env) {
   console.log('[CRON] Total events:', eventsResult?.count ?? 0);
   console.log('[CRON] Events older than 90 days:', oldEventsResult?.count ?? 0);
 
-  // Phase 4: Aggregate daily stats
+  // Phase 4: Aggregate daily stats (completed days only — today is excluded because it's partial)
   try {
-    await aggregateDailyStats(env, 0); // today (partial, refreshed hourly)
     await aggregateDailyStats(env, 1); // yesterday
   } catch (e) {
     console.log('[CRON] aggregation error:', e.message);
@@ -2379,13 +2659,33 @@ async function handleCron(env) {
 
 // === Retention cohorts ===
 async function handleStatsRetention(env, range, force, before) {
-  // TODO Phase 4+: fast path via retention_daily table
   const cacheKey = 'retention:' + range + '|' + (before || 0);
   return cachedJson(cacheKey, async () => {
-    // Always look back 12 weeks for cohorts regardless of range
+    // Fast path: pre-computed retention_daily
+    try {
+      const fastRows = await env.DB.prepare(
+        'SELECT cohort_week, cohort_size, d1_retained, d7_retained, d30_retained FROM retention_daily ORDER BY cohort_week DESC LIMIT 12'
+      ).all();
+      if (fastRows && fastRows.results && fastRows.results.length > 0) {
+        const cohorts = fastRows.results.map(r => ({
+          week: r.cohort_week,
+          cohort_size: r.cohort_size,
+          d1: r.d1_retained,
+          d7: r.d7_retained,
+          d30: r.d30_retained,
+          d1_pct: r.cohort_size > 0 ? Math.round((r.d1_retained / r.cohort_size) * 100) : 0,
+          d7_pct: r.cohort_size > 0 ? Math.round((r.d7_retained / r.cohort_size) * 100) : 0,
+          d30_pct: r.cohort_size > 0 ? Math.round((r.d30_retained / r.cohort_size) * 100) : 0,
+        }));
+        return { ok: true, data: { cohorts } };
+      }
+    } catch (_) {
+      // retention_daily may not exist yet, fall through
+    }
+
+    // Slow path: compute from events using batched queries
     const twelveWeeksAgo = (before || Date.now()) - 12 * 7 * 86400000;
 
-    // Step 1: Get cohort assignments (first_seen per pid, bucketed by ISO week)
     const cohortRows = await env.DB.prepare(`
       SELECT pid, MIN(server_ts) as first_seen
       FROM events
@@ -2397,8 +2697,7 @@ async function handleStatsRetention(env, range, force, before) {
       return { ok: true, data: { cohorts: [] } };
     }
 
-    // Bucket into weeks
-    const weekMap = {}; // week_str -> [{pid, first_seen}]
+    const weekMap = {};
     for (const r of cohortRows.results) {
       const d = new Date(r.first_seen);
       const jan1 = new Date(d.getFullYear(), 0, 1);
@@ -2408,35 +2707,35 @@ async function handleStatsRetention(env, range, force, before) {
       weekMap[weekKey].push({ pid: r.pid, first_seen: r.first_seen });
     }
 
-    // Step 2: For each cohort, check retention windows
     const cohorts = [];
     const sortedWeeks = Object.keys(weekMap).sort();
+    const BATCH = 900; // Stay under SQLite 999 param limit
 
     for (const week of sortedWeeks) {
       const members = weekMap[week];
       const cohort_size = members.length;
       let d1 = 0, d7 = 0, d30 = 0;
 
-      // Batch check: for each member, check if they have events in the retention windows
-      for (const m of members) {
-        const d1Start = m.first_seen + 24 * 3600000;
-        const d1End = m.first_seen + 48 * 3600000;
-        const d7Start = m.first_seen + 6 * 86400000;
-        const d7End = m.first_seen + 8 * 86400000;
-        const d30Start = m.first_seen + 29 * 86400000;
-        const d30End = m.first_seen + 31 * 86400000;
+      for (let i = 0; i < members.length; i += BATCH) {
+        const batch = members.slice(i, i + BATCH);
+        const minFs = Math.min(...batch.map(m => m.first_seen));
+        const maxFs = Math.max(...batch.map(m => m.first_seen));
 
-        const row = await env.DB.prepare(`
-          SELECT
-            EXISTS(SELECT 1 FROM events WHERE pid=? AND server_ts>=? AND server_ts<?) as d1,
-            EXISTS(SELECT 1 FROM events WHERE pid=? AND server_ts>=? AND server_ts<?) as d7,
-            EXISTS(SELECT 1 FROM events WHERE pid=? AND server_ts>=? AND server_ts<?) as d30
-        `).bind(m.pid, d1Start, d1End, m.pid, d7Start, d7End, m.pid, d30Start, d30End).first();
+        const rows = await env.DB.prepare(
+          'SELECT pid, server_ts FROM events WHERE pid IN (' + batch.map(() => '?').join(',') + ') AND server_ts >= ? AND server_ts < ?'
+        ).bind(...batch.map(m => m.pid), minFs + 86400000, maxFs + 31 * 86400000).all();
 
-        if (row) {
-          if (row.d1) d1++;
-          if (row.d7) d7++;
-          if (row.d30) d30++;
+        const pidEvents = {};
+        for (const r of (rows && rows.results) || []) {
+          if (!pidEvents[r.pid]) pidEvents[r.pid] = [];
+          pidEvents[r.pid].push(r.server_ts);
+        }
+
+        for (const m of batch) {
+          const evts = pidEvents[m.pid] || [];
+          if (evts.some(ts => ts >= m.first_seen + 86400000 && ts < m.first_seen + 2 * 86400000)) d1++;
+          if (evts.some(ts => ts >= m.first_seen + 6 * 86400000 && ts < m.first_seen + 8 * 86400000)) d7++;
+          if (evts.some(ts => ts >= m.first_seen + 29 * 86400000 && ts < m.first_seen + 31 * 86400000)) d30++;
         }
       }
 
@@ -2798,7 +3097,12 @@ async function handleAnomalies(env, force) {
     const d35ago = new Date(now - 35 * 86400000).toISOString().slice(0, 10);
 
     // Check if stats_daily has data
-    const hasData = await env.DB.prepare('SELECT COUNT(*) as c FROM stats_daily WHERE date >= ?').bind(d35ago).first();
+    let hasData;
+    try {
+      hasData = await env.DB.prepare('SELECT COUNT(*) as c FROM stats_daily WHERE date >= ?').bind(d35ago).first();
+    } catch (e) {
+      return { ok: true, data: { alerts: [], computedAt: now, note: 'Stats aggregation not yet initialized. Run /admin/aggregate to backfill.' } };
+    }
     if (!hasData || hasData.c === 0) {
       return { ok: true, data: { alerts: [], computedAt: now, note: 'No aggregated data yet. Run /admin/aggregate to backfill.' } };
     }
@@ -2907,10 +3211,10 @@ async function handleAnomalies(env, force) {
 
     // Global: DAU drop
     const recentDAU = await env.DB.prepare(
-      'SELECT AVG(unique_players) as avg_dau FROM stats_daily WHERE level=99 AND date >= ?'
+      'SELECT AVG(unique_players) as avg_dau FROM stats_daily WHERE level=-1 AND date >= ?'
     ).bind(d7ago).first();
     const baselineDAU = await env.DB.prepare(
-      'SELECT AVG(unique_players) as avg_dau FROM stats_daily WHERE level=99 AND date >= ? AND date < ?'
+      'SELECT AVG(unique_players) as avg_dau FROM stats_daily WHERE level=-1 AND date >= ? AND date < ?'
     ).bind(d35ago, d7ago).first();
 
     if (recentDAU && baselineDAU && baselineDAU.avg_dau > 0) {
@@ -2974,6 +3278,9 @@ export default {
       }
       if (path === '/sync/forgot-pin' && request.method === 'POST') {
         return await handleSyncForgotPin(request, env);
+      }
+      if (path === '/sync/set-recovery-code' && request.method === 'POST') {
+        return await handleSyncSetRecoveryCode(request, env);
       }
       // Stats and dashboard endpoints require auth cookie
       const needsAuth = path === '/stats' || path.startsWith('/stats/') || path === '/dashboard' || path === '/' || path.startsWith('/admin/');
@@ -3089,7 +3396,8 @@ export default {
         } else {
           // Escape </script in bundle to prevent premature script tag closure when injected into HTML.
           const safeBundle = dashboardBundle.replace(/<\/script/gi, '<\\/script');
-          html = dashboardHtml.replace('/* __BUNDLE__ */', safeBundle);
+          // Use replacer function to avoid $& / $$$ special-character interpolation
+          html = dashboardHtml.replace('/* __BUNDLE__ */', () => safeBundle);
         }
         return new Response(html, {
           headers: {

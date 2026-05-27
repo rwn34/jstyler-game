@@ -2,7 +2,7 @@ import { useState, useEffect } from 'preact/hooks';
 import { range, loadedAt } from '../state.js';
 import { fetchJson } from '../api.js';
 import { fmtNum } from '../format.js';
-import { COUNTRY_FLAGS } from '../constants.js';
+import { COUNTRY_FLAGS, COUNTRY_NAMES } from '../constants.js';
 import { Card } from '../components/Card.jsx';
 import { Table } from '../components/Table.jsx';
 import { LoadingPane } from '../components/LoadingPane.jsx';
@@ -33,7 +33,7 @@ export function Geo({ force }) {
 
   const today = new Date().toISOString().slice(0, 10);
   const columns = [
-    { key: 'cc', label: 'Country', sortable: true, sortType: 'string', render: r => <span>{COUNTRY_FLAGS[r.cc] || '🏳️'} {r.cc}</span> },
+    { key: 'cc', label: 'Country', sortable: true, sortType: 'string', render: r => <span>{COUNTRY_FLAGS[r.cc] || '🏳️'} {COUNTRY_NAMES[r.cc] || r.cc}</span> },
     { key: 'players', label: 'Players', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.players) },
     { key: 'sessions', label: 'Sessions', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.sessions) },
     { key: 'completes', label: 'Wins', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.completes) },
@@ -51,7 +51,7 @@ export function Geo({ force }) {
     <>
       <div class="grid">
         <Card label="Countries" val={fmtNum(d.countries.length)} hint="with activity" />
-        <Card label="Top Country" val={(COUNTRY_FLAGS[topCountry.cc] || '') + ' ' + topCountry.cc} cls="live" hint={fmtNum(topCountry.players) + ' players'} />
+        <Card label="Top Country" val={(COUNTRY_FLAGS[topCountry.cc] || '🏳️') + ' ' + (COUNTRY_NAMES[topCountry.cc] || topCountry.cc)} cls="live" hint={fmtNum(topCountry.players) + ' players'} />
         {topRegionEntry && <Card label="Top Region" val={topRegionEntry.region} hint={topCountry.cc + ' • ' + fmtNum(topRegionEntry.players) + ' players'} />}
       </div>
 
@@ -74,7 +74,7 @@ export function Geo({ force }) {
         return (
           <div key={c.cc}>
             <h3 style="cursor:pointer" onClick={() => setExpanded(expanded === c.cc ? null : c.cc)}>
-              {expanded === c.cc ? '▼' : '▶'} {COUNTRY_FLAGS[c.cc] || ''} {c.cc} Regions
+              {expanded === c.cc ? '▼' : '▶'} {COUNTRY_FLAGS[c.cc] || '🏳️'} {COUNTRY_NAMES[c.cc] || c.cc} Regions
             </h3>
             {expanded === c.cc && (
               <div class="panel scroll-x">

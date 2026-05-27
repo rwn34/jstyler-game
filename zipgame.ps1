@@ -108,8 +108,8 @@ if ($changelogVersion -and $currentItems.Count -gt 0) {
     $versionEntries += @{ version = $changelogVersion; items = $currentItems }
 }
 
-# Generate in-game changelog HTML (last 15 versions)
-$maxVersions = 15
+# Generate in-game changelog HTML (all versions)
+$maxVersions = 100
 $selectedVersions = $versionEntries | Select-Object -First $maxVersions
 
 $changelogHtmlParts = @()

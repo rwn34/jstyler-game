@@ -24,9 +24,12 @@ h3{font-size:.7rem;font-weight:700;color:#bbb;letter-spacing:1px;margin:12px 0 6
 .check-btn:hover{background:rgba(0,255,255,0.2)}
 
 /* Tabs */
-.tabs{display:flex;gap:4px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;border-bottom:1px solid rgba(0,229,255,.15);margin-bottom:14px}
-.tabs::-webkit-scrollbar{display:none}
-.tab{padding:8px 16px;font-size:.7rem;font-weight:700;letter-spacing:1.5px;color:#aaa;background:transparent;border:none;cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;font-family:inherit;text-transform:uppercase;white-space:nowrap;scroll-snap-align:start}
+.tabs-scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;width:100%;border-bottom:1px solid rgba(0,229,255,.15);margin-bottom:14px;scrollbar-width:thin;scrollbar-color:rgba(0,255,255,.25) transparent}
+.tabs-scroll::-webkit-scrollbar{height:4px}
+.tabs-scroll::-webkit-scrollbar-track{background:transparent}
+.tabs-scroll::-webkit-scrollbar-thumb{background:rgba(0,255,255,.25);border-radius:2px}
+.tabs{display:flex;gap:4px;width:max-content}
+.tab{padding:8px 16px;font-size:.7rem;font-weight:700;letter-spacing:1.5px;color:#aaa;background:transparent;border:none;cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;font-family:inherit;text-transform:uppercase;white-space:nowrap;flex:0 0 auto}
 .tab:hover{color:#0ff}
 .tab.active{color:#0ff;border-bottom-color:#0ff;text-shadow:0 0 6px rgba(0,255,255,.4)}
 .pane{display:none}
@@ -71,28 +74,18 @@ td.warn{color:#fa0;text-align:right;font-weight:700}
 tr:hover td{background:rgba(0,255,255,.03)}
 .scroll-x{overflow-x:auto}
 
-/* Table card layout for small viewports */
+/* Mobile tables: keep as real tables with horizontal scroll */
 @container (max-width: 720px) {
-  table,thead,tbody,tr,th,td{display:block}
-  thead{position:absolute;left:-9999px}
-  tr{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px 12px;margin-bottom:8px}
-  td{padding:4px 0;border:none;display:flex;justify-content:space-between;align-items:center}
-  td::before{content:attr(data-label);color:#aaa;font-size:.55rem;text-transform:uppercase;letter-spacing:1px;flex:0 0 40%;margin-right:8px}
-  td:first-child{font-weight:700;color:#0ff;font-size:.75rem;display:block;margin-bottom:4px;border-bottom:1px solid rgba(0,255,255,.15);padding-bottom:6px}
-  td:first-child::before{display:none}
-  td.num,td.gold,td.warn{text-align:left}
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{min-width:600px;font-size:.6rem}
+  th,td{padding:5px 6px}
 }
 /* Fallback for browsers without container queries */
 @supports not (container-type: inline-size) {
   @media (max-width: 720px) {
-    table,thead,tbody,tr,th,td{display:block}
-    thead{position:absolute;left:-9999px}
-    tr{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px 12px;margin-bottom:8px}
-    td{padding:4px 0;border:none;display:flex;justify-content:space-between;align-items:center}
-    td::before{content:attr(data-label);color:#aaa;font-size:.55rem;text-transform:uppercase;letter-spacing:1px;flex:0 0 40%;margin-right:8px}
-    td:first-child{font-weight:700;color:#0ff;font-size:.75rem;display:block;margin-bottom:4px;border-bottom:1px solid rgba(0,255,255,.15);padding-bottom:6px}
-    td:first-child::before{display:none}
-    td.num,td.gold,td.warn{text-align:left}
+    .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    table{min-width:600px;font-size:.6rem}
+    th,td{padding:5px 6px}
   }
 }
 
@@ -258,12 +251,14 @@ tr:hover td{background:rgba(0,255,255,.03)}
 
 /* Responsive: compact toolbar on small screens */
 @media (max-width: 640px) {
-  .range-btn{padding:4px 6px;font-size:.6rem;letter-spacing:0}
+  .range-btn{padding:3px 5px;font-size:.55rem;letter-spacing:0;min-width:28px}
+  .range-label{font-size:.55rem}
   .compare-toggle span{display:none}
   .compare-toggle::after{content:'⇄';font-size:.8rem}
   .grid{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
   .search-bar input{width:120px}
   .feed-item{grid-template-columns:60px 80px 1fr 70px;font-size:.6rem}
+  .tab{padding:6px 10px;font-size:.6rem;letter-spacing:1px}
 }
 
 /* Player modal full-screen on mobile */

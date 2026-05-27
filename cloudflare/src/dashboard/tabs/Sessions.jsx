@@ -73,7 +73,7 @@ export function Sessions({ force }) {
       <h2>Activity by Day & Hour</h2>
       <div class="panel">
         {d.dowHeatmap ? <DayHourHeatmap data={d.dowHeatmap} /> : <EmptyState message="No day-of-week data" />}
-        <div style="font-size:.5rem;color:#666;margin-top:6px;font-family:monospace;text-align:center">Sun–Sat × 0–23 UTC • opacity = relative activity</div>
+        <div style="font-size:.5rem;color:#666;margin-top:6px;font-family:monospace;text-align:center">Sun–Sat × 0–23 UTC+7 • opacity = relative activity</div>
       </div>
 
       <h2>Hourly Activity (UTC+7)</h2>

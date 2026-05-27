@@ -3,3 +3,18 @@ archive/
 cloudflare/node_modules/
 cloudflare/.wrangler/
 cloudflare/package-lock.json
+
+*.backup
+
+# Temp / generated test files
+bundle_js_only.js
+check_bytes.py
+cloudflare/test-dashboard.js
+cookies.txt
+curl_output.txt
+dashboard_*.html
+worker_test.html
+test-screenshots/
+
+# Activity logs (auto-generated)
+.ai/activity/

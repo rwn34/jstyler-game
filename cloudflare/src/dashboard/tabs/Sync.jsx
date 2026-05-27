@@ -28,10 +28,11 @@ export function Sync({ force }) {
   const today = new Date().toISOString().slice(0, 10);
 
   const cols = [
+    { key: 'username', label: 'Username', sortable: true, sortType: 'string', render: r => r.username || <span style="color:#666">—</span> },
     { key: 'keyHash', label: 'Key Hash', render: r => truncatePid(r.keyHash), className: 'pid' },
     { key: 'pid', label: 'PID', render: r => truncatePid(r.pid), className: 'pid' },
     { key: 'devices', label: 'Devices', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.devices) },
-    { key: 'updatedAt', label: 'Last Updated', sortable: true, sortType: 'date', render: r => fmtAgo(r.updatedAt) },
+    { key: 'updatedAt', label: 'Last Sync', sortable: true, sortType: 'date', render: r => fmtAgo(r.updatedAt) },
   ];
 
   return (
@@ -40,6 +41,7 @@ export function Sync({ force }) {
         <Card label="Sync Accounts" val={fmtNum(d.totalAccounts)} cls="live" hint="registered" />
         <Card label="Total Devices" val={fmtNum(d.totalDevices)} cls="gold" hint="linked" />
         <Card label="Avg Devices/Acct" val={d.avgDevicesPerAccount} />
+        <Card label="Last Sync" val={d.lastSyncAt ? fmtAgo(d.lastSyncAt) : '—'} cls="live" hint="across all accounts" />
       </div>
 
       <h2>Device Distribution</h2>

@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'preact/hooks';
 import { currentPlayerPid } from '../state.js';
 import { fetchJson } from '../api.js';
 import { fmtNum, fmtMs, fmtAgo, fmtDateTime, escapeHtml, truncatePid } from '../format.js';
-import { LEVEL_NAMES, COUNTRY_FLAGS } from '../constants.js';
+import { LEVEL_NAMES, COUNTRY_FLAGS, COUNTRY_NAMES } from '../constants.js';
 import { Card } from './Card.jsx';
 import { Heatmap } from './Heatmap.jsx';
 import { BarRow } from './BarRow.jsx';
@@ -104,7 +104,7 @@ function PlayerActions({ d, pid, setData }) {
 function PlayerDetail({ d, pid, setData }) {
   const champBadge = d.isChampion ? <span class="badge gold">★ MASTER</span> : null;
   const returnBadge = d.isReturning ? <span class="badge gold">RETURNING</span> : <span class="badge warn">TRIAL</span>;
-  const flag = d.country ? (COUNTRY_FLAGS[d.country] || '🌍') + ' ' + d.country : '';
+  const flag = d.country ? (COUNTRY_FLAGS[d.country] || '🌍') + ' ' + (COUNTRY_NAMES[d.country] || d.country) : '';
 
   const today = new Date().toISOString().slice(0, 10);
   const levelCols = [
@@ -194,7 +194,7 @@ function PlayerDetail({ d, pid, setData }) {
 
       <h2>Device & Locale</h2>
       <div class="panel" style="font-family:monospace;font-size:.7rem;color:#bbb">
-        {d.country && <div>Country: {COUNTRY_FLAGS[d.country] || '🌍'} {d.country}</div>}
+        {d.country && <div>Country: {COUNTRY_FLAGS[d.country] || '🌍'} {COUNTRY_NAMES[d.country] || d.country}</div>}
         {d.screen && <div>Screen: {d.screen}</div>}
         {d.language && <div>Language: {d.language}</div>}
       </div>

@@ -2530,6 +2530,11 @@ function openSyncPanel(){
             autoBtn.textContent=(typeof syncAuto!=='undefined'&&syncAuto)?'ON':'OFF';
             autoBtn.style.background=(typeof syncAuto!=='undefined'&&syncAuto)?'#0f8':'#555';
         }
+        var rcStatus=$('recoveryCodeStatus');
+        if(rcStatus){
+            var hasCode=(function(){try{return localStorage.getItem('ndj_recoveryCodeSet')==='1';}catch(e){return false;}})();
+            rcStatus.innerHTML='Recovery code: <span style="color:'+(hasCode?'#0f8':'#fa0')+'">'+(hasCode?'\u2713 Set':'\u2717 Not set (recommended)')+'</span>';
+        }
     }else{
         // Fresh device: show both Register and Link Device tabs
         $('syncTabRegister').style.display='block';
@@ -2715,14 +2720,113 @@ function changeSyncPinUI(){
         }
     });
 }
+function generateRecoveryCode(){
+    var alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    var out='';
+    var rand=new Uint8Array(16);
+    if(window.crypto&&crypto.getRandomValues)crypto.getRandomValues(rand);
+    else for(var i=0;i<16;i++)rand[i]=Math.floor(Math.random()*256);
+    for(var i=0;i<16;i++){
+        if(i>0&&i%4===0)out+='-';
+        out+=alphabet[rand[i]%32];
+    }
+    return out;
+}
+function maybeShowRecoveryCodeModal(){
+    try{
+        if(localStorage.getItem('ndj_recoveryCodeSet')==='1')return;
+        if(window._recoveryCodeShownThisSession)return;
+        var dismissCount=parseInt(localStorage.getItem('ndj_recoveryCodeDismissCount')||'0',10);
+        if(dismissCount>=5)return;
+    }catch(e){return;}
+    showRecoveryCodeModal();
+}
+function showRecoveryCodeModal(){
+    var modal=$('recoveryCodeModal');
+    if(!modal)return;
+    var code=generateRecoveryCode();
+    var displayEl=$('recoveryCodeDisplay');
+    var continueBtn=$('recoveryCodeContinue');
+    var copyBtn=$('recoveryCodeCopy');
+    var dismissBtn=$('recoveryCodeDismiss');
+    var errorEl=$('recoveryCodeError');
+    displayEl.textContent=code;
+    errorEl.style.display='none';
+    modal.style.display='flex';
+    var seconds=5;
+    continueBtn.disabled=true;
+    continueBtn.style.opacity='0.5';
+    continueBtn.textContent='Continue ('+seconds+')';
+    var iv=setInterval(function(){
+        seconds--;
+        if(seconds<=0){
+            clearInterval(iv);
+            continueBtn.disabled=false;
+            continueBtn.style.opacity='1';
+            continueBtn.textContent="I've saved it, continue";
+        }else{
+            continueBtn.textContent='Continue ('+seconds+')';
+        }
+    },1000);
+    function escHandler(ev){if(ev.key==='Escape')closeModal('dismiss');}
+    function closeModal(reasonDismiss){
+        modal.style.display='none';
+        clearInterval(iv);
+        document.removeEventListener('keydown',escHandler);
+        if(reasonDismiss){
+            window._recoveryCodeShownThisSession=true;
+            try{
+                var n=parseInt(localStorage.getItem('ndj_recoveryCodeDismissCount')||'0',10)+1;
+                localStorage.setItem('ndj_recoveryCodeDismissCount',String(n));
+                if(typeof sendMetric==='function')sendMetric('ui_event',{action:'recovery_code_dismissed',meta:String(n)});
+            }catch(e){}
+        }
+    }
+    copyBtn.onclick=function(){
+        if(navigator.clipboard&&navigator.clipboard.writeText){
+            navigator.clipboard.writeText(code).then(function(){
+                copyBtn.textContent='Copied!';
+                setTimeout(function(){copyBtn.textContent='Copy';},1500);
+            });
+        }else{
+            var ta=document.createElement('textarea');ta.value=code;document.body.appendChild(ta);
+            ta.select();document.execCommand('copy');document.body.removeChild(ta);
+            copyBtn.textContent='Copied!';
+            setTimeout(function(){copyBtn.textContent='Copy';},1500);
+        }
+    };
+    continueBtn.onclick=function(){
+        if(continueBtn.disabled)return;
+        continueBtn.disabled=true;
+        continueBtn.textContent='Saving\u2026';
+        setRecoveryCode(code,function(success,errOrData){
+            if(success){
+                var statusEl=document.getElementById('recoveryCodeStatus');
+                if(statusEl)statusEl.innerHTML='Recovery code: <span style="color:#0f8">\u2713 Set</span>';
+                closeModal();
+            }else{
+                errorEl.textContent='Could not save: '+(errOrData||'unknown')+'. Please try again.';
+                errorEl.style.display='block';
+                continueBtn.disabled=false;
+                continueBtn.textContent="I've saved it, continue";
+                if(errOrData==='not_supported'){
+                    setTimeout(function(){closeModal('dismiss');},2500);
+                }
+            }
+        });
+    };
+    dismissBtn.onclick=function(){closeModal('dismiss');};
+    document.addEventListener('keydown',escHandler);
+}
 function forgotSyncPinUI(){
     var newPin=$('syncForgotNewPin').value.trim();
+    var rc=($('forgotRecoveryCode')||{}).value||'';
     var status=$('syncStatus');
     if(!newPin||newPin.length!==6||!/^[0-9]{6}$/.test(newPin)){status.textContent='Enter new 6-digit PIN.';status.style.color='#f80';return;}
     if(!playerName||!playerMmyy){status.textContent='Not registered.';status.style.color='#f80';return;}
     if(!confirm('⚠️ RESET PIN\n\nThis will reset your PIN and clear all linked devices.\n\nContinue?')){return;}
     status.textContent='Resetting PIN...';status.style.color='#0ff';
-    forgotSyncPin(playerName,playerMmyy,newPin,function(success,error){
+    forgotSyncPin(playerName,playerMmyy,newPin,rc,function(success,error){
         if(success){
             status.textContent='PIN reset! Re-link your other devices.';status.style.color='#0f8';
             $('syncForgotNewPin').value='';$('syncOldPin').value='';

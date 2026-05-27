@@ -38,4 +38,10 @@ range.subscribe(syncToHash);
 currentPlayerPid.subscribe(syncToHash);
 
 // Mount app
-render(<App />, document.getElementById('root'));
+try {
+  render(<App />, document.getElementById('root'));
+} catch (e) {
+  var root = document.getElementById('root');
+  if (root) root.innerHTML = '<div style="padding:40px;text-align:center;font-family:monospace;color:#f44;"><h1>Dashboard Error</h1><pre style="color:#aaa;white-space:pre-wrap;">' + String(e && e.stack || e) + '</pre></div>';
+  console.error('Dashboard mount failed:', e);
+}

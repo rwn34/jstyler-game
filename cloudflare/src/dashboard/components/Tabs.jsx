@@ -34,21 +34,23 @@ export function Tabs() {
 
   return (
     <nav aria-label="Dashboard tabs">
-      <div class="tabs" role="tablist" onKeyDown={onKeyDown}>
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            role="tab"
-            id={`tab-${t.id}`}
-            aria-selected={currentTab.value === t.id}
-            aria-controls={`pane-${t.id}`}
-            tabIndex={currentTab.value === t.id ? 0 : -1}
-            class={`tab${currentTab.value === t.id ? ' active' : ''}`}
-            onClick={() => { currentTab.value = t.id; }}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div class="tabs-scroll">
+        <div class="tabs" role="tablist" onKeyDown={onKeyDown}>
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              role="tab"
+              id={`tab-${t.id}`}
+              aria-selected={currentTab.value === t.id}
+              aria-controls={`pane-${t.id}`}
+              tabIndex={currentTab.value === t.id ? 0 : -1}
+              class={`tab${currentTab.value === t.id ? ' active' : ''}`}
+              onClick={() => { currentTab.value = t.id; }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
     </nav>
   );

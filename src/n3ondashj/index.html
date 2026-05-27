@@ -569,7 +569,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     <canvas id="bootParticles" style="position:absolute;inset:0;z-index:2;"></canvas>
     <h1 style="z-index:1;">N3ON DashJ<span class="glitch" data-text="N3ON DashJ"></span></h1>
     <span class="sub" style="z-index:1;">jstylr</span>
-    <span style="z-index:1;font-size:.55rem;color:#444;font-family:monospace;">v1.2.54</span>
+    <span style="z-index:1;font-size:.55rem;color:#444;font-family:monospace;">v1.2.59</span>
     <div id="bootTips" style="z-index:1;font-size:0.6rem;color:#888;font-family:monospace;max-width:80vw;text-align:center;line-height:1.4;opacity:0;transition:opacity 0.5s ease;margin-top:-8px;"></div>
 </div>
 
@@ -684,7 +684,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     <!-- Cloud Sync moved to Profile panel -->
     <div style="text-align: center; margin-top: 15px; font-family: monospace;">
         <div style="display:flex;gap:6px;width:100%;">
-            <button onclick="openChangelog()" style="flex:1;padding:8px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#333,#222);border:1px solid rgba(255,255,255,0.15);color:#aaa;">📋 UPDATE LOG &nbsp; <span style='color:#666;font-size:0.6rem;'>v1.2.54</span></button>
+            <button onclick="openChangelog()" style="flex:1;padding:8px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#333,#222);border:1px solid rgba(255,255,255,0.15);color:#aaa;">📋 UPDATE LOG &nbsp; <span style='color:#666;font-size:0.6rem;'>v1.2.59</span></button>
             <button onclick="restartGame()" title="Restart the game to apply updates" style="flex:0 0 auto;padding:8px 14px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#0a4,#062);border:1px solid rgba(0,255,136,0.3);color:#0f8;">🔄 RESTART</button>
         </div>
         <button onclick="showPrivacyPolicy()" style="background:transparent; border:none; color:#444; font-size:0.6rem; font-weight:normal; text-decoration:underline; cursor:pointer; padding:5px; box-shadow:none; margin-top:2px;">🔒 Privacy Policy</button>
@@ -752,13 +752,30 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
   <button onclick="closeChangelog()" style="background:rgba(255,68,68,0.2);border:1px solid #f44;color:#f44;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:monospace;font-weight:700;font-size:.65rem;letter-spacing:1px;">✕ CLOSE</button>
 </div>
 <div style="width:100%;max-width:360px;max-height:60vh;overflow-y:auto;text-align:left;padding:10px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.1);">
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.54</div>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.59</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
 <li>Build</li>
 </ul>
-<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.53</div>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.58</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Fixed mojibake (garbled Unicode characters) caused by PowerShell encoding corruption — restored emojis, symbols, and special characters throughout the game UI</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.57</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
 <li>Build</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.56</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Build</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.55</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>**Device limit raised** from 3 to 5 per cloud sync account</li>
+<li>Mobile tables keep real column layout with horizontal scroll instead of card stacking</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.54</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>**Blank page bug** — `src\n3ondashj\index.html` had a leading `?` before `<!DOCTYPE html>` (introduced in v1.2.0), forcing browsers into quirks mode and causing a blank screen on some renderers. Removed the stray character.</li>
 </ul>
 <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.53</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
@@ -823,11 +840,6 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 <li>**Rate limiting added to PIN change** — `handleSyncChangePin` now has IP-based rate limiting (same window as save).</li>
 <li>**PWA banner dismissal not persisted** — `dismissPwaBanner()` saved `pwaBannerDismissed=true` but `showPwaInstallBanner()` never checked it, causing the banner to reappear every time the player returned to stage select.</li>
 <li>**PWA banner hidden on iOS** — The banner required `deferredPrompt` to be truthy, but iOS Safari never fires `beforeinstallprompt`. Removed the `deferredPrompt` gate from banner visibility so iOS users see the install helper too.</li>
-<li>**🔗 Link Device entry points** — Added "Link device" hyperlink in:</li>
-<li>→ First-time onboarding modal (below the name input)</li>
-<li>→ Name-change prompt overlay (below the input field)</li>
-<li>→ Clicking it opens the Cloud Sync panel focused on the **Link Device** tab</li>
-<li>→ Onboarding/overlay is temporarily hidden while the sync panel is open, then restored on close</li>
 </ul>
 <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.47</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
@@ -837,13 +849,11 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 </ul>
 <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.46</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
-<li>PWA install banner no longer blocked by aggressive CSS `!important` rule</li>
-<li>PIN and birthday inputs now use `inputmode="numeric"` for mobile numeric keypad</li>
+<li>Build</li>
 </ul>
 <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.45</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
 <li>Client-worker compatibility — sync load response now handles both old and new field names</li>
-<li>Cloud Sync status text now updates correctly when opening Settings panel</li>
 </ul>
 <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.44</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
@@ -889,6 +899,445 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.38</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
 <li>Build</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.37</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Build</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.36</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>PWA install button now shows fallback message when `beforeinstallprompt` isn't available (Android non-Chrome)</li>
+<li>PWA banner/button visibility now correctly tied to viewport mode — only one shows at a time</li>
+<li>Streak display consistency: `updateLsStreakBtn()` now uses same visual streak calculation as calendar</li>
+<li>HUD vertical alignment: `hudCenter`, `hudLeft`, and `hudRight` all now at `top: 64px`</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.35</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>iOS PWA reward now requires 60+ seconds of play after tapping install (anti-gaming)</li>
+<li>Landscape narrow mode: install button moved from floating banner to under `lsGlobalStats` in right column, centered</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.34</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>PWA install incentive banner on stage select — "📲 INSTALL APP — 100♦" appears when PWA is supported and not yet installed</li>
+<li>iOS users must play 60+ seconds after tapping install to claim reward; Android users get reward only after accepting install</li>
+<li>Dismissible banner (✕) with persistent state</li>
+<li>Stage-select random tip — same `homeTooltip` style/behavior as in-game tips, shows for 3s when opening stage select</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.33</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>PWA install button was hidden on iOS because Safari doesn't fire `beforeinstallprompt`</li>
+<li>iOS users now see "📱 ADD TO HOME SCREEN" button with step-by-step Safari instructions</li>
+<li>Android/Chrome behavior unchanged: button appears when `beforeinstallprompt` fires</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.32</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>In-game tooltip (`homeTooltip`) lowered 20px (60px → 80px) to avoid HUD overlap</li>
+<li>Stage-select hint tags (`btnHints`) lowered 20px (56px → 76px)</li>
+<li>Boot screen now shows a random tip from the 50-tip pool during loading</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.31</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Day rollover detection via `visibilitychange` — streak, daily stage, and chest UI refresh automatically when app becomes visible after 5 AM UTC+7</li>
+<li>Control layout independence — jump button now has separate position (`jumpX`/`jumpY`) and size (`jumpSize`) from movement controls</li>
+<li>Streak calendar visuals — active streak days in yellow/orange, frozen days in ice blue, missing days hollow</li>
+<li>Streak time tracking now accumulates across retries (`sessionRunTime`) — dying and retrying multiple times still counts toward the 60s play threshold</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.30</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>HUD transparency halved (rgba 0.1 → 0.05) on all three panels</li>
+<li>In-game changelog consolidated: v1.2.12–v1.2.29 merged into single v1.2.30 entry</li>
+<li>Past dailies are collectible badge grid (no replay)</li>
+<li>Build pipeline restored: always auto-bump</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.29</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Build script restored: default is always auto-bump (no change → don't run zipgame)</li>
+<li>Past dailies displayed as collectible badge grid instead of replay list</li>
+<li>Removed daily replay feature — past dailies are badges only</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.28</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Build script default changed: no-bump on plain build, use `-Bump` to release</li>
+<li>Past daily stages now shown as badge grid (date only, no replay)</li>
+<li>Removed daily replay feature entirely — past dailies are collectible badges only</li>
+<li>Daily replay race condition fixes from v1.2.26–v1.2.27</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.27</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Daily replay now actually starts the game — `replayDailyStage` was referencing `$('hud')` which doesn't exist in the HTML, causing a `TypeError` that halted execution before `startLvl()` could run</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.26</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Daily replay race condition: stale `setTimeout(showWin,1000)` from a previous win no longer fires during a new daily replay, which was causing the replay complete screen to appear immediately instead of letting the player actually play</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.25</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Removed `body.force-landscape` CSS — stage select now follows natural device orientation (portrait layout in portrait, landscape in landscape)</li>
+<li>Gameplay still locks to landscape via `attemptFullscreenAndLock()` when Play is tapped</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.23</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Settings orientation option restored — portrait choice is back, boot still defaults to landscape</li>
+<li>`force-landscape` CSS class now follows saved orientation preference instead of always-on</li>
+<li>`currentLayoutKey()` restored to actual device-dimension logic</li>
+<li>Build script auto-changelog fixed: uses `[regex]::Replace` with count=1, no more duplicate insertions</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.17</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Fullscreen button no longer overlaps settings gear in compact landscape (now uses dedicated `.fs-btn` class)</li>
+<li>**Portrait mode completely removed** — game is now landscape-only. Orientation setting reduced to "Landscape" only</li>
+<li>`currentLayoutKey()` always returns `'landscape'`</li>
+<li>`attemptFullscreenAndLock()` always locks to `'landscape'` regardless of previous setting</li>
+<li>`body.force-landscape` always applied for CSS fallback when browser can't lock orientation</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.16</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Build pipeline verified: auto-bump working correctly from v1.2.15 to v1.2.16</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.15</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Build pipeline verified: auto-bump working correctly, service worker cache updates with each build</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.14</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Game canvas now sizes to `visualViewport` (actual visible area) instead of `window.innerHeight`, preventing scroll when browser address bar / notification bar is present</li>
+<li>`window.visualViewport` resize listener added so canvas updates when browser chrome shows/hides</li>
+<li>**Landscape is now enforced by default** — even first-time users see onboarding, home screen, and stage select in landscape layout. Only users who explicitly set "Portrait" in settings get portrait mode</li>
+<li>`currentLayoutKey()` now always returns `'landscape'` when `orient !== 'portrait'`</li>
+<li>Body class `.force-landscape` added when landscape is enforced; CSS overrides apply landscape stage-select layout even if device is physically held in portrait</li>
+<li>**Fullscreen button added to home screen** — ⛶ icon below the settings gear toggles fullscreen mode</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.13</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Service worker cache name now correctly bumps with each build, preventing stale cached HTML</li>
+<li>In-game HUD background transparency actually works: `backdrop-filter: blur(10px)` + `rgba(0,0,0,0.1)` on all panels</li>
+<li>**HUD backgrounds**: `hudLeft`, `hudCenter`, `hudRight` all changed to `rgba(0,0,0,0.1)` with blur kept</li>
+<li>**Ghost button removed from `hudCenter`**: redundant since ghost status is already shown in `hudLeft` skill icons</li>
+<li>**Ghost rival replay button** moved inside stage thumbnail (`cardWrap`) at bottom center</li>
+<li>**Stage select tooltips**: `lsTags` shows level details on click; `lsBottomBar` shows progress + champion rewards</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.12</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Store portrait in landscape mode now sized 90×60 px with 5 px top margin (was 120×80 px at 44 px top) to avoid crowding header row</li>
+<li>Stage select tooltip now uses DOM-based `showStageTooltip()` instead of canvas `addFloat()`, which failed because the game draw loop isn't active in stage select</li>
+<li>**Stage select portrait layout**: Reduced top padding, moved logo/header up to eliminate large empty gaps; `lsName` centered; `lsBottomBar` height set to 6 px</li>
+<li>**Landscape narrow stage select**: `cardWrap` vertically centered via `margin: auto 0`, height `70vh` / `max-height: 380px`; `lsDetails` gap loosened; global stats pills compacted</li>
+<li>**`lsGlobalStats` redesign**: Replaced pill tags with two clean inline rows (`gs-row`) of `emoji value label` triplets. No backgrounds/borders. Emoji gets colored `drop-shadow`. Hover: `opacity: 0.7`</li>
+<li>**Store header compact**: Single row layout — gems left, `★ STORE` center, `🤖` icon + index + `▶` + inline tip right</li>
+<li>**Shopkeeper message orientation**: Portrait shows full tip centered below header; landscape narrow shows truncated tip inline next to the `🤖` icon</li>
+<li>**Store item spacing**: Landscape `.store-item` padding reduced `12px` → `8px`, margin-bottom `8px` → `4px`</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.11</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Daily stage canvas no longer renders at ~1/10 size on first play — `startDailyStage()` and `replayDailyStage()` were missing `resize()` / `initStars()` / `applyJoySettings()` / `applyBtnSize()` calls that `startGame()` has</li>
+<li>`generateDailyLevel()` `mdy` date parameter was corrupted: `today.slice(2, 4)` grabbed the last-two digits of the year instead of the day, producing `05262026` instead of `05202026` for mmddyyyy seed</li>
+<li>Daily stage platform layout was not rank-dependent — `genLvl()` used `getGameDayKey() + 'layout'` without rank, so players of different ranks on the same day got identical platform positions. Now uses `(dateKey || getGameDayKey()) + 'layout' + rankIdx`</li>
+<li>Ghost rival recording, button, and rendering now disabled during daily stages and daily replays (ghost skill passive still works)</li>
+<li>`dailyCollection` defensive check: `Array.isArray()` guard before push/iterate to prevent crashes on corrupted save data</li>
+<li>**Past Dailies in preview** — `#dailyPreview` now shows up to 5 previous completed daily stages with replay buttons, so users can browse collection without completing today's stage first</li>
+<li>**Date + theme mix display** in daily preview — shows current game date and the mood/energy/feel theme names to surface daily variety</li>
+<li>**Stage select progress bar** — animated cyan bar above global stats strip showing cleared count / 20 stages</li>
+<li>`dateKey` and `rankIdx` stored on `dailyLevelObj` so replayed dailies use the exact original layout seed</li>
+<li>Profile page (`#profile`) redesigned as 2-column grid: left = RANK tiers + progress, right = GLOBAL STATS + HAZARD BREAKDOWN. Container widened from 360px to 560px</li>
+<li>Streak calendar (`#streakCalendar`) redesigned as 2-column grid: left = streak count + freeze controls, right = week calendar grid. Container widened from 380px to 560px</li>
+<li>Daily stage button (`#lsDailyBtn`) now shows "DAILY STAGE" text label alongside icon instead of just the icon</li>
+<li>`buildDailyTheme()` now returns `moodName`, `energyName`, `feelName` for UI display</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.10</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Difficulty badge (`#lsTags`) now displays gravity, friction, weather, and ghost rival status in a single compact line</li>
+<li>Removed separate `#lsPhysics` descriptor row — all stage conditions merged into the badge</li>
+<li>Character portrait animation hidden for layout testing (canvas set to `display: none`)</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.9</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Dot navigation moved inside stage thumbnail bottom edge, scaled to fit within card bounds</li>
+<li>Stage records (best time, matches, gems, silver) consolidated into thumbnail overlay; removed separate stat card row below stage info</li>
+<li>Character preview is now a transparent floating avatar positioned beside player info (rank / name / gems) — no card border or background</li>
+<li>Streak, Daily Stage, and Daily Chest buttons stacked vertically below the Settings button, aligned to the right edge in both portrait and landscape</li>
+<li>Landscape info panel narrowed (48vw → 40vw) to prevent overlap with the vertical resource button stack</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.8</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Landscape stage title missing: `updateCarousel()` now resets `scrollTop` so `#lsName` is never scrolled out of view</li>
+<li>Resource buttons no longer overlap level card in landscape (raised from 48px to 38px, levelSelect padding increased to 86px)</li>
+<li>Avatar no longer visually collides with card in landscape (10px gap via padding)</li>
+<li>Breakdown text no longer wraps awkwardly in portrait (`white-space: nowrap` + ellipsis)</li>
+<li>Time stat stays on single line in both orientations (`white-space: nowrap`)</li>
+<li>Level number "1" no longer clipped by card corner (`left: 18px` instead of 14px)</li>
+<li>Username badge has more horizontal padding (4px 6px → 4px 10px)</li>
+<li>"watch replay" is now a standalone button below physics text, not inline with bullets</li>
+<li>Stage badge simplified to difficulty only (removed redundant stage name)</li>
+<li>Progress bar locked segments more visible (0.08 → 0.12 alpha)</li>
+<li>Card mini-stats have more bottom/side padding (12px → 14px/16px)</li>
+<li>Global stats use consistent `space-between` padding in both orientations</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.2</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Stage select visual overhaul: dot navigation replaced with thin segmented progress bar</li>
+<li>Top bar consolidated: store button is now icon-only, resource buttons centered below logo</li>
+<li>Thumbnail stats now have clear labels (Matches, Clears, Gems, Silver)</li>
+<li>Timer displayed in readable pill badge</li>
+<li>Stat grid uses tabular numerals for consistent visual weight</li>
+<li>Global stats icons and values enlarged for readability</li>
+<li>"LOG »" renamed to "💀 BREAKDOWN"</li>
+<li>Ghost replay link styled as a proper secondary button</li>
+<li>Landscape layout: avatar is compact (60px) instead of sidebar, info panel widened to 48vw</li>
+<li>Avatar is always a small top-left badge in both orientations</li>
+<li>Cross-orientation consistency for resource buttons and global stats layout</li>
+<li>In-game grid lines visibility increased (alpha 0.08 → 0.18)</li>
+<li>"CLEAR" weather label rendered in cyan to avoid clashing with title glow</li>
+<li>Terminology: "gold chip" → "gold gem" in champion ceremony text</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.0</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>**Daily Stage** — fresh procedurally-generated stage every day (5 AM UTC+7 reset). Mix-and-match themes, reversed difficulty, rank-scaled</li>
+<li>**Daily Stage Collection** — completed dailies become collectible badges (date, time, rank). Replay any past daily for practice — exact same stage, no gems, no deaths tracked</li>
+<li>**Streak System** — Duolingo-style week-grid calendar, 2 free Streak Freezes at start, buy extras for 15 ♦</li>
+<li>**Share Cards** — stage-themed visual cards for menu share, win screen, champion screen, and daily. Competitive "Can you beat this?" text</li>
+<li>**Daily preview panel** — see difficulty, streak, and best time before playing</li>
+<li>**Daily rewards** — random roll on completion (gold, silver, consumables, streak freeze)</li>
+<li>**75 random tips** in non-blocking top bar</li>
+<li>**Dashboard "🔥 Daily" tab** — analytics for daily stage attempts, completions, death causes</li>
+<li>Security hardening: rate limiting, server-side validation, CORS restrictions, security headers</li>
+<li>Master gems increased in normal stages (2/3/4 for Easy/Moderate/Hard), removed from daily stages</li>
+<li>Daily stages only have persistent silver gems (collected ones don't respawn on retry)</li>
+<li>Streak calendar: horizontal strip → CSS week grid</li>
+<li>Streak Freeze price: 10 ♦ → 15 ♦</li>
+<li>Share cards no longer show death count or attempt count</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.49</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>**Daily Stage Collection** — every completed daily stage is saved as a collectible badge with date, time, and rank index</li>
+<li>**Replay past daily stages** — each collected badge has a replay button that recreates the exact same procedural stage (same seed + rank). Replay mode has:</li>
+<li>→ No gems (no gold, no silver, no master gems)</li>
+<li>→ No death tracking in stats</li>
+<li>→ No ghost recording</li>
+<li>→ No rewards or streak updates</li>
+<li>→ Simple "✓ Replay Complete" overlay with time</li>
+<li>Collection list rendered on the daily win screen, sorted by date descending (newest first)</li>
+<li>Date formatted as "26May23" style in the collection list</li>
+<li>`generateDailyLevel()` now accepts optional `dateKey` and `forcedRankIdx` parameters for replay generation</li>
+<li>`goHome()` now resets `isDailyReplay` flag</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.46</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>**All players receive 2 free Streak Freezes** — one-time migration bumps existing players with fewer than 2 up to the max</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.43</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>**Daily stage silver gem persistence** — collected silver gems in daily stages are saved per-day and don't respawn on retry</li>
+<li>Week-based streak calendar grid layout (7 columns × 4 rows + 3 days)</li>
+<li>**Daily stages no longer spawn gold gems** — removes excessive gold income from daily farming</li>
+<li>**Daily stages no longer spawn master gems** — master gems are normal-stage only</li>
+<li>**Master gem count increased** in normal stages: Easy 1→2, Moderate 2→3, Hard 3→4</li>
+<li>**Streak Freeze price**: 10 ♦ → 15 ♦ (buying both default slots costs 30 ♦)</li>
+<li>Streak calendar: horizontal strip → CSS grid with week day headers (M T W T F S S)</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.41</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>All share cards no longer display **death count** or **attempt/match count**</li>
+<li>Rank remains visible on all share cards (menu, win, champion, daily)</li>
+<li>Share text templates updated to remove deaths/attempts references</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.40</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>**In-game result shares** now generate visual cards for all three result types:</li>
+<li>→ **Win screen** (`shareResult`): 400px canvas with stage theme, "💥 CAN YOU BEAT THIS? 💥" challenge text, best score, attempts, larger character</li>
+<li>→ **Champion screen** (`shareChampionResult`): 400px gold canvas with "💥 CAN YOU MATCH THIS? 💥" challenge text, larger character</li>
+<li>→ **Daily stage** (`shareDailyResult`): now generates an image card (was text-only) using the daily's mixed theme, streak, reward, and "💥 CAN YOU BEAT TODAY? 💥" text</li>
+<li>All result share text messages now include competitive hooks ("Think you can beat my time?")</li>
+<li>`shareResult` canvas height 340 → 400px for consistent layout with menu share card</li>
+<li>`shareChampionResult` canvas height 380 → 400px, character scale 1.8 → 2.4</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.39</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>**Stage-specific share cards** — the SHARE button on stage select now generates a visual card themed to the currently selected stage</li>
+<li>→ Background gradient uses the stage's sky colors (top/mid/bottom)</li>
+<li>→ Grid overlay in the stage's grid color</li>
+<li>→ Stage name in accent color, player name + rank, best time, score, deaths, style, attempts</li>
+<li>→ Character rendered with all equipped cosmetics</li>
+<li>→ "💥 CAN YOU BEAT THIS? 💥" challenge text</li>
+<li>→ Share text template now includes stage name, best time, score, and competitive hook</li>
+<li>Default share textarea message: "Think you can beat my time? 💥" (was "Hey! Try this game with me — it's wild.")</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.33</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Missing `#dailyPreview` and `#streakCalendar` HTML in `index.html` causing blank overlays</li>
+<li>Daily chest timer now uses UTC+7 day boundaries (5 AM cutoff) instead of raw 24h diff</li>
+<li>Removed old "daily master chip" mechanic from normal stages — daily gem lives exclusively in daily stage (`lvl === -1`)</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.30</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Brace duplication (`}},10);`) from module boundary corruption when `00-pwa.js` was reconstructed</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.29</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>`zipgame.ps1` now outputs `deploy/latest/` unzipped folder for instant local testing</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.28</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Chest countdown timer on stage select (hours until next UTC+7 5 AM reset)</li>
+<li>75 random tips in non-blocking top bar (`#npcAdvice`) on stage select</li>
+<li>Pause/exit tooltip auto-hides after 20 matches</li>
+<li>TIPS array expanded to 75 entries</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.27</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>**Streak calendar overlay** (`#streakCalendar`) — 31-day Duolingo-style strip showing play days, streak count, freeze inventory</li>
+<li>Streak freeze purchasable from calendar (10♦, max 2)</li>
+<li>**Daily preview panel** (`#dailyPreview`) — shows difficulty, streak, best time, PLAY/CLOSE buttons</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.26</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Missing `updateLsDailyBtn()` was aborting `initLevelSelect()`, breaking portrait animation, thumbnail init, dot nav, and achievement rendering</li>
+<li>Changelog overlay now has sticky close button</li>
+<li>Daily stage launch flow properly hides level select</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.25</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Worker `/stats/dailystage` endpoint with 11 SQL queries for daily stage analytics</li>
+<li>Dashboard **🔥 Daily** tab: attempts, unique players, completions, completion rate, deaths, avg time, best time, death causes chart, difficulty table, daily trend</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.22</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>**Daily Stage** — a procedurally generated stage every day, same for everyone at the same rank</li>
+<li>→ Mix-and-match theme system: sky from one theme, grid/particles from another, physics/weather from a third</li>
+<li>→ Inverted sky gradient + reversed difficulty curve (hard start, easier finish)</li>
+<li>→ 7 base templates × 20 themes × 6 rank modifiers = effectively infinite variety</li>
+<li>→ UTC+7 reset at 5 AM</li>
+<li>**Streak system** — Duolingo-style daily streak, updated when playing any mode</li>
+<li>→ 2 streak freeze slots by default (protects against missed days)</li>
+<li>→ Streak Freeze buyable from store for 10 silver (max 2)</li>
+<li>**Daily gem** moved from normal stages to the daily stage</li>
+<li>**Daily completion rewards** — random roll: gold, silver, consumables, or streak freeze</li>
+<li>**Daily share** — share your daily completion time and streak to friends</li>
+<li>**Fire indicator** on stage select: dim = streak alive but not played today, bright = played</li>
+<li>No ghost rival recording on daily stages (fair competition)</li>
+<li>Gems collected during daily stage are kept even on death</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.21</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Metrics worker: server-side name validation (`NAME_REGEX`) prevents XSS via crafted API requests</li>
+<li>Metrics worker: per-IP (600/5min) and per-player-ID (300/5min) rate limiting on ingestion endpoints</li>
+<li>Metrics worker: auth changed from fail-open to fail-closed (no `DASHBOARD_KEY` = no access)</li>
+<li>Metrics worker: dashboard `Cache-Control` changed from `public, max-age=300` to `no-store`</li>
+<li>Metrics worker: CORS `*` restricted to public ingestion endpoints only (`/session`, `/event`, `/events/batch`)</li>
+<li>Metrics worker: security headers added (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`)</li>
+<li>Metrics worker: raw user agent stripped from player profile API response</li>
+<li>Dashboard: HTML-escape function added; all player name renders now escaped before `innerHTML`</li>
+<li>Game: save import error display now escapes `<` and `>` before `innerHTML`</li>
+<li>Game: name input value attribute now escapes quotes (defense in depth)</li>
+<li>Cloudflare Pages: `_headers` file adds security headers to static assets</li>
+<li>In-game Privacy Policy accessible from Settings panel</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.1</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Game name: **N3on DashJ** (was N30N DASH J) — applied to title, boot screen, HUD title, share text, share images</li>
+<li>Stage select play button: "Play DashJ" (was "ENTER DASH J")</li>
+<li>Pause exit button: "BACK TO STAGE SELECTION" (was "EXIT TO HOME")</li>
+<li>Top stage-select buttons reordered: 🛒 STORE / 🎁 daily chest / ↗ share / ⚙ settings (left to right). The 🎁/share/settings cluster now anchored on the right edge as requested.</li>
+<li>Store cosmetics now sorted by category: hat → cape → glow → trail → body → death → jump → platform; within category by tier (common → master) then cost</li>
+<li>Player Rank popup now uses two columns in landscape: rank tiers + progress on left, how to earn points on right</li>
+<li>"Body: White" replaced with **"Body: Black"** — existing owners auto-migrated. Adds real contrast since the default body is already light cyan</li>
+<li>Removed `[YYYYMMDD]` date prefixes from in-game changelog entries (kept only on v1.0.0). Detailed dated history lives here in `CHANGELOG.md`</li>
+<li>Compact pause-settings spacing: tighter gaps, smaller fonts, action buttons (Apply | Exit) horizontal in landscape — fits short screens without scrolling</li>
+<li>Removed the orange "DAILY CHEST READY" banner from stage select (the pulsing 🎁 icon is enough)</li>
+<li>Stage card simplified ghost status to icon-only "👻 🚫" when no recording (was "🚫 no ghost yet (replay to record)")</li>
+<li>Orientation setting "Auto (No Lock)" removed. Default Landscape. Existing "Auto" setting auto-migrated to Landscape on next launch</li>
+<li>Orientation setting now also available in main Settings panel (was only in pause)</li>
+<li>"Show FPS" toggle added to in-game pause Settings (was only in main settings)</li>
+<li>Keyboard hint: when desktop/laptop with mouse detected, the home tooltip shows extra line "⌨ ← → move • SPACE jump • ESC pause"</li>
+<li>First-two-stages double-jump hint via existing NPC advice banner: "TIP: Tap jump twice in mid-air for a double-jump (3-second cooldown)"</li>
+<li>Settings &amp; pause panels appearing as locked overlay when rotating phone — CSS grid was being applied without `.active` class check</li>
+<li>Share dialog showing duplicate URL on apps like WhatsApp (URL was both in `text` and `url` fields)</li>
+<li>Encoding issues from previous build (mojibake/double-encoded UTF-8) restored</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.1.0</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>★ Champion of N3on system: clearing all 20 stages unlocks the **★ MASTER** badge (next to player name), **Champion's Aura** cosmetic (gold pulsing halo + ascending sparks), **Phase Dash** skill (one free hazard pass per run), and a permanent **1.5× silver multiplier**. Includes end-of-game ceremony with confetti and a dedicated gold-themed share card</li>
+<li>🌀 Pulse Platforms: new mechanic on Moderate and Hard tiers — platforms cycle through visible (4s) → warning flicker (0.5s) → invisible (2s)</li>
+<li>🎬 Replay system: every run records a ghost; "👻 ghost ready ▶" inline link on stage select, **WATCH** button on the win screen</li>
+<li>💎 Gem escrow: collected gems persist across deaths/retries within the same stage session. Wallet credit only on completion. Exit-to-home loses all uncashed gems (anti-fraud)</li>
+<li>🔄 UPDATED tag on stage cards when stage gameplay content changes — preserves achievement</li>
+<li>🎨 Visual Quality setting (Low/Med/High), live FPS counter, auto-recommend lower quality on sustained low FPS</li>
+<li>👻 Ghost Replay toggle (disable ghost feature entirely for performance)</li>
+<li>📐 Mobile landscape redesign: stage select two-column layout, store two-column grid, settings/pause panels two-column, top buttons compacted</li>
+<li>🎁 Daily Chest moved from store to stage select with pulsing icon button</li>
+<li>⭐ Player rank chip moved next to player name (with click-to-popup)</li>
+<li>🛒 Store labeled pill button (was "★" icon)</li>
+<li>📁 Save export → file download, save import → file picker (paste fallback retained); optional ghost-data inclusion in export</li>
+<li>🌌 NPC advice on fresh stage entry (high gravity / low gravity / slippery / storm / dust)</li>
+<li>🎮 Per-orientation control layouts (joystick/button positions saved separately for portrait vs landscape, swap on rotation)</li>
+<li>🦸 Cape physics: trails down on jump, up on falling</li>
+<li>📤 Personalized share dialog: textarea for custom message + auto-template preview</li>
+<li>Default control scheme: **Arrow Buttons** (was Joystick); switch in settings anytime</li>
+<li>Onboarding picker now shows BUTTONS first as recommended</li>
+<li>Void Walker white-screen bug (3-character hex `#000` caused gradient NaN crash)</li>
+<li>Home button leak to game (pointer-events on level select disabled briefly after `goHome()` to block touch→click double-fire)</li>
+<li>Replay no longer counts as game completion or attempt</li>
+<li>Cosmetic store preview overhaul (body color now actually applies; hat/cape positioning matches in-game)</li>
+<li>`normalizeLevelStat` was stripping `contentVersion` (UPDATED tag wasn't appearing)</li>
+<li>HUD chip count was showing 0 on retry instead of preserved gem count</li>
+<li>Champion ceremony share previously showed "Neon Abyss" — now uses dedicated Master share card</li>
+<li>Edge-landing effect simplified to text only (no particle ring)</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.0.25</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Versioning scheme renamed: `x.y.0` → `x.0.y` (e.g. `v1.24.0` → `v1.0.24`)</li>
+<li>HUD now shows human-readable physics (LOW G • SLIPPERY • RAIN) instead of raw G/S values</li>
+<li>Pause-menu shop activates consumables immediately in current run if not already in use</li>
+<li>Fixed [i] info icon in store not displaying (modal `display:none` override bug)</li>
+<li>Fixed home button needing two taps to exit after death (z-index overlap)</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.0.2</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Real PWA assets for N30N DASH J: `manifest.webmanifest`, `sw.js`, and `icon.svg` for installable offline play after first online load.</li>
+<li>Hardened save loading/import normalization and migrated per-level `falls` stats to clearer `hazards`.</li>
+<li>Clamped analog and arrow touch controls so large pad settings stay inside small landscape viewports.</li>
+<li>Made settings overlays scroll-safe on short screens.</li>
+<li>Updated the Controls option label to "Arrow Buttons".</li>
+<li>Dead orientation-lock UI/state and unused overlay action/state counters.</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.0.2</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>**Arrow button controls** — New "Controls" setting: Analog (joystick) or Arrow Buttons (left/right grouped on left, jump on right)</li>
+<li>**Vibration feedback** — `vib()` helper added to SFX; vibrates on jump (15ms), double jump (10ms), gold coin (20ms), silver coin (10ms), death [30,30,60], win [50,50,50,50,100]. Toggleable in Controls.</li>
+<li>**In-game Controls panel** (`#gameSettings`) — Fullscreen, Vibrate, Controls mode, Joy Size/X/Y. Opens on pause. Apply &amp; Resume buttons.</li>
+<li>**Stage Select Settings panel** (`#settings`) — SFX, Music, Particles, Export/Import, Reset. No controls here.</li>
+<li>**Canvas thumbnails on portal** — Root index.html renders mini game previews using theme colors (sky gradient, grid, platforms, player dot, particles).</li>
+<li>**Auto-detect game folders** — `zipgame` now scans `src/` for game HTML files, creates proper directory structure in zip.</li>
+<li>**Delta time physics** — `loop()` uses `performance.now()` to calculate `dt` (1.0 at 60fps). All velocity, gravity, friction, cooldowns, particles multiply by `dt`. Game speed now frame-rate independent.</li>
+<li>**Death cause differentiation** — `lastDeathType` tracked; showDie shows "FALLEN" (#f05), "SPIKED!" (#f80), or "LASERED!" (#f00).</li>
+<li>**Unlock notification on win** — showWin lists newly unlocked sector names with 🔓 icon.</li>
+<li>**First-time tutorial** — One-time overlay on first launch explaining controls, double jump, goal, gems. Stores `tutorialDone` flag.</li>
+<li>**Difficulty badge styling** — `.diff-easy` (#0f8), `.diff-med` (#fa0), `.diff-hard` (#f05) with colored text and border.</li>
+<li>**50 updated tips** — Rewritten to cover arrow controls, vibration, pad mirroring, fullscreen toggle, export/import, frame-rate independence, player rank.</li>
+<li>**Auto-fullscreen default** — Changed from `'off'` to `'on'`.</li>
+<li>**Joy Pad X/Y mirrors both sides** — `applyJoySettings()` now sets `jBtn` right/bottom and `arrowControls` padding/bottom to mirror left-side joystick position.</li>
+<li>**Carousel cards halved** — `carouselWrap` 400→220px, active card 640→320px / 360→180px tall, inactive 140→70px, gaps 20→10px.</li>
+<li>**Portal links** — `a.href = '/' + g.id + '/'` for Cloudflare Pages directory routing.</li>
+<li>**Keyboard input always works** — `joy.dx` checked first regardless of ctrlMode, then arrow touch overrides if pressed.</li>
+<li>**Camera smoothing** — `camX += (tcx-camX) * (1-Math.pow(0.92,dt))` for frame-rate independence.</li>
+<li>**Orientation lock screen buttons** — "Force Fullscreen" and "Ignore" buttons removed from `#orientLock`.</li>
+<li>**`checkOrient()` body** — Now only sets `bootFinished=true` and calls `initLevelSelect()`. No orientation checking.</li>
+<li>**Duplicate code block (~255 lines)** — First definitions of `handleDeath`, `shatterPlayer`, `spawnP`, `draw`, `drawPlat`, `drawSpike`, `drawPlayerSprite` removed. Second (correct) versions kept.</li>
+<li>**Duplicate `loop()`** — Was defined twice, second shadowed first. Single dt-aware version remains.</li>
+<li>**Old `setOrient`, `setCtrl`, `setJSize`, `setPadX`, `setPadY`** — Removed from stage-select settings. Moved to in-game `#gameSettings`.</li>
+<li>**Old `updateSettingsDisplay` + event listeners** — Cleaned up (references removed elements).</li>
+<li>**Death flash frame-rate dependent** — `deathFlash -= 0.04*dt` instead of `-= 0.04`.</li>
+<li>**PowerShell array serialization** — `ConvertTo-Json` unwraps single-element arrays; manual `[]` wrapping added.</li>
+<li>**Zip file naming** — `index.built.html` → proper `index.html` via temp directory build.</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.0.1</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Root `index.html` portal template with `<!-- ZIPGAME_GAMES -->` placeholder.</li>
+<li>`zipgame` custom command in PROJECT.md.</li>
+<li>Project restructured: `index.html` + `ne3ondashj/` → `src/index.html` + `src/n3ondashj.html`.</li>
+</ul>
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.0.0</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>Initial game: N30N DASH J (single-file platformer, 20 themed levels).</li>
 </ul>
 </div>
 <button onclick="closeChangelog()" style="width:100%;max-width:320px;margin-top:12px;">BACK</button>
@@ -1255,13 +1704,34 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
             </div>
             <div id="syncForgotPinSection" style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.1);">
                 <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">FORGOT PIN <span style="color:#666;font-size:0.55rem;">— reset without old PIN</span></div>
+                <div style="font-size:0.55rem;color:#fa0;margin-bottom:6px;line-height:1.4;">After the transition window, a recovery code will be required. Set one up below.</div>
                 <input id="syncForgotNewPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="New PIN (6 digits)" style="width:100%;padding:8px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.7rem;outline:none;text-align:center;margin-bottom:6px;">
+                <input id="forgotRecoveryCode" type="text" maxlength="19" placeholder="Recovery code (optional during transition)" style="width:100%;padding:8px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.65rem;outline:none;text-align:center;margin-bottom:6px;text-transform:uppercase;">
                 <button onclick="forgotSyncPinUI()" style="width:100%;padding:8px 0;background:linear-gradient(135deg,#a50,#830);border:none;border-radius:8px;cursor:pointer;color:#fff;font-weight:700;font-size:0.7rem;letter-spacing:1px;">RESET PIN</button>
+            </div>
+            <div id="syncRecoverySection" style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.1);">
+                <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">RECOVERY CODE</div>
+                <div id="recoveryCodeStatus" style="font-size:0.6rem;margin-bottom:6px;">Recovery code: <span style="color:#888;">—</span></div>
+                <button onclick="showRecoveryCodeModal()" style="width:100%;padding:8px 0;background:linear-gradient(135deg,#333,#222);border:none;border-radius:8px;cursor:pointer;color:#aaa;font-weight:700;font-size:0.7rem;letter-spacing:1px;">Set / replace recovery code</button>
             </div>
             <button onclick="showSyncLinkTab()" style="width:100%;padding:10px 0;background:linear-gradient(135deg,#333,#222);border:none;border-radius:8px;cursor:pointer;color:#aaa;font-weight:700;font-size:0.75rem;letter-spacing:1px;margin-top:8px;">🔗 LINK ANOTHER DEVICE</button>
         </div>
         <div id="syncStatus" style="font-size:0.65rem;color:#f80;text-align:center;min-height:16px;"></div>
         <button onclick="closeSyncPanel()" style="width:100%;padding:12px 0;background:linear-gradient(135deg,#555,#333);color:#fff;font-weight:700;border:none;border-radius:8px;cursor:pointer;font-size:0.8rem;letter-spacing:1px;">CLOSE</button>
+    </div>
+</div>
+
+<div id="recoveryCodeModal" style="position:fixed;inset:0;z-index:600;background:rgba(2,2,5,0.95);display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px;">
+    <div style="width:100%;max-width:320px;background:#111;border:1px solid rgba(0,255,255,0.3);border-radius:12px;padding:20px;position:relative;">
+        <h3 style="font-size:0.9rem;color:#0ff;font-weight:700;margin:0 0 10px 0;text-align:center;">Set a recovery code</h3>
+        <p style="font-size:0.6rem;color:#fa0;line-height:1.5;margin-bottom:12px;text-align:center;">Save this code somewhere safe. If you forget your PIN, this is the ONLY way to recover your account. We can't show it to you again.</p>
+        <div id="recoveryCodeDisplay" style="font-family:monospace;font-size:1.1rem;color:#0f8;text-align:center;background:rgba(0,0,0,0.4);padding:12px;border-radius:6px;border:1px solid rgba(0,255,136,0.3);margin-bottom:12px;letter-spacing:2px;">XXXX-XXXX-XXXX-XXXX</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <button id="recoveryCodeCopy" style="flex:1;padding:10px 0;background:linear-gradient(135deg,#333,#222);border:none;border-radius:8px;cursor:pointer;color:#fff;font-weight:700;font-size:0.7rem;">Copy</button>
+            <button id="recoveryCodeContinue" disabled style="flex:1;padding:10px 0;background:linear-gradient(135deg,#0aa,#055);border:none;border-radius:8px;cursor:pointer;color:#fff;font-weight:700;font-size:0.7rem;opacity:0.5;">Continue (5)</button>
+        </div>
+        <div id="recoveryCodeError" style="font-size:0.6rem;color:#f44;text-align:center;display:none;margin-top:6px;"></div>
+        <button id="recoveryCodeDismiss" style="position:absolute;top:8px;right:10px;background:none;border:none;color:#666;font-size:1.2rem;cursor:pointer;" aria-label="Close">✕</button>
     </div>
 </div>
 

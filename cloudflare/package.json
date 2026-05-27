@@ -7,12 +7,13 @@
     "deploy": "node build.mjs && npx wrangler deploy"
   },
   "dependencies": {
-    "preact": "^10",
-    "htm": "^3",
     "@preact/signals": "^1",
+    "htm": "^3",
+    "preact": "^10",
     "uplot": "^1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "esbuild": "^0.20",
     "wrangler": "^4.90.1"
   }

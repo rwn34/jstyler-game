@@ -30,5 +30,6 @@ This populates `stats_daily` for the last 30 days. The hourly cron will keep it 
 
 | File | Description | Date |
 |------|-------------|------|
+| 000_init.sql | Canonical DDL for all core tables (events, sessions, sync_states, sync_lookup, sync_attempts, sync_history, stats_daily, retention_daily, player_flags, feedback_status) | 2026-05-27 |
 | 001_indices.sql | Add performance indices on events, sessions, sync_states | 2026-05-26 |
 | 002_stats_daily.sql | Pre-aggregated daily stats, retention, player flags, feedback status | 2026-05-26 |

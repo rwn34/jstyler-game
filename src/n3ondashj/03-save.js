@@ -27,7 +27,7 @@ if(!isV2) {
 
 // === METRICS (anonymous, opt-out by setting METRIC_URL='') ===
 var METRIC_URL = 'https://ndj-metrics.jstylr.workers.dev'; // Cloudflare Worker — set to '' to disable metrics
-var APP_VERSION = 'v1.2.54'; // Build version — updated by zipgame.ps1
+var APP_VERSION = 'v1.2.59'; // Build version — updated by zipgame.ps1
 var playerId = load('playerId', null);
 if(!playerId){playerId='p_'+Math.random().toString(36).slice(2,10)+Date.now().toString(36);save('playerId',playerId);}
 
@@ -60,11 +60,17 @@ function _hmacSign(key,message){
     }catch(err){return Promise.resolve(null);}
 }
 
+function genEventUuid(){
+    if(self.crypto&&typeof self.crypto.randomUUID==='function')return self.crypto.randomUUID();
+    return('xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx').replace(/[xy]/g,function(c){var r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);});
+}
+
 function sendMetric(type, data){
     if(!METRIC_URL)return;
     var d=Object.assign({},data);
     d._v=APP_VERSION;
     var e={pid:playerId,name:(typeof playerName!=='undefined'&&playerName)?playerName:null,type:type,data:d,ts:Date.now()};
+    e.event_uuid=genEventUuid();
     getSessionToken().then(function(token){
         if(token){
             e.token=token;
@@ -603,15 +609,52 @@ function loadSync(username,mmyy,pin,callback,replace){
             if(replace)replaceSyncData(d.data);
             else mergeSyncData(d.data);
             if(typeof callback==='function')callback(true,d);
+            // Reflect authoritative server state into local recovery-code flag.
+            var serverFlag=(d.requiresRecoveryCodeSetup!==undefined
+                ?d.requiresRecoveryCodeSetup
+                :(d.data&&d.data.requiresRecoveryCodeSetup));
+            if(serverFlag===false){
+                try{localStorage.setItem('ndj_recoveryCodeSet','1');}catch(e){}
+            }else if(serverFlag===true){
+                try{localStorage.removeItem('ndj_recoveryCodeSet');}catch(e){}
+            }
+            if(serverFlag===true){
+                setTimeout(function(){if(typeof maybeShowRecoveryCodeModal==='function')maybeShowRecoveryCodeModal();},800);
+            }
         }else{
             if(typeof callback==='function')callback(false,d);
         }
     }).catch(function(){if(typeof callback==='function')callback(false,null);});
 }
 
-function forgotSyncPin(username,mmyy,newPin,callback){
+function setRecoveryCode(code,callback){
+    if(!METRIC_URL||!syncRegistered||!syncPin||!playerMmyy){
+        if(typeof callback==='function')callback(false,'not_signed_in');
+        return;
+    }
+    var payload={username:playerName,mmyy:playerMmyy,pin:syncPin,recoveryCode:code};
+    fetch(METRIC_URL+'/sync/set-recovery-code',{
+        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),keepalive:true
+    }).then(function(r){
+        if(r.status===404){if(typeof callback==='function')callback(false,'not_supported');return null;}
+        return r.json();
+    }).then(function(d){
+        if(d===null)return;
+        if(d&&d.ok){
+            try{localStorage.setItem('ndj_recoveryCodeSet','1');}catch(e){}
+            if(typeof callback==='function')callback(true,d);
+        }else{
+            if(typeof callback==='function')callback(false,d&&d.error?d.error:'failed');
+        }
+    }).catch(function(){if(typeof callback==='function')callback(false,'network_error');});
+}
+
+function forgotSyncPin(username,mmyy,newPin,recoveryCode,callback){
     if(!METRIC_URL)return;
     var payload={username:mmyy?username:playerName,mmyy:mmyy||playerMmyy,newPin:newPin};
+    if(recoveryCode&&typeof recoveryCode==='string'&&recoveryCode.trim().length>0){
+        payload.recoveryCode=recoveryCode.trim();
+    }
     fetch(METRIC_URL+'/sync/forgot-pin',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -625,6 +668,10 @@ function forgotSyncPin(username,mmyy,newPin,callback){
             syncRegistered=true;save('syncRegistered',true);
             if(typeof callback==='function')callback(true,d);
         }else{
+            if(d&&d.error){
+                if(d.error==='recovery_code_required'){if(typeof callback==='function')callback(false,'Your account is past the legacy window. Please enter a recovery code.');return;}
+                if(d.error==='locked_out'){if(typeof callback==='function')callback(false,'Too many attempts. Please try again in 1 hour.');return;}
+            }
             if(typeof callback==='function')callback(false,d&&d.error?d.error:'Failed');
         }
     }).catch(function(){if(typeof callback==='function')callback(false,'Network error');});

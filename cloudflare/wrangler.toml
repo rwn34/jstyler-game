@@ -2,12 +2,13 @@ name = "ndj-metrics"
 main = "src/index.js"
 compatibility_date = "2024-09-01"
 
-[vars]
-DASHBOARD_KEY = "qwepoi123098"
-SYNC_SALT = "ndj-sync-v1-salt"
-# ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes) for AES-256-GCM.
-# Generate a random one with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+# Secrets (set via `wrangler secret put <NAME>` — DO NOT commit values here):
+#   DASHBOARD_KEY      — dashboard auth password
+#   SYNC_SALT          — HMAC salt for sync key hashing
+#   ENCRYPTION_KEY     — 64-hex-char AES-256-GCM key for cloud save encryption
+#   ENCRYPTION_KEY_LEGACY — previous encryption key (dual-key window during rotation)
+#
+# Generate ENCRYPTION_KEY: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 # Allow importing HTML files as raw text
 [[rules]]
