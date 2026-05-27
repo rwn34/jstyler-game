@@ -18,3 +18,12 @@ test-screenshots/
 
 # Activity logs (auto-generated)
 .ai/activity/
+
+
+# Smoke test artifacts
+smoke_test.js
+.ai/reports/smoke-test-stdout-*.txt
+e2e-temp/
+
+# Build auto-detect hash
+.zipgame-last-build-hash

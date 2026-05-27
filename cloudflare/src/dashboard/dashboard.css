@@ -261,6 +261,28 @@ tr:hover td{background:rgba(0,255,255,.03)}
   .tab{padding:6px 10px;font-size:.6rem;letter-spacing:1px}
 }
 
+/* Sub-tabs */
+.subtabs-nav{margin-bottom:12px}
+.subtabs{display:flex;gap:4px;width:max-content}
+.subtab{padding:6px 14px;font-size:.65rem;font-weight:700;letter-spacing:1px;color:#888;background:transparent;border:none;cursor:pointer;border-radius:4px;transition:all .2s;font-family:inherit;text-transform:uppercase;white-space:nowrap;flex:0 0 auto}
+.subtab:hover{color:#0ff;background:rgba(0,255,255,.06)}
+.subtab.active{color:#0ff;background:rgba(0,255,255,.12)}
+
+/* Segment chips */
+.segment-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid rgba(0,229,255,.1)}
+.segment-chip{padding:5px 12px;font-size:.65rem;font-weight:700;letter-spacing:1px;color:#888;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;cursor:pointer;font-family:inherit;transition:all .2s}
+.segment-chip:hover{color:#0ff;border-color:rgba(0,255,255,.3)}
+.segment-chip.active{color:#0ff;background:rgba(0,255,255,0.12);border-color:#0ff}
+
+/* Live feed controls */
+.live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#0f8;box-shadow:0 0 6px rgba(0,255,136,.4);animation:pulse 2s infinite}
+.live-dot.dead{background:#f44;box-shadow:0 0 6px rgba(255,68,68,.4);animation:none}
+.live-dot.paused{background:#888;box-shadow:none;animation:none}
+.pause-btn{padding:4px 10px;font-size:.6rem;font-weight:700;color:#0ff;background:rgba(0,255,255,.08);border:1px solid rgba(0,255,255,.2);border-radius:4px;cursor:pointer;font-family:inherit}
+.pause-btn:hover{background:rgba(0,255,255,.15)}
+
+@keyframes pulse{0%{opacity:1}50%{opacity:.5}100%{opacity:1}}
+
 /* Player modal full-screen on mobile */
 @media (max-width: 720px) {
   .player-modal{padding:8px}

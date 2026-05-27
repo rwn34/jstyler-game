@@ -1,35 +1,30 @@
 # Changelog
 
-## v1.2.59 — May 27, 2026
+## v1.2.63 — May 27, 2026
 
 ### Changed
-- In-game changelog now shows all historical versions (limit raised from 15 to 100)
-- Fixed mojibake (garbled Unicode) caused by PowerShell encoding corruption
-## v1.2.58 — May 27, 2026
+- **Birthday year dropdown** now spans **1970 to the current year** (was 2000–2099). Updates automatically each year. Affects all year selectors: onboarding, profile birthday edit, name-change prompt, cloud sync register, link-device.
 
-### Fixed
-- Fixed mojibake (garbled Unicode characters) caused by PowerShell encoding corruption — restored emojis, symbols, and special characters throughout the game UI
-## v1.2.57 — May 26, 2026
+## v1.2.62 — May 27, 2026
 
-### Changed
-- Build
-## v1.2.56 — May 26, 2026
-
-### Changed
-- Build
-
-## v1.2.55 — May 26, 2026
+### Added
+- 🔐 **Recovery code system** — one-time modal after first cloud sync prompts you to save a 16-character recovery code. This is the only way to recover an account if you forget your PIN.
+  - 5-second confirmation delay before "Continue" enables (so you actually save the code somewhere safe)
+  - Copy-to-clipboard with execCommand fallback for older browsers
+  - Stops prompting after 5 dismissals; manual re-trigger button always available in Settings → Cloud Save
+- 🔄 **Forgot-PIN with recovery code** — enter username, birthday, new PIN, and your recovery code. Recovery code remains valid through PIN changes (only setting a new code invalidates the old one).
+- 🛡️ **Settings → Cloud Save** indicator: "Recovery code: ✓ Set" / "✗ Not set (recommended)" with a button to set or replace the code.
 
 ### Changed
 - **Device limit raised** from 3 to 5 per cloud sync account
+- Every gameplay event now carries a unique ID (`event_uuid`) for server-side deduplication. Prevents double-counting of currency/completions when the network flakes during a retry.
+- In-game changelog now shows all historical versions (limit raised from 15 to 100)
 
 ### Fixed
-- Mobile tables keep real column layout with horizontal scroll instead of card stacking
-
-## v1.2.54 — May 26, 2026
-
-### Fixed
+- **Multi-device recovery-code indicator** — the "Recovery code: ✓/✗" status now reflects authoritative server state, not just local browser storage. Fixes false-negative warning on freshly-linked devices.
 - **Blank page bug** — `src\n3ondashj\index.html` had a leading `?` before `<!DOCTYPE html>` (introduced in v1.2.0), forcing browsers into quirks mode and causing a blank screen on some renderers. Removed the stray character.
+- Mobile tables keep real column layout with horizontal scroll instead of card stacking
+- Mojibake (garbled Unicode) caused by PowerShell encoding corruption — restored emojis, symbols, and special characters throughout the game UI
 
 ## v1.2.53 — May 26, 2026
 

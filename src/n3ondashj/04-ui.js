@@ -1459,8 +1459,12 @@ function getMonthOptions(selected){
     return html;
 }
 function getYearOptions(selected){
-    var html='';
-    for(var y=0;y<=99;y++){ var ys=(y<10?'0':'')+y; html+='<option value="'+ys+'"'+(ys===selected?' selected':'')+'>'+(2000+y)+'</option>'; }
+    var currentYear = new Date().getFullYear();
+    var html = '';
+    for(var year = 1970; year <= currentYear; year++){
+        var ys = ('0' + (year % 100)).slice(-2);
+        html += '<option value="' + ys + '"' + (ys === selected ? ' selected' : '') + '>' + year + '</option>';
+    }
     return html;
 }
 function populateMmyyDropdowns(monthId,yearId,defaultMmyy){

@@ -1,11 +1,25 @@
 ﻿# N3ON DashJ build script
-# Default: auto-bumps patch version on every build (mutates HTML/SW + changelogs).
-# Pass -Version "X.Y.Z" to set an explicit version.
+# Default: auto-detects whether source changed since the last build (via .zipgame-last-build-hash).
+#   - No source changes  -> auto-applies -RollForward (renames most recent CHANGELOG entry to new version)
+#   - Source changed     -> bumps version normally; refuses to ship if CHANGELOG entry is just `- Build` placeholder
+# Flags:
+#   -Version 'X.Y.Z'      Set explicit version (overrides auto-detect)
+#   -NoBump               Re-zip current version without bumping (e.g., after fixing CHANGELOG.md)
+#   -RollForward          Force rename most recent entry to new version (overrides auto-detect)
+#   -AllowPlaceholder     Force-build with `- Build` placeholder (escape hatch; overrides auto-detect)
 # Concatenates JS modules into single-file HTML for zero-dependency deployment.
 
 param(
-    [string]$Version = ''
+    [string]$Version = '',
+    [switch]$NoBump,
+    [switch]$RollForward,
+    [switch]$AllowPlaceholder
 )
+
+if($RollForward -and $AllowPlaceholder){
+    Write-Error "-RollForward and -AllowPlaceholder are mutually exclusive"
+    exit 1
+}
 
 $ErrorActionPreference = 'Stop'
 $root = 'C:\Users\rwn34\Code\rwn-game-jstyler'
@@ -45,18 +59,108 @@ function Bump-Patch($v){
     return "$v.1"
 }
 
-if($Version -eq ''){
+# Compute a stable hash of source content used for auto-detection of "no source changes".
+# Excludes version strings and the auto-regenerated in-game changelog viewer region
+# so that builds without code changes produce identical hashes.
+function Get-SourceContentHash {
+    param(
+        [string]$rootPath,
+        [string]$srcPath
+    )
+
+    $hashInput = ''
+
+    # Concatenate JS modules (sorted alphabetically, matching build order)
+    $jsDir = Join-Path $srcPath 'n3ondashj'
+    $jsFiles = Get-ChildItem $jsDir -Filter '*.js' | Where-Object { $_.Name -match '^\d{2}-' } | Sort-Object Name
+    foreach($f in $jsFiles){
+        $content = [System.IO.File]::ReadAllText($f.FullName, [System.Text.Encoding]::UTF8)
+        # Normalize APP_VERSION (auto-mutated by the script)
+        $content = $content -replace "var APP_VERSION = 'v[^']+';", "var APP_VERSION = 'vX.Y.Z';"
+        $hashInput += "--- $($f.Name) ---`n$content`n"
+    }
+
+    # Game shell HTML, with version strings AND the auto-regenerated changelog viewer region replaced.
+    $shellPath = Join-Path $jsDir 'index.html'
+    if(Test-Path $shellPath){
+        $shellContent = [System.IO.File]::ReadAllText($shellPath, [System.Text.Encoding]::UTF8)
+        # Strip version strings
+        $shellContent = $shellContent -replace 'v\d+\.\d+\.\d+[a-zA-Z0-9\-_]*', 'vX.Y.Z'
+        # Strip the auto-regenerated changelog viewer body (regenerated from CHANGELOG.md every build)
+        $changelogContainerPattern = '(?s)(<div style="width:100%;max-width:360px;max-height:60vh;overflow-y:auto;text-align:left;padding:10px;background:rgba\(255,255,255,0\.03\);border-radius:12px;border:1px solid rgba\(255,255,255,0\.1\);">)\r?\n.*?\r?\n(</div>\r?\n<button onclick="closeChangelog\()'
+        $shellContent = [regex]::Replace($shellContent, $changelogContainerPattern, '$1[CHANGELOG_PLACEHOLDER]$2', 1)
+        $hashInput += "--- shell.html ---`n$shellContent`n"
+    }
+
+    # Service Worker (with CACHE_NAME normalized)
+    $swPath = Join-Path $jsDir 'sw.js'
+    if(Test-Path $swPath){
+        $swContent = [System.IO.File]::ReadAllText($swPath, [System.Text.Encoding]::UTF8)
+        $swContent = $swContent -replace "'n3ondashj-v[^']+'", "'n3ondashj-vX.Y.Z'"
+        $hashInput += "--- sw.js ---`n$swContent`n"
+    }
+
+    # Manifest (rarely changes but include for completeness)
+    $manifestPath = Join-Path $jsDir 'manifest.webmanifest'
+    if(Test-Path $manifestPath){
+        $manifestContent = [System.IO.File]::ReadAllText($manifestPath, [System.Text.Encoding]::UTF8)
+        $hashInput += "--- manifest ---`n$manifestContent`n"
+    }
+
+    # Compute SHA-256
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($hashInput)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hashBytes = $sha.ComputeHash($bytes)
+    } finally {
+        $sha.Dispose()
+    }
+    return ([System.BitConverter]::ToString($hashBytes) -replace '-', '').ToLower()
+}
+
+# === AUTO-DETECT no-op rebuild ===
+# Default invocation (no flags + no -Version) auto-applies -RollForward when source content
+# is unchanged from the last successful build (compared via .zipgame-last-build-hash).
+$autoDetected = $false
+$hashFilePath = Join-Path $root '.zipgame-last-build-hash'
+if(!$NoBump -and !$RollForward -and !$AllowPlaceholder -and $Version -eq ''){
+    if(Test-Path $hashFilePath){
+        $previousHash = ([System.IO.File]::ReadAllText($hashFilePath, [System.Text.Encoding]::UTF8)).Trim()
+        $currentHash = Get-SourceContentHash -rootPath $root -srcPath $src
+        if($currentHash -eq $previousHash -and $previousHash.Length -eq 64){
+            $RollForward = $true
+            $autoDetected = $true
+            Write-Host '  -> No source changes detected since last build; auto-applying -RollForward' -ForegroundColor Cyan
+        }
+        else {
+            Write-Host '  -> Source changes detected since last build; bumping version normally' -ForegroundColor DarkGray
+        }
+    }
+    else {
+        Write-Host '  -> No previous build hash found (first run or hash file missing); bumping version normally' -ForegroundColor DarkGray
+    }
+}
+
+if($NoBump){
+    $newVersion = $currentVersion
+    Write-Host "Current version: v$currentVersion"
+    Write-Host "Rebuilding same version (no bump)"
+}
+elseif($Version -eq ''){
     $newVersion = Bump-Patch $currentVersion
-} else {
+}
+else {
     $newVersion = $Version -replace '^v',''
     if($newVersion -eq $currentVersion){
-        Write-Error "New version equals current ($currentVersion). Specify a different -Version or bump manually."
+        Write-Error "New version equals current ($currentVersion). Specify a different -Version or use -NoBump."
         exit 1
     }
 }
 
-Write-Host "Current version: v$currentVersion"
-Write-Host "New version:     v$newVersion"
+if(!$NoBump){
+    Write-Host "Current version: v$currentVersion"
+    Write-Host "New version:     v$newVersion"
+}
 
 # === DOC CHECKS & AUTO-INSERT PLACEHOLDERS ===
 $changelogPath = Join-Path $root 'CHANGELOG.md'
@@ -65,15 +169,61 @@ $rootChangelog = (Test-Path $changelogPath) -and ([System.IO.File]::ReadAllText(
 $featuresPath = Join-Path $root 'FEATURES.md'
 $workflowPath = Join-Path $root 'WORKFLOW.md'
 
-# Auto-insert placeholder into CHANGELOG.md if missing
-if(!$rootChangelog){
+# Auto-insert placeholder or roll forward into CHANGELOG.md if missing
+if(!$rootChangelog -and !$NoBump){
+    if(Test-Path $changelogPath){
+        if($RollForward){
+            # Rename the most recent entry header to the new version + today's date
+            $changelogContent = [System.IO.File]::ReadAllText($changelogPath, [System.Text.Encoding]::UTF8)
+            $dateStr = Get-Date -Format 'MMMM d, yyyy'
+            $headerPattern = '(?m)^## v[0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9\-_]* \u2014 [^\r\n]+$'
+            $newHeader = "## v$newVersion — $dateStr"
+            $firstMatch = [regex]::Match($changelogContent, $headerPattern)
+            if(!$firstMatch.Success){
+                Write-Error "-RollForward: no previous changelog entry found to roll forward from"
+                exit 1
+            }
+            $changelogContent = $changelogContent.Substring(0, $firstMatch.Index) + $newHeader + $changelogContent.Substring($firstMatch.Index + $firstMatch.Length)
+            [System.IO.File]::WriteAllText($changelogPath, $changelogContent, (New-Object System.Text.UTF8Encoding($false)))
+            Write-Host "  -> Rolled forward most recent entry to v$newVersion" -ForegroundColor DarkGray
+        }
+        else {
+            # Original placeholder behavior
+            $changelogContent = [System.IO.File]::ReadAllText($changelogPath, [System.Text.Encoding]::UTF8)
+            $dateStr = Get-Date -Format 'MMMM d, yyyy'
+            $placeholder = "## v$newVersion — $dateStr`n`n### Changed`n- Build`n"
+            $changelogContent = [regex]::Replace($changelogContent, '^# Changelog\s*\r?\n', "# Changelog`n`n$placeholder", 1)
+            [System.IO.File]::WriteAllText($changelogPath, $changelogContent, (New-Object System.Text.UTF8Encoding($false)))
+            Write-Host "  -> Added placeholder to CHANGELOG.md for v$newVersion" -ForegroundColor DarkGray
+        }
+    }
+}
+elseif($RollForward -and $rootChangelog -and !$NoBump){
+    Write-Host "  -> v$newVersion already has a changelog entry; skipping roll-forward" -ForegroundColor DarkGray
+}
+elseif($RollForward -and $NoBump){
+    # -NoBump -RollForward: check if most recent entry already matches current version (idempotent)
     if(Test-Path $changelogPath){
         $changelogContent = [System.IO.File]::ReadAllText($changelogPath, [System.Text.Encoding]::UTF8)
-        $dateStr = Get-Date -Format 'MMMM d, yyyy'
-        $placeholder = "## v$newVersion — $dateStr`n`n### Changed`n- Build`n"
-        $changelogContent = [regex]::Replace($changelogContent, '^# Changelog\s*\r?\n', "# Changelog`n`n$placeholder", 1)
-        [System.IO.File]::WriteAllText($changelogPath, $changelogContent, (New-Object System.Text.UTF8Encoding($false)))
-        Write-Host "  -> Added placeholder to CHANGELOG.md for v$newVersion" -ForegroundColor DarkGray
+        $headerPattern = '(?m)^## v([0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9\-_]*) \u2014 [^\r\n]+$'
+        $firstMatch = [regex]::Match($changelogContent, $headerPattern)
+        if($firstMatch.Success -and $firstMatch.Groups[1].Value -eq $newVersion){
+            Write-Host "  -> Most recent entry is already v$newVersion; nothing to roll forward" -ForegroundColor DarkGray
+        }
+        else {
+            # Rename the most recent entry to current version
+            $dateStr = Get-Date -Format 'MMMM d, yyyy'
+            $newHeader = "## v$newVersion — $dateStr"
+            if($firstMatch.Success){
+                $changelogContent = $changelogContent.Substring(0, $firstMatch.Index) + $newHeader + $changelogContent.Substring($firstMatch.Index + $firstMatch.Length)
+                [System.IO.File]::WriteAllText($changelogPath, $changelogContent, (New-Object System.Text.UTF8Encoding($false)))
+                Write-Host "  -> Rolled forward most recent entry to v$newVersion" -ForegroundColor DarkGray
+            }
+            else {
+                Write-Error "-RollForward: no previous changelog entry found to roll forward from"
+                exit 1
+            }
+        }
     }
 }
 
@@ -250,7 +400,7 @@ if(Test-Path $assetsDir){
 # === LOCAL TESTING OUTPUT (unzipped, latest only) ===
 $latestDir = Join-Path $deploy 'latest'
 $latestGameDir = Join-Path $latestDir 'n3ondashj'
-if(Test-Path $latestDir){ Remove-Item $latestDir -Recurse -Force }
+if(Test-Path $latestDir){ Remove-Item $latestDir -Recurse -Force -ErrorAction SilentlyContinue }
 New-Item -ItemType Directory -Path $latestGameDir | Out-Null
 [System.IO.File]::WriteAllText((Join-Path $latestDir 'index.html'), $indexHtml, $utf8NoBom)
 [System.IO.File]::WriteAllText((Join-Path $latestGameDir 'index.html'), $finalGameHtml, $utf8NoBom)
@@ -263,6 +413,29 @@ if(Test-Path $assetsDir){
 $headersPath = Join-Path $src '_headers'
 if(Test-Path $headersPath){ Copy-Item $headersPath $latestDir }
 Write-Host "  -> deploy/latest/ (for local testing)"
+
+# Enforce: don't ship a zip with a `- Build` placeholder unless explicitly allowed.
+if(!$AllowPlaceholder -and !$NoBump){
+    $chkContent = [System.IO.File]::ReadAllText($changelogPath, [System.Text.Encoding]::UTF8)
+    $entryPattern = "(?ms)^## v$([regex]::Escape($newVersion))[^\r\n]*\r?\n(.*?)(?=^## v[0-9]|\z)"
+    $entryMatch = [regex]::Match($chkContent, $entryPattern)
+    if($entryMatch.Success){
+        $entryBody = $entryMatch.Groups[1].Value
+        $bullets = ($entryBody -split '\r?\n') | Where-Object { $_ -match '^\s*-\s+\S' }
+        $isJustBuild = ($bullets.Count -eq 1) -and ($bullets[0] -match '^\s*-\s+Build\s*$')
+        if($isJustBuild){
+            Write-Host ''
+            Write-Host "ABORTING: CHANGELOG.md still has only the ``- Build`` placeholder for v$newVersion" -ForegroundColor Red
+            Write-Host 'Source files were updated (in-game changelog HTML, version strings) but the zip was NOT created.' -ForegroundColor Yellow
+            Write-Host ''
+            Write-Host 'Choose one of these next steps:' -ForegroundColor Yellow
+            Write-Host "  1. Edit CHANGELOG.md to write real changes for v$newVersion, then re-run with -NoBump" -ForegroundColor Yellow
+            Write-Host "  2. Apply rolling-forward: re-run with -RollForward (uses previous version's changelog)" -ForegroundColor Yellow
+            Write-Host '  3. Force build with placeholder: re-run with -AllowPlaceholder' -ForegroundColor Yellow
+            exit 2
+        }
+    }
+}
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 Add-Type -AssemblyName System.IO.Compression
@@ -290,6 +463,20 @@ Remove-Item $tempDir -Recurse -Force
 $size = [math]::Round((Get-Item $zipPath).Length/1024, 1)
 Write-Host ""
 Write-Host "Done: $zipName ($size KB)" -ForegroundColor Green
+
+# === PERSIST SOURCE HASH for next run's auto-detect ===
+try {
+    $newHash = Get-SourceContentHash -rootPath $root -srcPath $src
+    [System.IO.File]::WriteAllText($hashFilePath, $newHash, (New-Object System.Text.UTF8Encoding($false)))
+    if($autoDetected){
+        Write-Host '  -> Source hash unchanged (auto-rolled forward)' -ForegroundColor DarkGray
+    } else {
+        Write-Host '  -> Updated .zipgame-last-build-hash for next-run auto-detect' -ForegroundColor DarkGray
+    }
+} catch {
+    Write-Warning ('Could not write .zipgame-last-build-hash: ' + $_.Exception.Message)
+}
+
 Write-Host ""
 Write-Host ""
 Write-Host "ACTION NEEDED:" -ForegroundColor Yellow

@@ -5,18 +5,13 @@ const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'levels', label: 'Per Level' },
   { id: 'players', label: 'Per Player' },
-  { id: 'watchlist', label: '🚩 Watchlist' },
   { id: 'retention', label: 'Retention' },
-  { id: 'sessions', label: 'Sessions' },
-  { id: 'geo', label: 'Geo' },
-  { id: 'engagement', label: 'Engagement' },
+  { id: 'activity', label: 'Activity' },
   { id: 'economy', label: 'Economy' },
   { id: 'dailystage', label: '🔥 Daily' },
-  { id: 'feed', label: 'Live Feed' },
-  { id: 'alerts', label: '⚠ Alerts' },
-  { id: 'appversion', label: 'App Ver' },
+  { id: 'live', label: 'Live' },
+  { id: 'platform', label: 'Platform' },
   { id: 'feedback', label: 'Feedback' },
-  { id: 'sync', label: 'Cloud Sync' },
 ];
 
 export function Tabs() {
