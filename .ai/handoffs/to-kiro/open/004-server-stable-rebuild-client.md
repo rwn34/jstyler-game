@@ -9,7 +9,7 @@
 
 ## Server state
 
-- **Worker deployed:** `ndj-metrics` Version `e09886c4-af7b-4a9b-bfd3-caf2b55f5e75`
+- **Worker deployed:** `ndj-metrics` Version `c22d9ad9-603d-40c6-969c-92c6a5a7cde7`
 - **URL:** `https://ndj-metrics.jstylr.workers.dev`
 - **Migrations applied:**
   - `004_pbkdf2_recovery_columns.sql` — all new columns live (`sync_states.pin_hash_algo`, `pin_salt`, `pin_hash`, `recovery_code_hash`, `recovery_code_salt`; `events.event_uuid`)
