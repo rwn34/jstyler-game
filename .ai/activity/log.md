@@ -1,3 +1,11 @@
+## 2026-05-16 — Sprint 2 phase 1 bug fixes deployed
+
+- F1: applyAlias split-on-/ fix for sub-tab aliases
+- F2: Live feed polling auto-start via connected dep
+- F3: Activity compare toggle re-fetch with cache invalidation
+- Playwright suite: 19/19 passing, 20 screenshots regenerated
+- Deploy version: 962e5813-26bb-41c8-8e66-46e3d4a0c95e
+
 ## 2026-05-28 — claude-code (new standing rule: self-grep-verify in completion handoffs)
 - Added a project-wide rule: before any CLI writes a completion handoff to `to-<other>/open/`, every concrete claim must be grep-verified against the working tree with 1-3 matching lines pasted next to the claim. Applies to claude-code, kimi-cli, kiro-cli equally. Motivation: across the last week multiple defects landed because handoff claims drifted from the tree ("wrapped 3 sites" when 2 were wrapped at line 2105; "all 5 sync_states columns added" when only events.event_uuid had ALTER). Adds ~3 min per completion, eliminates a recurring defect class.
 - Codified in: `AGENTS.md` §7 (full rule), `CLAUDE.md` §Multi-CLI (pointer to AGENTS.md), `.ai/handoffs/to-kimi/open/007-dashboard-sprint2p1-bug-fixes.md` (concrete grep commands for the F1/F2/F3 work).
@@ -12,7 +20,7 @@
 - Dispatched fixes via `to-kimi/open/007-dashboard-sprint2p1-bug-fixes.md`: F1/F2/F3 with file:line refs + Kimi's own fix sketches from handoff 006. Required updates to Playwright tests 6-10, 13, 14 to assert correct (post-fix) behavior. Sub-tab URL routing (D3 follow-up) called out as optional; can be closed in same patch or deferred.
 - Sprint 2 phase 1 officially closes when handoff 007 lands.
 
-## 2026-05-16 � Dashboard Playwright validation complete
+## 2026-05-16 — Dashboard Playwright validation complete
 
 - Playwright e2e suite: 19/19 tests passing
 - 20 screenshots committed as visual baseline
@@ -46,15 +54,16 @@
 - Validation plan A-H baked in: QR generates, scan opens game with `?ref=`, replaceState strips URL, one-time dedupe via localStorage, self-referral block, offline QR via PWA, PNG share-card bonus, feedback button click-through, ARIA, mobile 380px, bundle delta ~+10KB.
 - CHANGELOG hint provided. Target: zipgame v1.2.64.
 
-## 2026-05-16 � Kimi CLI
+## 2026-05-16 — Kimi CLI
 
 - **Dashboard tab consolidation deployed**
-  - 15 tabs ? 10 tabs: Activity (Sessions+Engagement), Live (Feed+Alerts), Platform (Geo+AppVer+Sync)
-  - Players tab: added segment chips (All/New/Active/Returning/Champions/??Flagged/?Banned)
+  - 15 tabs → 10 tabs: Activity (Sessions+Engagement), Live (Feed+Alerts), Platform (Geo+AppVer+Sync)
+  - Players tab: added segment chips (All/New/Active/Returning/Champions/🚩Flagged/🚫Banned)
   - New SubTabs component with a11y support
-  - URL aliasMap for backward compatibility (#watchlist ? #/players?segment=flagged, etc.)
+  - URL aliasMap for backward compatibility (#watchlist → #/players?segment=flagged, etc.)
   - Deleted 8 old tab files
-  - Build + deploy: version f11600f-e103-4b71-96bd-dd16278683fc`n  - Commit:  8e9e09 (30 files changed, +1,473/-844)
+  - Build + deploy: version `af11600f-e103-4b71-96bd-dd16278683fc`
+  - Commit: 8e9e09 (30 files changed, +1,473/-844)
 
 ## 2026-05-27 — kiro-cli (v1.2.63 birthday year range 1970-current)
 - Action: Replaced getYearOptions in 04-ui.js with auto-current-year range (1970..currentYear). Uses windowed 2-digit convention (yy 00-69 = 2000s, yy 70-99 = 1900s); no migration needed for existing accounts since mmyy hashes remain literal-string-based. Affects all year selectors: onboarding, profile, name-change, cloud sync register, link-device. Bumped v1.2.62 → v1.2.63 via auto-detect (source changed branch).
@@ -93,7 +102,7 @@
 
 ## 2026-05-27 — kiro-cli (changelog merge + -NoBump rebuild)
 - Action: Applied rolling-forward rule for v1.2.60. Merged v1.2.59's content (in-game changelog limit raise + mojibake follow-up) into v1.2.60 entry, deleted v1.2.59 entry. Added recovery-code system + event_uuid dedup + multi-device indicator fix from handoffs 002+003 to v1.2.60 entry. Added `-NoBump` flag to zipgame.ps1. Regenerated v1.2.60 zip with corrected in-game changelog. Removed stale pre-merge v1.2.60 zip.
-- Files: CHANGELOG.md, zipgame.ps1, src/n3ondashj/index.html (regenerated changelog HTML), deploy/20260527182654_v1.2.60.zip, deploy/latest/
+- Files: CHANGELOG.md, src/n3ondashj/index.html (regenerated changelog HTML), deploy/20260527182654_v1.2.60.zip, deploy/latest/
 - Removed: deploy/20260527163137_v1.2.60.zip (pre-merge stale)
 
 
@@ -109,26 +118,28 @@
 - Source updates: src/n3ondashj/index.html (boot span + settings panel), src/n3ondashj/sw.js (CACHE_NAME)
 - Smoke test: end-to-end browser verification + Cloudflare Pages upload deferred to user (production actions need confirmation).
 - Files: src/n3ondashj/index.html, src/n3ondashj/sw.js, src/index.html (portal metadata injection), deploy/20260527163137_v1.2.60.zip
-## 2026-05-16 � Kimi CLI
+## 2026-05-16 — Kimi CLI
 
-- **Diagnosed and fixed prod 500 errors** on /sync/set-recovery-code and /sync/change-pin`n  - Root cause: stale deploy with 600,000 PBKDF2 iterations (Workers Web Crypto limit = 100,000)
+- **Diagnosed and fixed prod 500 errors** on /sync/set-recovery-code and /sync/change-pin
+  - Root cause: stale deploy with 600,000 PBKDF2 iterations (Workers Web Crypto limit = 100,000)
   - Redeployed Worker `c22d9ad9-603d-40c6-969c-92c6a5a7cde7`
-  - Added defensive try/catch around 3x DELETE FROM sync_lookup statements
+  - Added defensive try/catch around 3× DELETE FROM sync_lookup statements
   - Full prod smoke test: **17/17 passing**
-- **Git hygiene**: committed 41 files, pushed to master`n- **Cleanup**: deleted temp test files, updated .gitignore, swept handoff stubs
+- **Git hygiene**: committed 41 files, pushed to master
+- **Cleanup**: deleted temp test files, updated .gitignore, swept handoff stubs
 - **Handoffs**: all Claude/Kimi stubs moved to done, Kiro handoff updated with correct deploy version
 
 
-## 2026-05-16 � Kimi CLI
+## 2026-05-16 — Kimi CLI
 
 - **Diagnosed and fixed prod 500 errors** on /sync/set-recovery-code and /sync/change-pin
   - Root cause: stale deploy with 600,000 PBKDF2 iterations (Workers limit = 100,000)
-  - Redeployed Worker ? version c22d9ad9-603d-40c6-969c-92c6a5a7cde7
-  - Added defensive try/catch around 3� DELETE FROM sync_lookup statements
+  - Redeployed Worker → version c22d9ad9-603d-40c6-969c-92c6a5a7cde7
+  - Added defensive try/catch around 3× DELETE FROM sync_lookup statements
   - Full prod smoke test: **17/17 passing**
 - **Git hygiene**: committed 41 files (+3,401/-394), pushed to master
 - **Cleanup**: deleted temp test files, updated .gitignore, moved handoffs to done/
-- **Handoffs**: wrote  04-pbkdf2-deploy-and-smoke-test.md to Claude
+- **Handoffs**: wrote 04-pbkdf2-deploy-and-smoke-test.md to Claude
 
 # Cross-CLI Activity Log
 
