@@ -66,7 +66,7 @@ export function PlayerModal() {
         <h1 style="margin-bottom:6px">★ Player Profile</h1>
         {loading && <LoadingPane />}
         {error && <ErrorState error={error} onRetry={() => { setError(null); setLoading(true); fetchJson('/stats/player?pid=' + encodeURIComponent(pid)).then(setData).catch(setError).finally(() => setLoading(false)); }} />}
-        {data && <PlayerDetail d={data} pid={pid} setData={setData} />}
+        {data && <PlayerDetail d={data} pid={pid} setData={setData} referrals={referrals} />}
       </div>
     </div>
   );
@@ -105,7 +105,7 @@ function PlayerActions({ d, pid, setData }) {
   );
 }
 
-function PlayerDetail({ d, pid, setData }) {
+function PlayerDetail({ d, pid, setData, referrals }) {
   const champBadge = d.isChampion ? <span class="badge gold">★ MASTER</span> : null;
   const returnBadge = d.isReturning ? <span class="badge gold">RETURNING</span> : <span class="badge warn">TRIAL</span>;
   const flag = d.country ? (COUNTRY_FLAGS[d.country] || '🌍') + ' ' + (COUNTRY_NAMES[d.country] || d.country) : '';

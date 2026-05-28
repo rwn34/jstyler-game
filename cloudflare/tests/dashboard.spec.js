@@ -306,6 +306,86 @@ test.describe('Desktop (1280x800)', () => {
     expect(networkErrors).toEqual([]);
   });
 
+  test('18. PlayerModal renders Referrals section with mocked data', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+    // Mock players list
+    await page.route(/\/stats\/players/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            recentActive: [{ pid: 'p_mocktest', name: 'MOCK', last_seen: Date.now(), first_seen: Date.now() - 86400000, cohort: 'new' }],
+            newPlayers: [], returningPlayers: [], topActive: [], topCompleters: [], topDiers: [],
+            topGold: [], champions: [], lowestVerified: [], highMotivation: [], generatedAt: Date.now(),
+          },
+        }),
+      });
+    });
+
+    // Mock flagged players
+    await page.route(/\/stats\/flagged-players/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { players: [] } }) });
+    });
+
+    // Mock referrals summary (no pid)
+    await page.route(/\/admin\/referrals\?((?!pid).)*$/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { summary: { total_referral_opens: 0, unique_referrers: 0, unique_referees: 0 }, top_referrers: [], timeseries: [] } }) });
+    });
+
+    // Mock player detail
+    await page.route(/\/stats\/player\?/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            pid: 'p_mocktest', name: 'MOCK', firstSeen: Date.now() - 86400000, lastSeen: Date.now(),
+            sessionCount: 5, daysActive: 2, totalEvents: 100, verifiedRatio: 80, uniqueLevels: 3,
+            perLevel: [], totalGoldEarned: 50, totalGoldSpent: 20, totalSilverEarned: 100, totalSilverSpent: 30,
+            favoriteStage: 1, country: 'US', recent: [], deathCauses: [], hourlyActivity: [], equipment: null,
+            ownedSkills: [], ownedCosmetics: [], ownedConsumables: [],
+          },
+        }),
+      });
+    });
+
+    // Mock referrals detail for mock PID
+    await page.route(/\/admin\/referrals\?.*pid=p_mocktest/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            pid: 'p_mocktest', name: 'MOCK',
+            referredBy: { pid: 'p_alice', name: 'ALICE', ts: Date.now() - 86400000 },
+            referred: [
+              { pid: 'p_carol', name: 'CAROL', ts: Date.now() - 3600000 },
+              { pid: 'p_dave', name: 'DAVE', ts: Date.now() - 1800000 },
+            ],
+            hasMore: false,
+          },
+        }),
+      });
+    });
+
+    await page.goto(`${BASE_URL}#/players?range=7d`);
+    await page.waitForSelector('table tbody tr');
+    await page.locator('table tbody tr:first-child td:nth-child(2) a').first().click();
+
+    await expect(page.locator('.player-modal')).toBeVisible();
+    await expect(page.locator('.player-modal')).toContainText('Referrals');
+    await expect(page.locator('.player-modal')).toContainText('ALICE');
+    await expect(page.locator('.player-modal')).toContainText('CAROL');
+    await expect(page.locator('.player-modal')).toContainText('DAVE');
+    await page.screenshot({ path: 'tests/dashboard/visual/player-modal.png', fullPage: false });
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
   test('22. Health verdict banner renders on Overview', async ({ page }) => {
     const { consoleErrors, networkErrors } = setupErrorCollection(page);
     await page.goto(`${BASE_URL}#/overview?range=7d`);
@@ -366,6 +446,76 @@ test.describe('Mobile (380x800)', () => {
     const { consoleErrors, networkErrors } = setupErrorCollection(page);
     await page.goto(`${BASE_URL}#/players?range=7d`);
     await expect(page.locator('h2', { hasText: 'Top Referrers' })).toBeVisible();
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
+  test('18m. PlayerModal renders Referrals section with mocked data', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+
+    await page.route(/\/stats\/players/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            recentActive: [{ pid: 'p_mocktest', name: 'MOCK', last_seen: Date.now(), first_seen: Date.now() - 86400000, cohort: 'new' }],
+            newPlayers: [], returningPlayers: [], topActive: [], topCompleters: [], topDiers: [],
+            topGold: [], champions: [], lowestVerified: [], highMotivation: [], generatedAt: Date.now(),
+          },
+        }),
+      });
+    });
+    await page.route(/\/stats\/flagged-players/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { players: [] } }) });
+    });
+    await page.route(/\/admin\/referrals\?((?!pid).)*$/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { summary: { total_referral_opens: 0, unique_referrers: 0, unique_referees: 0 }, top_referrers: [], timeseries: [] } }) });
+    });
+    await page.route(/\/stats\/player\?/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            pid: 'p_mocktest', name: 'MOCK', firstSeen: Date.now() - 86400000, lastSeen: Date.now(),
+            sessionCount: 5, daysActive: 2, totalEvents: 100, verifiedRatio: 80, uniqueLevels: 3,
+            perLevel: [], totalGoldEarned: 50, totalGoldSpent: 20, totalSilverEarned: 100, totalSilverSpent: 30,
+            favoriteStage: 1, country: 'US', recent: [], deathCauses: [], hourlyActivity: [], equipment: null,
+            ownedSkills: [], ownedCosmetics: [], ownedConsumables: [],
+          },
+        }),
+      });
+    });
+    await page.route(/\/admin\/referrals\?.*pid=p_mocktest/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            pid: 'p_mocktest', name: 'MOCK',
+            referredBy: { pid: 'p_alice', name: 'ALICE', ts: Date.now() - 86400000 },
+            referred: [
+              { pid: 'p_carol', name: 'CAROL', ts: Date.now() - 3600000 },
+              { pid: 'p_dave', name: 'DAVE', ts: Date.now() - 1800000 },
+            ],
+            hasMore: false,
+          },
+        }),
+      });
+    });
+
+    await page.goto(`${BASE_URL}#/players?range=7d`);
+    await page.waitForSelector('table tbody tr');
+    await page.locator('table tbody tr:first-child td:nth-child(2) a').first().click();
+
+    await expect(page.locator('.player-modal')).toBeVisible();
+    await expect(page.locator('.player-modal')).toContainText('Referrals');
+    await expect(page.locator('.player-modal')).toContainText('ALICE');
+    await page.screenshot({ path: 'tests/dashboard/visual/player-modal-mobile.png', fullPage: false });
     expect(consoleErrors).toEqual([]);
     expect(networkErrors).toEqual([]);
   });

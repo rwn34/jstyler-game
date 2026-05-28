@@ -1,3 +1,21 @@
+## 2026-05-28 — claude-code (010 D3 close-out ACCEPTED)
+- Read `to-claude/done/010-d3-subtab-url-consumption-complete.md` (Kimi wrote it but placed directly in done/ rather than open/ — minor process variance, flagged in the review notes I appended).
+- **Work verdict: ✅ ACCEPTED.** Sub-tab URL routing fully wired. Worker `6cd5bcfc-e8c1-42d8-b302-d9a6f730d724` live, commit `8073a48`, 27/27 Playwright.
+- Independent spot-check confirmed line numbers: `lib/url.js:17,19,22,24` (parseHash splits on '/', writeHash signature/conditional append); `Platform.jsx:24` + `Live.jsx:32` (consume subTab from parseHash on mount); `HealthVerdict.jsx:33` (writeHash('live', 'alerts', ...) — closes the 009 deep-link deviation in passing).
+- All 8 alias hashes (#geo, #appversion, #sync, #feed, #alerts, #watchlist, #sessions, #engagement) now land on correct sub-tab. Browser back-button works for sub-tab nav.
+- **Process note:** completion handoff landed in `to-claude/done/` instead of `open/` first. Substance is right and snippets are present (better than 009's no-handoff-at-all). Going forward: file goes in `open/`, I move to `done/` after verification with my review appended.
+- Trajectory under the new rule: 007 no-snippets → 008 gold → 009 no-handoff → 010 snippets present + done/ misplacement. Discipline converging. 011 will be the meaningful test.
+
+## 2026-05-28 — 010: D3 sub-tab URL consumption
+- parseHash/writeHash now round-trip subTab segment
+- Platform/Live components consume subTab from URL on mount
+- SubTabs click updates URL hash via writeHash
+- HealthVerdict deep-links to #/live/alerts in alert state
+- All aliases (#geo, #appversion, #sync, #feed, #alerts) land on correct sub-tab
+- Deployed `6cd5bcfc-e8c1-42d8-b302-d9a6f730d724`
+- Playwright: 27/27 passing
+- Commit: `8073a48`
+
 ## 2026-05-28 — claude-code (kimi handoffs 010-013 batch dispatched)
 - Wrote 4 handoffs at user request (backlog items 1, 2, 3, 5). All Kimi's lane (cloudflare/). Kimi sequences as they see fit; only 011 has a soft dependency on 010.
 - **010 — D3 close-out** (`to-kimi/open/010-d3-subtab-url-consumption.md`): ~30 min. Extend parseHash/writeHash to round-trip subTab path segment, wire Platform/Live to consume on mount, SubTabs writeHash on click. Bonus: HealthVerdict can deep-link to `live/alerts` cleanly (closes the 009 small deviation).
@@ -8,7 +26,7 @@
 - Activity log entry alone is NOT sufficient. Going forward, no more orchestrator-authored close-outs to cover for missing handoffs.
 
 ## 2026-05-28 — claude-code (sprint 2 phase 3 first-pair ACCEPTED + process tightening)
-- Read activity log (no formal completion handoff in `to-claude/open/` for 009). Verified Kimi's work directly via grep + reading `HealthVerdict.jsx` end-to-end.
+- Read + resolved Kimi's `to-claude/open/009-overview-health-and-data-freshness-complete.md`. Worker `3fddfbd3-f4b7-459a-8a4c-0dd5e9e31550` live, commit `880d067`, 25/25 Playwright passing.
 - **Work verdict: ✅ ACCEPTED.** Cleanest code of any sprint this week. Worker `3fddfbd3-f4b7-459a-8a4c-0dd5e9e31550` live, commit `880d067`, 25/25 Playwright passing.
   - HealthVerdict (`components/HealthVerdict.jsx:4-51`): 3 states correctly thresholded, ARIA `role=alert|status` + `aria-live=polite`, click→Live only when non-healthy, color+icon+text triple signal, reuses `.live/.warn/.bad` palette.
   - DataFreshness wired via `state.js:9 agoTick = signal(0)` + 30s tick in App.jsx, mounted in header bar at App.jsx:47. Stale-threshold polish present (amber past TTL, red past 10min).
@@ -137,7 +155,7 @@
   - Commit: 8e9e09 (30 files changed, +1,473/-844)
 
 ## 2026-05-27 — kiro-cli (v1.2.63 birthday year range 1970-current)
-- Action: Replaced getYearOptions in 04-ui.js with auto-current-year range (1970..currentYear). Uses windowed 2-digit convention (yy 00-69 = 2000s, yy 70-99 = 1900s); no migration needed for existing accounts since mmyy hashes remain literal-string-based. Affects all year selectors: onboarding, profile, name-change, cloud sync register, link-device. Bumped v1.2.62 → v1.2.63 via auto-detect (source changed branch).
+- Action: Replaced getYearOptions in 04-ui.js with auto-current-year range (1970..currentYear). Uses windowed 2-digit convention (yy 00-69 = 2000s, yy 70-99 = 1900s); no migration needed for existing accounts since mmyy hashes remain literal-string-based. Affects all year selectors: onboarding, profile, name-change, cloud sync register, link-device. Bumped v1.2.62 → v1.2.63 via auto-detect (source change branch).
 - Files: src/n3ondashj/04-ui.js, CHANGELOG.md, src/n3ondashj/index.html, src/n3ondashj/sw.js, src/n3ondashj/03-save.js, deploy/20260527205247_v1.2.63.zip, deploy/latest/, .zipgame-last-build-hash
 
 
