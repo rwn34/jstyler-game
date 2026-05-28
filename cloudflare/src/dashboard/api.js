@@ -14,6 +14,20 @@ export async function fetchJson(path, { range, force } = {}) {
   return j.data;
 }
 
+export async function postJson(path, body) {
+  const res = await fetch(API + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    credentials: 'same-origin',
+  });
+  if (res.status === 401) { location.href = '/'; throw new Error('unauthorized'); }
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const j = await res.json();
+  if (!j.ok) throw new Error(j.error || 'API error');
+  return j.data;
+}
+
 export async function getReferrals(pid, { force } = {}) {
   const path = pid ? '/admin/referrals?pid=' + encodeURIComponent(pid) : '/admin/referrals';
   const sep = path.indexOf('?') >= 0 ? '&' : '?';

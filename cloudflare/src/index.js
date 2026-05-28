@@ -2551,6 +2551,45 @@ async function handleAdminSyncResetPin(request, env) {
   return jsonResponse({ ok: true, newKeyHash }, 200);
 }
 
+// === Alerts admin endpoints ===
+
+async function handleAdminAlertsAck(request, env) {
+  const body = await readJsonBody(request);
+  const { alert_id } = body || {};
+  if (!alert_id || typeof alert_id !== 'string') {
+    return errResponse('alert_id required', 400);
+  }
+  const now = Date.now();
+  await env.DB.prepare(
+    "INSERT INTO alerts_state (alert_id, status, acked_at, acked_by) VALUES (?, 'acked', ?, 'dashboard') ON CONFLICT(alert_id) DO UPDATE SET status = excluded.status, acked_at = excluded.acked_at, acked_by = excluded.acked_by, mute_until = NULL"
+  ).bind(alert_id, now).run();
+  return jsonResponse({ ok: true });
+}
+
+async function handleAdminAlertsMute(request, env) {
+  const body = await readJsonBody(request);
+  const { alert_id, days } = body || {};
+  if (!alert_id || typeof alert_id !== 'string') {
+    return errResponse('alert_id required', 400);
+  }
+  const muteDays = Math.min(Math.max(parseInt(days) || 1, 1), 30);
+  const muteUntil = Date.now() + muteDays * 86400000;
+  await env.DB.prepare(
+    "INSERT INTO alerts_state (alert_id, status, mute_until, acked_at, acked_by) VALUES (?, 'muted', ?, NULL, NULL) ON CONFLICT(alert_id) DO UPDATE SET status = excluded.status, mute_until = excluded.mute_until, acked_at = NULL, acked_by = NULL"
+  ).bind(alert_id, muteUntil).run();
+  return jsonResponse({ ok: true, muteUntil });
+}
+
+async function handleAdminAlertsUnack(request, env) {
+  const body = await readJsonBody(request);
+  const { alert_id } = body || {};
+  if (!alert_id || typeof alert_id !== 'string') {
+    return errResponse('alert_id required', 400);
+  }
+  await env.DB.prepare('DELETE FROM alerts_state WHERE alert_id = ?').bind(alert_id).run();
+  return jsonResponse({ ok: true });
+}
+
 // === Search endpoint ===
 async function handleStatsSearch(env, url, force) {
   let q = (url.searchParams.get('q') || '').trim();
@@ -3237,12 +3276,17 @@ async function handleFeedStream(env, url) {
   });
 }
 
+// Stable alert ID generator
+async function makeAlertId(type, severity, message, since) {
+  const hash = await sha256Hex(`${type}|${severity}|${message}|${since}`);
+  return hash.slice(0, 16);
+}
+
 // === Anomaly detection ===
 async function handleAnomalies(env, force) {
   return cachedJson('anomalies', async () => {
     const now = Date.now();
     const alerts = [];
-    let alertId = 0;
 
     // Use stats_daily for fast lookups
     const today = new Date(now).toISOString().slice(0, 10);
@@ -3319,7 +3363,7 @@ async function handleAnomalies(env, force) {
         const dropPct = Math.round((1 - recentCR / baselineCR) * 100);
         const severity = dropPct > 50 ? 'high' : dropPct > 25 ? 'medium' : 'low';
         alerts.push({
-          id: ++alertId, severity, type: 'completion_rate_drop',
+          id: await makeAlertId('completion_rate_drop', severity, `Level ${level + 1}: completion rate dropped ${dropPct}%`, d7ago), severity, type: 'completion_rate_drop',
           message: `Level ${level + 1}: completion rate dropped ${dropPct}%`,
           level, value: Math.round(recentCR * 100), baseline: Math.round(baselineCR * 100),
           sigma: stddev > 0 ? Math.round((baselineCR - recentCR) / stddev * 10) / 10 : 0,
@@ -3339,7 +3383,7 @@ async function handleAnomalies(env, force) {
           const dStd = Math.sqrt(dVar);
           if (dStd > 0 && recentDR > dMean + 3 * dStd) {
             alerts.push({
-              id: ++alertId, severity: 'medium', type: 'death_rate_spike',
+              id: await makeAlertId('death_rate_spike', 'medium', `Level ${level + 1}: death rate spiked (${Math.round(recentDR * 100)}% vs ${Math.round(baselineDR * 100)}% baseline)`, d7ago), severity: 'medium', type: 'death_rate_spike',
               message: `Level ${level + 1}: death rate spiked (${Math.round(recentDR * 100)}% vs ${Math.round(baselineDR * 100)}% baseline)`,
               level, value: Math.round(recentDR * 100), baseline: Math.round(baselineDR * 100),
               sigma: Math.round((recentDR - dMean) / dStd * 10) / 10, since: d7ago,
@@ -3353,7 +3397,7 @@ async function handleAnomalies(env, force) {
         const slowdown = (recent.avg_ms - baseline.avg_ms) / baseline.avg_ms;
         if (slowdown > 0.25) {
           alerts.push({
-            id: ++alertId, severity: 'low', type: 'avg_time_slowdown',
+            id: await makeAlertId('avg_time_slowdown', 'low', `Level ${level + 1}: avg completion time ${Math.round(slowdown * 100)}% slower`, d7ago), severity: 'low', type: 'avg_time_slowdown',
             message: `Level ${level + 1}: avg completion time ${Math.round(slowdown * 100)}% slower`,
             level, value: Math.round(recent.avg_ms), baseline: Math.round(baseline.avg_ms),
             sigma: 0, since: d7ago,
@@ -3385,7 +3429,7 @@ async function handleAnomalies(env, force) {
       if (drop > 5) {
         const severity = drop > 10 ? 'high' : 'medium';
         alerts.push({
-          id: ++alertId, severity, type: 'verified_pct_drop',
+          id: await makeAlertId('verified_pct_drop', severity, `Verified event % dropped ${Math.round(drop)}pp (${Math.round(recentPct)}% vs ${Math.round(baselinePct)}%)`, d7ago), severity, type: 'verified_pct_drop',
           message: `Verified event % dropped ${Math.round(drop)}pp (${Math.round(recentPct)}% vs ${Math.round(baselinePct)}%)`,
           value: Math.round(recentPct), baseline: Math.round(baselinePct), sigma: 0, since: d7ago,
         });
@@ -3396,19 +3440,7 @@ async function handleAnomalies(env, force) {
       const dauRatio = recentDAU.avg_dau / baselineDAU.avg_dau;
       if (dauRatio < 0.7) {
         alerts.push({
-          id: ++alertId, severity: 'low', type: 'dau_drop',
-          message: `DAU dropped to ${Math.round(dauRatio * 100)}% of baseline`,
-          value: Math.round(recentDAU.avg_dau), baseline: Math.round(baselineDAU.avg_dau),
-          sigma: 0, since: d7ago,
-        });
-      }
-    }
-
-    if (recentDAU && baselineDAU && baselineDAU.avg_dau > 0) {
-      const dauRatio = recentDAU.avg_dau / baselineDAU.avg_dau;
-      if (dauRatio < 0.7) {
-        alerts.push({
-          id: ++alertId, severity: 'low', type: 'dau_drop',
+          id: await makeAlertId('dau_drop', 'low', `DAU dropped to ${Math.round(dauRatio * 100)}% of baseline`, d7ago), severity: 'low', type: 'dau_drop',
           message: `DAU dropped to ${Math.round(dauRatio * 100)}% of baseline`,
           value: Math.round(recentDAU.avg_dau), baseline: Math.round(baselineDAU.avg_dau),
           sigma: 0, since: d7ago,
@@ -3420,7 +3452,40 @@ async function handleAnomalies(env, force) {
     const sevOrder = { high: 0, medium: 1, low: 2 };
     alerts.sort((a, b) => sevOrder[a.severity] - sevOrder[b.severity]);
 
-    return { ok: true, data: { alerts, computedAt: now } };
+    // Fetch alert states and merge
+    let stateMap = {};
+    try {
+      // Auto-expire old muted rows
+      await env.DB.prepare("DELETE FROM alerts_state WHERE status='muted' AND mute_until <= ?").bind(now).run();
+      if (alerts.length > 0) {
+        const ids = alerts.map(a => a.id);
+        // D1 doesn't support IN with variable-length lists; query in batches of 50
+        const batchSize = 50;
+        for (let i = 0; i < ids.length; i += batchSize) {
+          const batch = ids.slice(i, i + batchSize);
+          const placeholders = batch.map(() => '?').join(',');
+          const rows = await env.DB.prepare(`SELECT alert_id, status, acked_at, mute_until FROM alerts_state WHERE alert_id IN (${placeholders})`).bind(...batch).all();
+          if (rows && rows.results) {
+            for (const r of rows.results) stateMap[r.alert_id] = r;
+          }
+        }
+      }
+    } catch (_) {}
+
+    // Merge state and filter muted
+    const visibleAlerts = [];
+    for (const a of alerts) {
+      const s = stateMap[a.id];
+      if (s) {
+        a.status = s.status;
+        a.acked_at = s.acked_at;
+        a.mute_until = s.mute_until;
+      }
+      if (a.status === 'muted' && a.mute_until > now) continue;
+      visibleAlerts.push(a);
+    }
+
+    return { ok: true, data: { alerts: visibleAlerts, computedAt: now } };
   }, force);
 }
 
@@ -3578,6 +3643,15 @@ export default {
       }
       if (path === '/admin/referrals' && request.method === 'GET') {
         return jsonResponse(await handleAdminReferrals(env, url));
+      }
+      if (path === '/admin/alerts/ack' && request.method === 'POST') {
+        return await handleAdminAlertsAck(request, env);
+      }
+      if (path === '/admin/alerts/mute' && request.method === 'POST') {
+        return await handleAdminAlertsMute(request, env);
+      }
+      if (path === '/admin/alerts/unack' && request.method === 'POST') {
+        return await handleAdminAlertsUnack(request, env);
       }
       if ((path === '/' || path === '/dashboard') && request.method === 'GET') {
         let html;

@@ -6,6 +6,7 @@ import { fmtTime } from './format.js';
 import { Tabs } from './components/Tabs.jsx';
 import { SearchBar } from './components/SearchBar.jsx';
 import { PlayerModal } from './components/PlayerModal.jsx';
+import { FilterStrip } from './components/FilterStrip.jsx';
 import { Overview } from './tabs/Overview.jsx';
 import { Levels } from './tabs/Levels.jsx';
 import { Players } from './tabs/Players.jsx';
@@ -64,6 +65,7 @@ export function App() {
       </div>
 
       <Tabs />
+      <FilterStrip />
 
       <main id={`pane-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`}>
         <div key={tab + ':' + forceKey}>

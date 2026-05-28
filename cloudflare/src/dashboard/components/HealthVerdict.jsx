@@ -30,7 +30,8 @@ export function HealthVerdict({ alerts, dau7d, dauToday, lastCheck }) {
 
   function onClick() {
     if (state !== 'healthy') {
-      writeHash('live', 'alerts', range.value, currentPlayerPid.value, currentSegment.value);
+      const f = currentFilters.value;
+      writeHash('live', 'alerts', range.value, currentPlayerPid.value, currentSegment.value, f.cc, f.level, f.version, f.named);
       currentTab.value = 'live';
     }
   }

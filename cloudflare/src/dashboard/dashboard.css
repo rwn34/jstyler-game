@@ -229,6 +229,11 @@ tr:hover td{background:rgba(0,255,255,.03)}
 .alert-meta{display:flex;gap:10px;flex-wrap:wrap;font-size:.6rem;font-family:monospace;color:#aaa}
 .alert-meta .badge{font-size:.55rem}
 .alert-since{color:#aaa}
+.alert-item.acked{opacity:.55}
+.alert-item.muted{opacity:.4}
+.alert-actions button{padding:2px 8px;font-size:.55rem;font-weight:700;border-radius:3px;cursor:pointer;font-family:monospace;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:#ccc}
+.alert-actions button:hover{background:rgba(255,255,255,.12)}
+.ack-caption{color:#8f8;font-size:.6rem}
 
 /* Feedback inline actions */
 .fb-actions{display:flex;gap:4px;flex-wrap:wrap}

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'preact/hooks';
-import { currentPlayerPid } from '../state.js';
-import { fetchJson } from '../api.js';
-import { parseHash } from '../lib/url.js';
+import { currentPlayerPid, currentTab, currentFilters, range } from '../state.js';
+import { fetchJson, postJson } from '../api.js';
+import { parseHash, writeHash } from '../lib/url.js';
 import { fmtNum, fmtMs, fmtAgo, escapeHtml, truncatePid } from '../format.js';
 import { Card } from '../components/Card.jsx';
 import { SubTabs } from '../components/SubTabs.jsx';
@@ -44,6 +44,7 @@ export function Live() {
 function AlertsPane() {
   const [d, setD] = useState(null);
   const [err, setErr] = useState(null);
+  const [showMuted, setShowMuted] = useState(false);
   const timer = useRef(null);
 
   function load() {
@@ -59,13 +60,69 @@ function AlertsPane() {
     return () => clearInterval(timer.current);
   }, []);
 
+  async function ackAlert(id) {
+    setD(prev => {
+      if (!prev) return prev;
+      return { ...prev, alerts: prev.alerts.map(a => a.id === id ? { ...a, status: 'acked', acked_at: Date.now() } : a) };
+    });
+    try { await postJson('/admin/alerts/ack', { alert_id: id }); }
+    catch (e) { setErr(e); load(); }
+  }
+
+  async function unackAlert(id) {
+    setD(prev => {
+      if (!prev) return prev;
+      return { ...prev, alerts: prev.alerts.map(a => a.id === id ? { ...a, status: 'open', acked_at: null } : a) };
+    });
+    try { await postJson('/admin/alerts/unack', { alert_id: id }); }
+    catch (e) { setErr(e); load(); }
+  }
+
+  async function muteAlert(id, days) {
+    setD(prev => {
+      if (!prev) return prev;
+      const muteUntil = Date.now() + days * 86400000;
+      return { ...prev, alerts: prev.alerts.map(a => a.id === id ? { ...a, status: 'muted', mute_until: muteUntil } : a) };
+    });
+    try { await postJson('/admin/alerts/mute', { alert_id: id, days }); }
+    catch (e) { setErr(e); load(); }
+  }
+
+  function jumpToSource(a) {
+    const h = parseHash();
+    if (a.type === 'completion_rate_drop' || a.type === 'death_rate_spike' || a.type === 'avg_time_slowdown') {
+      currentFilters.value = { ...currentFilters.value, level: String(a.level) };
+      writeHash('levels', '', range.value, currentPlayerPid.value, currentSegment.value, currentFilters.value.cc, String(a.level), currentFilters.value.version, currentFilters.value.named);
+      currentTab.value = 'levels';
+    } else if (a.type === 'dau_drop' || a.type === 'verified_pct_drop') {
+      writeHash('overview', '', range.value, currentPlayerPid.value, currentSegment.value, currentFilters.value.cc, currentFilters.value.level, currentFilters.value.version, currentFilters.value.named);
+      currentTab.value = 'overview';
+    } else {
+      writeHash('overview', '', range.value, currentPlayerPid.value, currentSegment.value, currentFilters.value.cc, currentFilters.value.level, currentFilters.value.version, currentFilters.value.named);
+      currentTab.value = 'overview';
+    }
+  }
+
   if (err) return <ErrorState error={err} onRetry={load} />;
   if (!d) return <LoadingPane />;
 
-  const alerts = d.alerts || [];
-  const high = alerts.filter(a => a.severity === 'high');
-  const medium = alerts.filter(a => a.severity === 'medium');
-  const low = alerts.filter(a => a.severity === 'low');
+  const allAlerts = d.alerts || [];
+  const visible = allAlerts.filter(a => a.status !== 'muted');
+  const muted = allAlerts.filter(a => a.status === 'muted');
+  const display = showMuted ? [...visible, ...muted] : visible;
+
+  // Sort: open first, then acked, then muted
+  const statusOrder = { open: 0, acked: 1, muted: 2 };
+  display.sort((a, b) => {
+    const so = (statusOrder[a.status] || 0) - (statusOrder[b.status] || 0);
+    if (so !== 0) return so;
+    const sev = { high: 0, medium: 1, low: 2 };
+    return (sev[a.severity] || 0) - (sev[b.severity] || 0);
+  });
+
+  const high = visible.filter(a => a.severity === 'high');
+  const medium = visible.filter(a => a.severity === 'medium');
+  const low = visible.filter(a => a.severity === 'low');
 
   return (
     <div id="subpane-alerts" role="tabpanel" aria-labelledby="subtab-alerts">
@@ -76,15 +133,23 @@ function AlertsPane() {
         <Card label="Last Check" val={d.computedAt ? fmtAgo(d.computedAt) : '—'} />
       </div>
 
-      {alerts.length === 0 ? (
+      {muted.length > 0 && (
+        <div style="margin:12px 0">
+          <button class="chip" onClick={() => setShowMuted(v => !v)}>
+            {showMuted ? '🔔 Hide muted' : `🔕 Show ${muted.length} muted`}
+          </button>
+        </div>
+      )}
+
+      {display.length === 0 ? (
         <div class="empty-state" style="margin-top:24px">
           <div class="empty-msg">✅ All systems normal — no anomalies detected.</div>
           <div class="empty-hint">Checks last 7 days vs prior 28-day baseline</div>
         </div>
       ) : (
         <div class="alerts-list">
-          {alerts.map(a => (
-            <div key={a.id} class={`alert-item sev-${a.severity}`}>
+          {display.map(a => (
+            <div key={a.id} class={`alert-item sev-${a.severity} ${a.status === 'acked' ? 'acked' : ''} ${a.status === 'muted' ? 'muted' : ''}`}>
               <span class="alert-icon">{SEV_ICON[a.severity]}</span>
               <div class="alert-body">
                 <div class="alert-msg">{a.message}</div>
@@ -94,6 +159,20 @@ function AlertsPane() {
                   <span>Baseline: {a.baseline}%</span>
                   {a.sigma > 0 && <span>{a.sigma}σ</span>}
                   <span class="alert-since">since {a.since}</span>
+                  {a.status === 'acked' && a.acked_at && <span class="ack-caption">Acked {fmtAgo(a.acked_at)}</span>}
+                </div>
+                <div class="alert-actions" style="display:flex;gap:6px;margin-top:6px">
+                  {a.status !== 'acked' && a.status !== 'muted' && (
+                    <>
+                      <button class="btn-small" onClick={() => ackAlert(a.id)}>✓ Ack</button>
+                      <button class="btn-small" onClick={() => muteAlert(a.id, 1)}>🔕 Mute 1h</button>
+                      <button class="btn-small" onClick={() => muteAlert(a.id, 7)}>🔕 Mute 7d</button>
+                    </>
+                  )}
+                  {a.status === 'acked' && (
+                    <button class="btn-small" onClick={() => unackAlert(a.id)}>↩ Unack</button>
+                  )}
+                  <button class="btn-small" onClick={() => jumpToSource(a)}>🔗 Jump</button>
                 </div>
               </div>
             </div>

@@ -1,6 +1,6 @@
 import { render } from 'preact';
 import { App } from './App.jsx';
-import { range, currentTab, currentPlayerPid, currentSegment } from './state.js';
+import { range, currentTab, currentPlayerPid, currentSegment, currentFilters } from './state.js';
 import { parseHash, writeHash, applyAlias } from './lib/url.js';
 import css from './dashboard.css';
 
@@ -32,6 +32,12 @@ function applyHash() {
   if (h.range && VALID_RANGES.includes(h.range)) range.value = h.range;
   if (h.player) currentPlayerPid.value = h.player;
   else currentPlayerPid.value = null;
+  currentFilters.value = {
+    cc: h.cc || '',
+    level: h.level || '',
+    version: h.version || '',
+    named: h.named || '',
+  };
 }
 
 applyHash();
@@ -44,13 +50,15 @@ function syncToHash() {
   if (writing) return;
   writing = true;
   const h = parseHash();
-  writeHash(currentTab.value, h.subTab, range.value, currentPlayerPid.value, currentSegment.value);
+  const f = currentFilters.value;
+  writeHash(currentTab.value, h.subTab, range.value, currentPlayerPid.value, currentSegment.value, f.cc, f.level, f.version, f.named);
   writing = false;
 }
 currentTab.subscribe(syncToHash);
 range.subscribe(syncToHash);
 currentPlayerPid.subscribe(syncToHash);
 currentSegment.subscribe(syncToHash);
+currentFilters.subscribe(syncToHash);
 
 // Mount app
 try {

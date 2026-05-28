@@ -5,6 +5,7 @@ export const currentTab = signal('overview');
 export const searchQuery = signal('');
 export const currentPlayerPid = signal(null);
 export const currentSegment = signal(''); // segment chip filter (e.g. 'flagged')
+export const currentFilters = signal({}); // { cc, level, version, named }
 export const loadedAt = signal({}); // { tabName: timestamp }
 export const agoTick = signal(0); // bumps every 30s to refresh fmtAgo displays
 

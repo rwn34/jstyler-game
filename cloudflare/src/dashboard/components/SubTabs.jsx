@@ -1,5 +1,5 @@
 import { useCallback } from 'preact/hooks';
-import { currentTab, range, currentPlayerPid, currentSegment } from '../state.js';
+import { currentTab, range, currentPlayerPid, currentSegment, currentFilters } from '../state.js';
 import { writeHash } from '../lib/url.js';
 
 export function SubTabs({ tabs, active, onChange, ariaLabel }) {
@@ -29,7 +29,8 @@ export function SubTabs({ tabs, active, onChange, ariaLabel }) {
             class={`subtab${active === t.id ? ' active' : ''}`}
             onClick={() => {
               onChange(t.id);
-              writeHash(currentTab.value, t.id, range.value, currentPlayerPid.value, currentSegment.value);
+              const f = currentFilters.value;
+              writeHash(currentTab.value, t.id, range.value, currentPlayerPid.value, currentSegment.value, f.cc, f.level, f.version, f.named);
             }}
           >
             {t.label}

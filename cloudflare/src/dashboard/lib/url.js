@@ -16,16 +16,29 @@ export function parseHash() {
   const [path, qs] = hash.split('?');
   const [tab, subTab] = (path || '').split('/');
   const params = new URLSearchParams(qs || '');
-  return { tab: tab || '', subTab: subTab || '', range: params.get('range') || '', player: params.get('player') || '', segment: params.get('segment') || '' };
+  return {
+    tab: tab || '', subTab: subTab || '',
+    range: params.get('range') || '',
+    player: params.get('player') || '',
+    segment: params.get('segment') || '',
+    cc: params.get('cc') || '',
+    level: params.get('level') || '',
+    version: params.get('version') || '',
+    named: params.get('named') || '',
+  };
 }
 
-export function writeHash(tab, subTab, range, player, segment) {
+export function writeHash(tab, subTab, range, player, segment, cc, level, version, named) {
   let hash = '#/' + (tab || '');
   if (subTab) hash += '/' + subTab;
   const params = [];
   if (range) params.push('range=' + range);
   if (segment) params.push('segment=' + encodeURIComponent(segment));
   if (player) params.push('player=' + encodeURIComponent(player));
+  if (cc) params.push('cc=' + encodeURIComponent(cc));
+  if (level) params.push('level=' + encodeURIComponent(level));
+  if (version) params.push('version=' + encodeURIComponent(version));
+  if (named) params.push('named=' + encodeURIComponent(named));
   if (params.length) hash += '?' + params.join('&');
   history.replaceState(null, '', hash);
 }
