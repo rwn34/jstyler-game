@@ -395,6 +395,13 @@ if(Test-Path $assetsDir){
         $af = Join-Path $assetsDir $an
         if(Test-Path $af){ Copy-Item $af (Join-Path $gameDir $an) }
     }
+    # Copy lib/ directory (vendored JS like qrcode.js)
+    $libSrc = Join-Path $assetsDir 'lib'
+    if(Test-Path $libSrc){
+        $libDst = Join-Path $gameDir 'lib'
+        New-Item -ItemType Directory -Path $libDst -Force | Out-Null
+        Copy-Item (Join-Path $libSrc '*') $libDst -Recurse
+    }
 }
 
 # === LOCAL TESTING OUTPUT (unzipped, latest only) ===
@@ -408,6 +415,13 @@ if(Test-Path $assetsDir){
     foreach($an in $assetNames){
         $af = Join-Path $assetsDir $an
         if(Test-Path $af){ Copy-Item $af (Join-Path $latestGameDir $an) }
+    }
+    # Copy lib/ directory (vendored JS like qrcode.js)
+    $libSrc = Join-Path $assetsDir 'lib'
+    if(Test-Path $libSrc){
+        $libDst = Join-Path $latestGameDir 'lib'
+        New-Item -ItemType Directory -Path $libDst -Force | Out-Null
+        Copy-Item (Join-Path $libSrc '*') $libDst -Recurse
     }
 }
 $headersPath = Join-Path $src '_headers'

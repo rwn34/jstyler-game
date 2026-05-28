@@ -96,6 +96,14 @@ pattern is enforced — see `.claude/agents/` (13 agents) and
 **Activity log**: prepend a short entry to `.ai/activity/log.md` after
 substantive work. Identity: `claude-code`.
 
+**Self-grep-verify before writing a completion handoff** (standing rule, applies
+to all CLIs): for every concrete claim in a completion handoff (e.g. "wrapped
+3 sites in try/catch", "compareEnabled added to effect deps", "all 5 columns
+added"), `rg` the working tree and paste the 1-3 matching lines into the
+handoff body next to the claim. If grep returns nothing, fix the code first.
+Eliminates the "claims drift from tree" defect class. Full rule lives in
+`AGENTS.md` → §7 Multi-CLI Setup.
+
 ## Global user rules that DO apply here
 
 From `~/.claude/rules/`:

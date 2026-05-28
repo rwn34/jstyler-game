@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
 import { range, loadedAt } from '../state.js';
 import { fetchJson } from '../api.js';
-import { fetchWithCompare } from '../lib/compare.js';
+import { fetchWithCompare, compareEnabled } from '../lib/compare.js';
 import { fmtNum, fmtDate } from '../format.js';
 import { Card } from '../components/Card.jsx';
 import { BarRow } from '../components/BarRow.jsx';
@@ -22,7 +22,9 @@ export function Activity({ force }) {
   useEffect(() => {
     const cachedSess = loadedAt.value.activitySessions;
     const cachedEng = loadedAt.value.activityEngagement;
-    if (!force && cachedSess && Date.now() - cachedSess < 240000 && cachedEng && Date.now() - cachedEng < 240000) return;
+    const cachedCompare = loadedAt.value.activityCompare;
+    const compareNow = compareEnabled.value;
+    if (!force && cachedSess && Date.now() - cachedSess < 240000 && cachedEng && Date.now() - cachedEng < 240000 && cachedCompare === compareNow) return;
 
     setErr(null);
     Promise.all([
@@ -37,10 +39,11 @@ export function Activity({ force }) {
           ...loadedAt.value,
           activitySessions: Date.now(),
           activityEngagement: Date.now(),
+          activityCompare: compareNow,
         };
       })
       .catch(setErr);
-  }, [range.value, force]);
+  }, [range.value, force, compareEnabled.value]);
 
   if (err) return <ErrorState error={err} onRetry={() => { loadedAt.value = { ...loadedAt.value, activitySessions: 0, activityEngagement: 0 }; setErr(null); setSessionsData(null); setEngagementData(null); }} />;
   if (!sessionsData || !engagementData) return <LoadingPane />;

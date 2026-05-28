@@ -169,6 +169,8 @@ Shared cross-CLI state lives in `.ai/`.
 
 **Activity logging:** After substantive work, prepend a short entry to `.ai/activity/log.md` with your CLI identity.
 
+**Self-grep-verify before writing a completion handoff (standing rule):** Before declaring work "done" via a handoff in `to-<other>/open/`, for every concrete claim you intend to make (e.g. "added X to file Y at line Z", "wrapped N sites in try/catch", "deps array now includes signal S"), run `rg` against the working tree and paste the matching 1-3 lines into the handoff body next to the claim. If a grep returns nothing where you expected something, fix the code first — don't fudge the handoff. Adds ~3 minutes; eliminates the "claims don't match the tree" defect class. Applies to all CLIs (claude-code, kimi-cli, kiro-cli). Completion handoffs without grep-verified snippets get reviewed at the same skepticism level as if no claims were made.
+
 ---
 
 ## 8. Security Considerations

@@ -27,9 +27,26 @@ if(!isV2) {
 
 // === METRICS (anonymous, opt-out by setting METRIC_URL='') ===
 var METRIC_URL = 'https://ndj-metrics.jstylr.workers.dev'; // Cloudflare Worker — set to '' to disable metrics
-var APP_VERSION = 'v1.2.63'; // Build version — updated by zipgame.ps1
+var APP_VERSION = 'v1.2.64'; // Build version — updated by zipgame.ps1
 var playerId = load('playerId', null);
 if(!playerId){playerId='p_'+Math.random().toString(36).slice(2,10)+Date.now().toString(36);save('playerId',playerId);}
+
+// Referral capture — must run after playerId is set, before anything else reads location.search
+(function handleReferral(){
+try{
+var params=new URLSearchParams(location.search);
+var ref=params.get('ref');
+if(!ref)return;
+if(ref===playerId){history.replaceState(null,'',location.origin+location.pathname);return;}
+if(localStorage.getItem('ndj_referrer_pid')){history.replaceState(null,'',location.origin+location.pathname);return;}
+if(!/^p_[a-z0-9]+$/i.test(ref)){history.replaceState(null,'',location.origin+location.pathname);return;}
+localStorage.setItem('ndj_referrer_pid',ref);
+if(typeof sendMetric==='function')sendMetric('ui_event',{action:'referral_open',meta:ref});
+history.replaceState(null,'',location.origin+location.pathname);
+showWelcomeFromFriendToast();
+}catch(e){}
+})();
+function showWelcomeFromFriendToast(){var t=document.createElement('div');t.textContent='Welcomed via friend';t.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(0,255,255,0.15);color:#0ff;border:1px solid #0ff;padding:8px 16px;border-radius:8px;font-family:monospace;font-size:0.8rem;z-index:9999;backdrop-filter:blur(8px);box-shadow:0 0 12px rgba(0,255,255,0.3);';document.body.appendChild(t);setTimeout(function(){t.style.transition='opacity 500ms';t.style.opacity='0';},3500);setTimeout(function(){if(t.parentNode)t.parentNode.removeChild(t);},4200);}
 
 // v2: session token + HMAC signing for anti-cheat
 var _sessionToken=null,_sessionExpiresAt=0,_sessionPromise=null;

@@ -150,7 +150,7 @@ function FeedPane() {
 
     timerRef.current = setInterval(poll, 2000);
     return () => clearInterval(timerRef.current);
-  }, [paused]);
+  }, [paused, connected]);
 
   const filtered = events.filter(e => {
     if (filters.has('all')) return true;

@@ -1052,6 +1052,7 @@ function shareGame(){
     $('ovTitle').textContent='\ud83d\udce4 SHARE';
     $('ovTitle').style.color='#0ff';
     $('ovMsg').innerHTML=
+        '<div id="shareQRBlock" style="text-align:center;margin-bottom:16px;"><div id="shareQRMount" style="display:inline-block;padding:8px;background:#fff;border-radius:8px;"></div><div style="font-size:0.7rem;color:#0ff;margin-top:6px;font-family:monospace;">\ud83d\udcf7 Scan to play \u2014 friends nearby</div><div id="shareURLDisplay" style="font-size:0.55rem;color:#888;margin-top:4px;font-family:monospace;word-break:break-all;"></div></div>'+
         '<div style="font-size:0.7rem;color:#aaa;margin-bottom:8px;text-align:left;">Add a personal note. Stats and game link auto-include below.</div>'+
         '<textarea id="shareCustomMsg" oninput="refreshSharePreview()" style="width:100%;height:60px;background:#111;color:#0ff;border:1px solid #0ff;padding:8px;font-family:monospace;font-size:0.75rem;border-radius:8px;resize:none;box-sizing:border-box;">Think you can beat my time? \ud83d\udca5</textarea>'+
         '<div style="font-size:0.6rem;color:#666;margin-top:8px;text-align:left;">Preview:</div>'+
@@ -1060,6 +1061,13 @@ function shareGame(){
         refreshSharePreview();
         var ta=$('shareCustomMsg');
         if(ta){ta.focus();ta.select();}
+        var shareUrl=location.origin+location.pathname+'?ref='+encodeURIComponent(playerId);
+        var mount=$('shareQRMount');
+        var urlDisp=$('shareURLDisplay');
+        if(mount&&typeof renderQR==='function'){mount.innerHTML='';renderQR(mount,shareUrl,180);}
+        else{var qb=$('shareQRBlock');if(qb)qb.style.display='none';}
+        if(urlDisp)urlDisp.textContent=shareUrl;
+        sendMetric('ui_event',{action:'share_qr_shown'});
     }, 30);
     $('ovBtn').style.display='inline-block';
     $('ovBtn').textContent='\ud83d\udce4 SHARE';
@@ -1115,6 +1123,8 @@ function shareGame(){
         // URL
         sx.fillStyle=th.acc;sx.font='bold 12px monospace';sx.textAlign='center';
         sx.fillText(location.host+location.pathname,300,385);
+        // QR code (bottom-right)
+        if(typeof drawQRToCanvas==='function'){var _sUrl=location.origin+location.pathname+'?ref='+encodeURIComponent(playerId);drawQRToCanvas(sx,sc.width-110,sc.height-110,100,_sUrl);}
         // Border
         sx.strokeStyle=th.acc;sx.lineWidth=3;sx.strokeRect(2,2,596,396);
         sc.toBlob(function(blob){
@@ -2440,6 +2450,10 @@ function togglePause() {
 
 function openContactUs(){
     window.location.href='mailto:xterzd@gmail.com?subject=N3ON%20DashJ%20Contact&body=Hi%20N3ON%20DashJ%20team%2C%0A%0A';
+}
+function openFeedbackFromStageSelect(){
+    if(typeof sendMetric==='function')sendMetric('ui_event',{action:'feedback_panel_opened',meta:'stage_select'});
+    openFeedbackPanel();
 }
 function openFeedbackPanel(){
     $('settings').classList.remove('active');

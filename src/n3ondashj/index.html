@@ -252,6 +252,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 .gear:hover{background:rgba(0,229,255,.2);border-color:#0ff;transform:rotate(30deg)}
 .fs-btn{position:fixed;top:56px;right:16px;z-index:110;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;font-size:.85rem;color:#fff;padding:0;appearance:none;-webkit-appearance:none}
 .fs-btn:hover{background:rgba(0,229,255,.2);border-color:#0ff}
+.fb-btn{top:96px !important}
 
 .weather{position:fixed;inset:0;pointer-events:none;z-index:60}
 
@@ -273,6 +274,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
   .gear { width: 30px !important; height: 30px !important; font-size: 0.85rem !important; top: 8px !important; }
   .store-btn { width: 30px !important; height: 30px !important; padding: 0 !important; top: 8px !important; font-size: 0.85rem !important; }
   .fs-btn { width: 30px !important; height: 30px !important; font-size: 0.75rem !important; top: 44px !important; right: 16px !important; }
+  .fb-btn { top: 78px !important; }
   #levelSelect {
     flex-direction: row !important;
     align-items: center !important;
@@ -569,7 +571,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     <canvas id="bootParticles" style="position:absolute;inset:0;z-index:2;"></canvas>
     <h1 style="z-index:1;">N3ON DashJ<span class="glitch" data-text="N3ON DashJ"></span></h1>
     <span class="sub" style="z-index:1;">jstylr</span>
-    <span style="z-index:1;font-size:.55rem;color:#444;font-family:monospace;">v1.2.63</span>
+    <span style="z-index:1;font-size:.55rem;color:#444;font-family:monospace;">v1.2.64</span>
     <div id="bootTips" style="z-index:1;font-size:0.6rem;color:#888;font-family:monospace;max-width:80vw;text-align:center;line-height:1.4;opacity:0;transition:opacity 0.5s ease;margin-top:-8px;"></div>
 </div>
 
@@ -600,6 +602,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     <button class="gear ls-ui" type="button" onclick="shareGame()" aria-label="Share" style="right:60px;top:16px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></button>
     <button class="store-btn ls-ui" type="button" onclick="openStore()" aria-label="Store" title="Store" style="right:104px;top:16px;">🛒</button>
     <button class="fs-btn ls-ui" type="button" onclick="toggleFullscreen()" aria-label="Fullscreen" title="Toggle Fullscreen">⛶</button>
+    <button class="fs-btn ls-ui fb-btn" type="button" onclick="openFeedbackFromStageSelect()" aria-label="Send feedback" title="Send feedback">📝</button>
     <!-- daily buttons moved into lsDetails below Play DashJ -->
     <div id="btnHints">
         <div class="hint-tag">⚙ Settings — sound, controls, export</div>
@@ -679,12 +682,12 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     </div>
     <div style="display:flex; gap:10px; margin-top:4px;">
         <button onclick="openContactUs()" title="Contact Us" style="width:44px;height:40px;background:linear-gradient(135deg,#555,#333);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">✉️</button>
-        <button onclick="openFeedbackPanel()" style="flex:1;height:40px;background:linear-gradient(135deg,#0af,#08f);border:none;border-radius:8px;cursor:pointer;color:#000;font-weight:700;font-size:0.75rem;letter-spacing:1px;">📝 Send Feedback</button>
+        <button onclick="sendMetric('ui_event',{action:'feedback_panel_opened',meta:'pause_menu'});openFeedbackPanel()" style="flex:1;height:40px;background:linear-gradient(135deg,#0af,#08f);border:none;border-radius:8px;cursor:pointer;color:#000;font-weight:700;font-size:0.75rem;letter-spacing:1px;">📝 Send Feedback</button>
     </div>
     <!-- Cloud Sync moved to Profile panel -->
     <div style="text-align: center; margin-top: 15px; font-family: monospace;">
         <div style="display:flex;gap:6px;width:100%;">
-            <button onclick="openChangelog()" style="flex:1;padding:8px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#333,#222);border:1px solid rgba(255,255,255,0.15);color:#aaa;">📋 UPDATE LOG &nbsp; <span style='color:#666;font-size:0.6rem;'>v1.2.63</span></button>
+            <button onclick="openChangelog()" style="flex:1;padding:8px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#333,#222);border:1px solid rgba(255,255,255,0.15);color:#aaa;">📋 UPDATE LOG &nbsp; <span style='color:#666;font-size:0.6rem;'>v1.2.64</span></button>
             <button onclick="restartGame()" title="Restart the game to apply updates" style="flex:0 0 auto;padding:8px 14px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#0a4,#062);border:1px solid rgba(0,255,136,0.3);color:#0f8;">🔄 RESTART</button>
         </div>
         <button onclick="showPrivacyPolicy()" style="background:transparent; border:none; color:#444; font-size:0.6rem; font-weight:normal; text-decoration:underline; cursor:pointer; padding:5px; box-shadow:none; margin-top:2px;">🔒 Privacy Policy</button>
@@ -752,6 +755,12 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
   <button onclick="closeChangelog()" style="background:rgba(255,68,68,0.2);border:1px solid #f44;color:#f44;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:monospace;font-weight:700;font-size:.65rem;letter-spacing:1px;">✕ CLOSE</button>
 </div>
 <div style="width:100%;max-width:360px;max-height:60vh;overflow-y:auto;text-align:left;padding:10px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.1);">
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.64</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>📷 **QR share** — Share popup now shows a scannable QR code with the game URL. Hand your phone to a friend nearby instead of opening WhatsApp.</li>
+<li>📝 **Feedback shortcut** — New 📝 icon button on the stage-select screen (right edge, under the fullscreen toggle) opens the feedback form directly.</li>
+<li>Share URLs include an anonymous referral tag (`?ref=p_…`) so we can see which shares actually bring new players in. PID only — no personal data exposed.</li>
+</ul>
 <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.63</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
 <li>**Birthday year dropdown** now spans **1970 to the current year** (was 2000–2099). Updates automatically each year. Affects all year selectors: onboarding, profile birthday edit, name-change prompt, cloud sync register, link-device.</li>
@@ -1730,5 +1739,6 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     </div>
 </div>
 
+<script src="lib/qrcode.js"></script>
 </body>
 </html>

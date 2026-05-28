@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.2.64 — May 27, 2026
+
+### Added
+- 📷 **QR share** — Share popup now shows a scannable QR code with the game URL. Hand your phone to a friend nearby instead of opening WhatsApp.
+- 📝 **Feedback shortcut** — New 📝 icon button on the stage-select screen (right edge, under the fullscreen toggle) opens the feedback form directly.
+
+### Changed
+- Share URLs include an anonymous referral tag (`?ref=p_…`) so we can see which shares actually bring new players in. PID only — no personal data exposed.
+
 ## v1.2.63 — May 27, 2026
 
 ### Changed

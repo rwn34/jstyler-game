@@ -33,9 +33,10 @@ export function applyAlias(tab) {
   if (alias) {
     const newHash = '#/' + alias;
     history.replaceState(null, '', newHash);
-    const [newTab, qs] = alias.split('?');
+    const [pathPart, qs] = alias.split('?');
+    const [tabPart, subTab] = pathPart.split('/');
     const params = new URLSearchParams(qs || '');
-    return { tab: newTab, segment: params.get('segment') || '' };
+    return { tab: tabPart, segment: params.get('segment') || '', subTab: subTab || '' };
   }
-  return { tab, segment: '' };
+  return { tab, segment: '', subTab: '' };
 }
