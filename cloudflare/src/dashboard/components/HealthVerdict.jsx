@@ -1,5 +1,6 @@
-import { currentTab } from '../state.js';
+import { currentTab, range, currentPlayerPid, currentSegment } from '../state.js';
 import { fmtAgo } from '../format.js';
+import { writeHash } from '../lib/url.js';
 
 export function HealthVerdict({ alerts, dau7d, dauToday, lastCheck }) {
   const high = alerts?.high ?? 0;
@@ -29,6 +30,7 @@ export function HealthVerdict({ alerts, dau7d, dauToday, lastCheck }) {
 
   function onClick() {
     if (state !== 'healthy') {
+      writeHash('live', 'alerts', range.value, currentPlayerPid.value, currentSegment.value);
       currentTab.value = 'live';
     }
   }

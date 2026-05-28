@@ -1,3 +1,31 @@
+## 2026-05-28 — claude-code (kimi handoffs 010-013 batch dispatched)
+- Wrote 4 handoffs at user request (backlog items 1, 2, 3, 5). All Kimi's lane (cloudflare/). Kimi sequences as they see fit; only 011 has a soft dependency on 010.
+- **010 — D3 close-out** (`to-kimi/open/010-d3-subtab-url-consumption.md`): ~30 min. Extend parseHash/writeHash to round-trip subTab path segment, wire Platform/Live to consume on mount, SubTabs writeHash on click. Bonus: HealthVerdict can deep-link to `live/alerts` cleanly (closes the 009 small deviation).
+- **011 — Alerts workflow + cross-tab drilldown** (`to-kimi/open/011-alerts-workflow-and-cross-tab-drilldown.md`): ~2-3 hrs, bigger. Two features bundled because they share URL-state infrastructure. Server: new `alerts_state` table + `/admin/alerts/ack|mute|unack` endpoints + LEFT JOIN in handleAnomalies. Dashboard: per-alert Ack/Mute UI + Jump-to-source links + global FilterStrip wired to URL hash (cc/level/version/named filter params propagated across tabs). Soft dep on 010 for URL routing. Explicit scope guardrails listed; instructed to write back via to-claude/open/ before expanding scope.
+- **012 — O1 sync_load/sync_save per-user lockout** (`to-kimi/open/012-sync-lockout-extension.md`): ~1 hr, security. Extend per-(username, mmyy) lockout (already on forgot-pin) to sync/load + sync/save failure paths via `userLockKey = hashSyncKey(u, m, '', SYNC_SALT)`. Keep per-keyHash lockout layer alongside. Add smoke_test.js case. Both layers cleared on success.
+- **013 — Mock-based PlayerModal Playwright** (`to-kimi/open/013-playermodal-mock-test.md`): ~30 min. Closes the 008 deviation. `page.route()` mocks `/stats/players` + `/admin/referrals` + `/stats/player/<pid>`, deterministic synthetic PID, assert Referrals section renders. Visual baseline added.
+- All four explicitly cite AGENTS.md §7 tightened protocol: completion handoff file REQUIRED in `to-claude/open/NNN-...-complete.md`, grep snippets REQUIRED inside, missing either = rejected at submission.
+- Activity log entry alone is NOT sufficient. Going forward, no more orchestrator-authored close-outs to cover for missing handoffs.
+
+## 2026-05-28 — claude-code (sprint 2 phase 3 first-pair ACCEPTED + process tightening)
+- Read activity log (no formal completion handoff in `to-claude/open/` for 009). Verified Kimi's work directly via grep + reading `HealthVerdict.jsx` end-to-end.
+- **Work verdict: ✅ ACCEPTED.** Cleanest code of any sprint this week. Worker `3fddfbd3-f4b7-459a-8a4c-0dd5e9e31550` live, commit `880d067`, 25/25 Playwright passing.
+  - HealthVerdict (`components/HealthVerdict.jsx:4-51`): 3 states correctly thresholded, ARIA `role=alert|status` + `aria-live=polite`, click→Live only when non-healthy, color+icon+text triple signal, reuses `.live/.warn/.bad` palette.
+  - DataFreshness wired via `state.js:9 agoTick = signal(0)` + 30s tick in App.jsx, mounted in header bar at App.jsx:47. Stale-threshold polish present (amber past TTL, red past 10min).
+  - Bonus: Kimi optimized `handleAnomalies` ~5s → ~1s when their HealthVerdict mount exposed the slow query. Caught + fixed in same commit. Good discipline.
+- **Process verdict: ⚠️ REGRESSED.** Sequence: 007 skipped grep rule (accepted as transition courtesy), 008 gold standard, 009 skipped the entire handoff doc (only activity log entry, no `to-claude/open/` file). Two-of-three skips means the rule isn't internalized.
+- **Tightened AGENTS.md §7:** completion handoff file is REQUIRED; activity log alone is NOT sufficient. Grep snippets REQUIRED inside the file. Enforcement: next skip gets rejected at submission, no verification work performed.
+- Wrote orchestrator-authored close-out at `.ai/handoffs/to-claude/done/009-overview-health-and-data-freshness-complete.md` with grep snippets supplied (modeling what Kimi should have written).
+- One small deviation accepted: HealthVerdict click navigates to Live tab but doesn't deep-link to Alerts sub-tab — same D3 limitation as before. Track.
+
+## 2026-05-28 — 009: Overview health verdict + data-freshness indicator
+- Added HealthVerdict banner to Overview tab (healthy/attention/alert states)
+- Added DataFreshness indicator to header bar with stale color thresholds
+- Optimized handleAnomalies queries (~5s → ~1s) to fix Playwright timeouts
+- Deployed `3fddfbd3-f4b7-459a-8a4c-0dd5e9e31550`
+- Playwright: 25/25 passing, screenshots regenerated
+- Commit: `880d067`
+
 ## 2026-05-28 — claude-code (kimi handoff 009: sprint 2 phase 3 first-pair — Overview health verdict + data-freshness)
 - Wrote `.ai/handoffs/to-kimi/open/009-overview-health-and-data-freshness.md`.
 - Two small dashboard P0 items from the original UX audit, packaged together (~30-45 min total Kimi time): Overview health verdict banner (🟢/🟡/🔴 derived from alerts + DAU collapse) at top of Overview tab; per-tab data-freshness indicator ("Data: 3m ago") tied to existing `loadedAt` signal, mounted in App.jsx header bar.

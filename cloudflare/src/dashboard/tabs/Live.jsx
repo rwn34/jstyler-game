@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'preact/hooks';
 import { currentPlayerPid } from '../state.js';
 import { fetchJson } from '../api.js';
+import { parseHash } from '../lib/url.js';
 import { fmtNum, fmtMs, fmtAgo, escapeHtml, truncatePid } from '../format.js';
 import { Card } from '../components/Card.jsx';
 import { SubTabs } from '../components/SubTabs.jsx';
@@ -27,7 +28,9 @@ const FEED_CHIPS = [
 const MAX_EVENTS = 200;
 
 export function Live() {
-  const [subTab, setSubTab] = useState('alerts');
+  const validSubs = SUBTABS.map(t => t.id);
+  const { subTab: urlSub } = parseHash();
+  const [subTab, setSubTab] = useState(validSubs.includes(urlSub) ? urlSub : 'alerts');
 
   return (
     <>

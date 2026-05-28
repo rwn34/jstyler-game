@@ -169,7 +169,17 @@ Shared cross-CLI state lives in `.ai/`.
 
 **Activity logging:** After substantive work, prepend a short entry to `.ai/activity/log.md` with your CLI identity.
 
-**Self-grep-verify before writing a completion handoff (standing rule):** Before declaring work "done" via a handoff in `to-<other>/open/`, for every concrete claim you intend to make (e.g. "added X to file Y at line Z", "wrapped N sites in try/catch", "deps array now includes signal S"), run `rg` against the working tree and paste the matching 1-3 lines into the handoff body next to the claim. If a grep returns nothing where you expected something, fix the code first — don't fudge the handoff. Adds ~3 minutes; eliminates the "claims don't match the tree" defect class. Applies to all CLIs (claude-code, kimi-cli, kiro-cli). Completion handoffs without grep-verified snippets get reviewed at the same skepticism level as if no claims were made.
+**Completion handoff protocol (standing rule, all CLIs):**
+
+1. **A completion handoff file IS REQUIRED.** When you finish work delegated via a handoff, write a completion handoff to `.ai/handoffs/to-<other>/open/NNN-...-complete.md` (matching the original handoff's NNN). An activity log entry alone is NOT sufficient — the activity log is the cross-CLI breadcrumb, the completion handoff is the credibility artifact and the work submission. Both must exist.
+
+2. **Self-grep-verify inside the completion handoff.** For every concrete claim (e.g. "added X to file Y at line Z", "wrapped N sites in try/catch", "deps array now includes signal S"), run `rg` against the working tree and paste the matching 1-3 lines next to the claim. If a grep returns nothing where you expected something, fix the code first — don't fudge the handoff.
+
+3. **Enforcement.** Completion handoffs missing the file or missing grep snippets will be rejected at submission. The orchestrator will not perform any verification work until both are present. This is not punitive — it's the credibility contract that makes the multi-CLI loop fast. With snippets, verification is ~2 min. Without, it's 15-20 min of manual reading. Don't make the orchestrator pay your verification debt.
+
+4. **What counts as a "concrete claim":** anything where a reader could ask "where is that?" and you'd need to point at a line. File creations, function additions, prop additions, dep-array changes, CSS classes, route registrations, test additions. Style / wording / structural choices don't need snippets ("I matched the existing color palette" — fine, no snippet needed unless someone asks).
+
+Adds ~3 minutes per completion. Eliminates the "claims don't match the tree" defect class. Applies to claude-code, kimi-cli, kiro-cli equally.
 
 ---
 

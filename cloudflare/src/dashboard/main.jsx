@@ -43,7 +43,8 @@ let writing = false;
 function syncToHash() {
   if (writing) return;
   writing = true;
-  writeHash(currentTab.value, range.value, currentPlayerPid.value, currentSegment.value);
+  const h = parseHash();
+  writeHash(currentTab.value, h.subTab, range.value, currentPlayerPid.value, currentSegment.value);
   writing = false;
 }
 currentTab.subscribe(syncToHash);

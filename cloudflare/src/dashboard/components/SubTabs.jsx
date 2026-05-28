@@ -1,4 +1,6 @@
 import { useCallback } from 'preact/hooks';
+import { currentTab, range, currentPlayerPid, currentSegment } from '../state.js';
+import { writeHash } from '../lib/url.js';
 
 export function SubTabs({ tabs, active, onChange, ariaLabel }) {
   const onKeyDown = useCallback((e) => {
@@ -25,7 +27,10 @@ export function SubTabs({ tabs, active, onChange, ariaLabel }) {
             aria-controls={`subpane-${t.id}`}
             tabIndex={active === t.id ? 0 : -1}
             class={`subtab${active === t.id ? ' active' : ''}`}
-            onClick={() => onChange(t.id)}
+            onClick={() => {
+              onChange(t.id);
+              writeHash(currentTab.value, t.id, range.value, currentPlayerPid.value, currentSegment.value);
+            }}
           >
             {t.label}
           </button>

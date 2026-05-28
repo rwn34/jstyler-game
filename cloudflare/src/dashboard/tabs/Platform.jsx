@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
 import { range, loadedAt } from '../state.js';
 import { fetchJson } from '../api.js';
+import { parseHash } from '../lib/url.js';
 import { fmtNum, fmtAgo, escapeHtml, truncatePid } from '../format.js';
 import { COUNTRY_FLAGS, COUNTRY_NAMES } from '../constants.js';
 import { Card } from '../components/Card.jsx';
@@ -19,7 +20,9 @@ const SUBTABS = [
 ];
 
 export function Platform({ force }) {
-  const [subTab, setSubTab] = useState('geo');
+  const validSubs = SUBTABS.map(t => t.id);
+  const { subTab: urlSub } = parseHash();
+  const [subTab, setSubTab] = useState(validSubs.includes(urlSub) ? urlSub : 'geo');
   const [geoData, setGeoData] = useState(null);
   const [verData, setVerData] = useState(null);
   const [syncData, setSyncData] = useState(null);

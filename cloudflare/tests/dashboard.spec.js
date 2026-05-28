@@ -115,14 +115,13 @@ test.describe('Desktop (1280x800)', () => {
     expect(networkErrors).toEqual([]);
   });
 
-  test('6. #feed lands on Live', async ({ page }) => {
+  test('6. #feed lands on Live + Feed sub-tab', async ({ page }) => {
     const { consoleErrors, networkErrors } = setupErrorCollection(page);
     await page.goto(`${BASE_URL}#/feed?range=7d`);
     await expect(
       page.locator('nav[aria-label="Dashboard tabs"] .tabs [role="tab"][aria-selected="true"]')
     ).toHaveText('Live');
-    // Sub-tab defaults to Alerts (leftmost) since URL→sub-tab routing is deferred
-    await expect(page.locator('.subtabs [role="tab"]').filter({ hasText: /Alerts/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.subtabs [role="tab"]').filter({ hasText: /Live Feed/ })).toHaveAttribute('aria-selected', 'true');
     expect(consoleErrors).toEqual([]);
     expect(networkErrors).toEqual([]);
   });
@@ -151,26 +150,24 @@ test.describe('Desktop (1280x800)', () => {
     expect(networkErrors).toEqual([]);
   });
 
-  test('9. #appversion lands on Platform', async ({ page }) => {
+  test('9. #appversion lands on Platform + Versions sub-tab', async ({ page }) => {
     const { consoleErrors, networkErrors } = setupErrorCollection(page);
     await page.goto(`${BASE_URL}#/appversion?range=7d`);
     await expect(
       page.locator('nav[aria-label="Dashboard tabs"] .tabs [role="tab"][aria-selected="true"]')
     ).toHaveText('Platform');
-    // Sub-tab defaults to Geo (leftmost) since URL→sub-tab routing is deferred
-    await expect(page.locator('.subtabs [role="tab"]').filter({ hasText: /Geo/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.subtabs [role="tab"]').filter({ hasText: /Versions/ })).toHaveAttribute('aria-selected', 'true');
     expect(consoleErrors).toEqual([]);
     expect(networkErrors).toEqual([]);
   });
 
-  test('10. #sync lands on Platform', async ({ page }) => {
+  test('10. #sync lands on Platform + Cloud Sync sub-tab', async ({ page }) => {
     const { consoleErrors, networkErrors } = setupErrorCollection(page);
     await page.goto(`${BASE_URL}#/sync?range=7d`);
     await expect(
       page.locator('nav[aria-label="Dashboard tabs"] .tabs [role="tab"][aria-selected="true"]')
     ).toHaveText('Platform');
-    // Sub-tab defaults to Geo (leftmost) since URL→sub-tab routing is deferred
-    await expect(page.locator('.subtabs [role="tab"]').filter({ hasText: /Geo/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.subtabs [role="tab"]').filter({ hasText: /Cloud Sync/ })).toHaveAttribute('aria-selected', 'true');
     expect(consoleErrors).toEqual([]);
     expect(networkErrors).toEqual([]);
   });
@@ -182,6 +179,28 @@ test.describe('Desktop (1280x800)', () => {
 
     await page.goto(`${BASE_URL}#/live?range=7d`);
     await expect(page.locator('.subtabs [role="tab"]')).toHaveCount(2);
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
+  test('24. Direct #/platform/versions deep-link selects Versions sub-tab', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+    await page.goto(`${BASE_URL}#/platform/versions?range=7d`);
+    await expect(
+      page.locator('nav[aria-label="Dashboard tabs"] .tabs [role="tab"][aria-selected="true"]')
+    ).toHaveText('Platform');
+    await expect(page.locator('.subtabs [role="tab"]').filter({ hasText: /Versions/ })).toHaveAttribute('aria-selected', 'true');
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
+  test('25. Sub-tab click updates URL hash', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+    await page.goto(`${BASE_URL}#/live?range=7d`);
+    // Switch to Feed sub-tab
+    await page.locator('.subtabs [role="tab"]').filter({ hasText: /Live Feed/ }).click();
+    await page.waitForTimeout(200);
+    expect(await page.evaluate(() => location.hash)).toContain('/feed');
     expect(consoleErrors).toEqual([]);
     expect(networkErrors).toEqual([]);
   });

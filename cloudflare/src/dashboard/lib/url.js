@@ -14,12 +14,14 @@ const TAB_ALIASES = {
 export function parseHash() {
   const hash = location.hash.replace(/^#\/?/, '');
   const [path, qs] = hash.split('?');
+  const [tab, subTab] = (path || '').split('/');
   const params = new URLSearchParams(qs || '');
-  return { tab: path || '', range: params.get('range') || '', player: params.get('player') || '', segment: params.get('segment') || '' };
+  return { tab: tab || '', subTab: subTab || '', range: params.get('range') || '', player: params.get('player') || '', segment: params.get('segment') || '' };
 }
 
-export function writeHash(tab, range, player, segment) {
+export function writeHash(tab, subTab, range, player, segment) {
   let hash = '#/' + (tab || '');
+  if (subTab) hash += '/' + subTab;
   const params = [];
   if (range) params.push('range=' + range);
   if (segment) params.push('segment=' + encodeURIComponent(segment));
