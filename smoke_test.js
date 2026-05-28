@@ -36,12 +36,55 @@ function ok(name, condition, detail = '') {
 
 async function run() {
   const ts = Date.now();
-  const user = 'SMOKE' + (ts % 10000);
   const mmyy = '1225';
+
+  console.log(`=== Smoke Test ===\n`);
+
+  // --- Per-user lockout test FIRST (before IP rate limits are consumed) ---
+  const lockUser = 'LOCK' + (ts % 10000);
+  const lockPin = '555555';
+
+  // Create account
+  const lockSave = await post('/sync/save', {
+    username: lockUser, mmyy, pin: lockPin, deviceId: 'dev_lock',
+    data: { playerName: lockUser, playerMmyy: mmyy, scores: { 1: 10 }, silver: 5 },
+    ts: ts + 100,
+  });
+  ok('lockout: create account', lockSave.status === 200 && lockSave.json?.ok === true, `status=${lockSave.status}`);
+
+  // 5 wrong PIN loads (different PINs)
+  let wrongCount = 0;
+  for (let i = 0; i < 5; i++) {
+    const wrongPin = String(100000 + i).padStart(6, '0');
+    const w = await post('/sync/load', { username: lockUser, mmyy, pin: wrongPin, deviceId: 'dev_lock' });
+    if (w.status === 401) wrongCount++;
+  }
+  ok('lockout: 5 wrong PIN loads → 401', wrongCount === 5, `got ${wrongCount}/5 401s`);
+
+  // 6th attempt with correct PIN → 429 (per-user lockout)
+  const locked = await post('/sync/load', { username: lockUser, mmyy, pin: lockPin, deviceId: 'dev_lock' });
+  ok('lockout: correct PIN after 5 fails → 429', locked.status === 429 && locked.json?.error === 'too many failed attempts', `status=${locked.status} error=${locked.json?.error}`);
+
+  // Cleanup lockout test account
+  try {
+    const { execSync } = require('child_process');
+    execSync(
+      `npx wrangler d1 execute ndj-metrics-db --remote --command="DELETE FROM sync_history WHERE key_hash IN (SELECT key_hash FROM sync_lookup WHERE username = '${lockUser}'); DELETE FROM sync_states WHERE key_hash IN (SELECT key_hash FROM sync_lookup WHERE username = '${lockUser}'); DELETE FROM sync_lookup WHERE username = '${lockUser}';"`,
+      { cwd: 'cloudflare', stdio: 'ignore' }
+    );
+    console.log('✓ lockout: cleaned up test account');
+  } catch (e) {
+    console.log('⚠ lockout: manual cleanup may be needed for account', lockUser);
+  }
+
+  // Wait for IP rate-limit window to reset before core tests
+  console.log('⏳ Waiting 65s for IP rate-limit window...');
+  await new Promise(r => setTimeout(r, 65000));
+
+  // --- Core smoke tests ---
+  const user = 'SMOKE' + (ts % 10000);
   const pin = '123456';
   const deviceId = 'dev_smoke';
-
-  console.log(`=== Smoke Test: ${user} ===\n`);
 
   // 1. Save
   const save = await post('/sync/save', {

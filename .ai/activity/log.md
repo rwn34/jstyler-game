@@ -1,3 +1,11 @@
+## 2026-05-28 — 013: Mock-based PlayerModal Referrals test + referrals prop fix
+- Added deterministic Playwright tests 18/18m for PlayerModal Referrals section
+- Mocked /stats/players, /stats/player, /admin/referrals to control test data
+- Discovered and fixed bug: PlayerDetail referenced `referrals` out of scope (not passed as prop)
+- Deployed `90708148-906c-4fbd-8923-7857e7cadaf3`
+- Playwright: 29/29 passing, player-modal screenshots generated
+- Commit: `be683b9`
+
 ## 2026-05-28 — claude-code (010 D3 close-out ACCEPTED)
 - Read `to-claude/done/010-d3-subtab-url-consumption-complete.md` (Kimi wrote it but placed directly in done/ rather than open/ — minor process variance, flagged in the review notes I appended).
 - **Work verdict: ✅ ACCEPTED.** Sub-tab URL routing fully wired. Worker `6cd5bcfc-e8c1-42d8-b302-d9a6f730d724` live, commit `8073a48`, 27/27 Playwright.

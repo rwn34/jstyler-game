@@ -31,7 +31,7 @@ const SYNC_RATE_LIMIT_SAVE_WINDOW_MS = 60 * 1000;   // 1 minute
 const SYNC_RATE_LIMIT_SAVE_MAX = 5;                 // 5 saves per min per IP
 const SYNC_RATE_LIMIT_LOAD_WINDOW_MS = 60 * 1000;   // 1 minute
 const SYNC_RATE_LIMIT_LOAD_MAX = 10;                // 10 loads per min per IP
-const SYNC_LOCKOUT_THRESHOLD = 10;                  // 10 fails = lockout
+const SYNC_LOCKOUT_THRESHOLD = 5;                   // 5 fails = lockout
 const SYNC_LOCKOUT_DURATION_MS = 60 * 60 * 1000;    // 1 hour lockout
 const SYNC_MAX_DEVICES = 5;
 const SYNC_HISTORY_MAX = 5;
@@ -1557,6 +1557,15 @@ async function handleSyncSave(request, env) {
     });
   }
 
+  const userLockKey = await hashSyncKey(username, mmyy, '', env.SYNC_SALT);
+  const userLockout = await checkSyncLockout(userLockKey, env);
+  if (userLockout.locked) {
+    return new Response(JSON.stringify({ ok: false, error: 'too many failed attempts' }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json', 'Retry-After': String(userLockout.retryAfter), ...publicCorsHeaders() },
+    });
+  }
+
   const keyHash = await hashSyncKey(username, mmyy, pin, env.SYNC_SALT);
   const lockout = await checkSyncLockout(keyHash, env);
   if (lockout.locked) {
@@ -1578,6 +1587,18 @@ async function handleSyncSave(request, env) {
 
     // Load existing sync state (including updated_at for optimistic lock)
     const existing = await env.DB.prepare('SELECT pid, data_json, rewards_json, purchase_json, device_ids, updated_at FROM sync_states WHERE key_hash = ?').bind(keyHash).first();
+
+    // Wrong PIN for existing account: block and count against per-user lockout
+    if (!existing) {
+      let lookupRow = null;
+      try {
+        lookupRow = await env.DB.prepare('SELECT key_hash FROM sync_lookup WHERE username = ? AND mmyy = ?').bind(String(username).toUpperCase(), String(mmyy)).first();
+      } catch (_) {}
+      if (lookupRow && lookupRow.key_hash && lookupRow.key_hash !== keyHash) {
+        await recordSyncFail(userLockKey, env);
+        return errResponse('invalid credentials', 401, true);
+      }
+    }
     const readUpdatedAt = existing ? existing.updated_at : null;
 
     let mergedData = { ...data };
@@ -1882,6 +1903,7 @@ async function handleSyncSave(request, env) {
   } catch (_) {}
 
   await clearSyncFails(keyHash, env);
+  await clearSyncFails(userLockKey, env);
 
   return jsonResponse({ ok: true, approvedPurchases, rejectedPurchases, serverTs }, 200, true);
 }
@@ -1900,6 +1922,15 @@ async function handleSyncLoad(request, env) {
     return new Response(JSON.stringify({ ok: false, error: 'rate limit exceeded' }), {
       status: 429,
       headers: { 'Content-Type': 'application/json', 'Retry-After': String(Math.ceil(SYNC_RATE_LIMIT_LOAD_WINDOW_MS / 1000)), ...publicCorsHeaders() },
+    });
+  }
+
+  const userLockKey = await hashSyncKey(username, mmyy, '', env.SYNC_SALT);
+  const userLockout = await checkSyncLockout(userLockKey, env);
+  if (userLockout.locked) {
+    return new Response(JSON.stringify({ ok: false, error: 'too many failed attempts' }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json', 'Retry-After': String(userLockout.retryAfter), ...publicCorsHeaders() },
     });
   }
 
@@ -1930,6 +1961,7 @@ async function handleSyncLoad(request, env) {
 
   if (!row) {
     await recordSyncFail(keyHash, env);
+    await recordSyncFail(userLockKey, env);
     return errResponse('invalid credentials', 401, true);
   }
 
@@ -1939,6 +1971,7 @@ async function handleSyncLoad(request, env) {
     const derived = await pbkdf2Hash(String(pin), row.pin_salt);
     if (!constantTimeEqual(derived, row.pin_hash)) {
       await recordSyncFail(keyHash, env);
+      await recordSyncFail(userLockKey, env);
       return errResponse('invalid credentials', 401, true);
     }
   } else if (usedFallback) {
@@ -1946,6 +1979,7 @@ async function handleSyncLoad(request, env) {
     const expectedKeyHash = await hashSyncKey(username, mmyy, pin, env.SYNC_SALT);
     if (!constantTimeEqual(expectedKeyHash, row.key_hash)) {
       await recordSyncFail(keyHash, env);
+      await recordSyncFail(userLockKey, env);
       return errResponse('invalid credentials', 401, true);
     }
   }
@@ -1990,6 +2024,7 @@ async function handleSyncLoad(request, env) {
   try { purchaseLog = JSON.parse(row.purchase_json) || []; } catch (_) {}
 
   await clearSyncFails(keyHash, env);
+  await clearSyncFails(userLockKey, env);
 
   // Backfill sync_lookup for old accounts
   try {
