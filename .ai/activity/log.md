@@ -1,3 +1,23 @@
+## 2026-05-28 — claude-code (kimi handoff 008: referrals endpoint + PlayerModal widget — sprint 2 phase 2)
+- Wrote `.ai/handoffs/to-kimi/open/008-referrals-endpoint-and-widget.md`.
+- Scope: new `/admin/referrals` endpoint (auth-gated, two modes: summary + detail-by-pid) + PlayerModal "Referrals" section showing incoming + outgoing referrals with clickable PIDs + "Top Referrers" widget on Per Player tab (All segment only).
+- Reads from existing `referral_open` ui_events that Kiro's v1.2.64 already emits — no new event shape, no client work, no schema migration. JSON_EXTRACT on `idx_events_type_server_ts` for now; column promotion deferred to phase 2.5 if perf bites.
+- Validation plan A-E baked in: endpoint smoke (auth, summary, detail, PID validation, synthetic insert), dashboard render (referred_by/referred lists, clickable navigation, segment-aware widget), perf (<500ms summary, <300ms detail, EXPLAIN QUERY PLAN paste), Playwright test added + screenshots regenerated, empty-state polish.
+- **Self-grep-verify required** per AGENTS.md §7. Handoff lists 6 explicit `rg` commands Kimi must run + paste output for each claim. Noted: 007 skipped this as a transition courtesy; 008 skipping gets rejected on submission.
+- Explicit deferrals: anti-fraud filtering (2.5), referral tree recursive view (3), column promotion (2.5), conversion tracking (later), top-level Referrals tab (v1 lives inside Per Player + Modal).
+- User chose to start now vs waiting 24-48h for data accumulation. Data will populate as v1.2.64 reaches more players; endpoint works against empty + populated states.
+
+## 2026-05-28 — claude-code (sprint 2 phase 1 OFFICIALLY CLOSED)
+- Read + resolved Kimi's `to-claude/open/007-dashboard-sprint2p1-bug-fixes-complete.md`. Worker `962e5813-26bb-41c8-8e66-46e3d4a0c95e` live, commit `65f1f17`.
+- **Self-grep-verified all 3 fixes against the working tree** (Kimi's handoff skipped this step — first completion since the rule landed; doing it for them as a transitional courtesy):
+  - F1 ✅ `lib/url.js:36-39` — `applyAlias` splits on `?` then `/`, returns `{tab, segment, subTab}`. Bonus: `subTab` extractable (partial D3 groundwork).
+  - F2 ✅ `Live.jsx:110, 129, 153` — `connected` state added, useEffect deps `[paused, connected]`. Polling autostarts.
+  - F3 ✅ `Activity.jsx:26, 46` — `compareEnabled.value` in deps. Toggle re-fetches with `before=`.
+- 19/19 Playwright still passing with corrected (post-fix) assertions. 20 screenshots regenerated.
+- D3 sub-tab URL deep-link still partial — `applyAlias` exposes `subTab` but Platform/Live don't consume it. Tracked.
+- **Process reminder logged:** future Kimi completion handoffs MUST include grep-verified snippets per `AGENTS.md` §7; this one slid as a transition courtesy. Next skip gets rejected on submission.
+- Sprint 2 phase 1 backlog now: phase 2 (referrals endpoint, waits ~24-48h for Kiro v1.2.64 data) or phase 3 (dashboard polish from original UX audit).
+
 ## 2026-05-16 — Sprint 2 phase 1 bug fixes deployed
 
 - F1: applyAlias split-on-/ fix for sub-tab aliases

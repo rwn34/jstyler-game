@@ -277,6 +277,17 @@ test.describe('Desktop (1280x800)', () => {
     expect(consoleErrors).toEqual([]);
     expect(networkErrors).toEqual([]);
   });
+
+  test('17. Top Referrers widget renders on Per Player tab', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+    await page.goto(`${BASE_URL}#/players?range=7d`);
+    // Top Referrers is only shown in "All" segment (default)
+    await expect(page.locator('h2', { hasText: 'Top Referrers' })).toBeVisible();
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
+  // PlayerModal referrals section is covered by synthetic smoke test and visual snapshots.
 });
 
 test.describe('Mobile (380x800)', () => {
@@ -315,4 +326,14 @@ test.describe('Mobile (380x800)', () => {
     expect(consoleErrors).toEqual([]);
     expect(networkErrors).toEqual([]);
   });
+
+  test('17m. Top Referrers widget renders on Per Player tab', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+    await page.goto(`${BASE_URL}#/players?range=7d`);
+    await expect(page.locator('h2', { hasText: 'Top Referrers' })).toBeVisible();
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
+  // PlayerModal referrals section is covered by synthetic smoke test and visual snapshots.
 });

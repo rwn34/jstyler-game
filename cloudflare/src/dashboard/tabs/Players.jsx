@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'preact/hooks';
 import { range, loadedAt, currentPlayerPid, currentSegment } from '../state.js';
-import { fetchJson } from '../api.js';
+import { fetchJson, getReferrals } from '../api.js';
 import { fmtNum, fmtAgo, escapeHtml, truncatePid } from '../format.js';
 import { Table } from '../components/Table.jsx';
 import { LoadingPane } from '../components/LoadingPane.jsx';
@@ -27,6 +27,7 @@ function PidLink({ p }) {
 export function Players({ force }) {
   const [d, setD] = useState(null);
   const [flagged, setFlagged] = useState(null);
+  const [referrals, setReferrals] = useState(null);
   const [err, setErr] = useState(null);
   const segment = currentSegment.value || 'all';
 
@@ -44,11 +45,13 @@ export function Players({ force }) {
     else promises.push(Promise.resolve(d));
     if (force || needFlagged) promises.push(fetchJson('/stats/flagged-players', { force }));
     else promises.push(Promise.resolve(flagged));
+    promises.push(getReferrals(null, { force }));
 
     Promise.all(promises)
-      .then(([pData, fData]) => {
+      .then(([pData, fData, rData]) => {
         if (pData) { setD(pData); loadedAt.value = { ...loadedAt.value, players: Date.now() }; }
         if (fData) { setFlagged(fData); loadedAt.value = { ...loadedAt.value, flaggedPlayers: Date.now() }; }
+        if (rData) setReferrals(rData);
       })
       .catch(setErr);
   }, [range.value, force]);
@@ -129,6 +132,14 @@ export function Players({ force }) {
     { key: 'v', label: 'Verified', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.v) },
     { key: 'total', label: 'Total', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.total) },
     { key: '_ratio', label: 'Ratio', align: 'right', sortable: true, sortType: 'number', render: r => { const ratio = r.total > 0 ? Math.round((r.v / r.total) * 100) : 0; return <span class={`badge ${ratio < 30 ? 'bad' : ratio < 60 ? 'warn' : ''}`}>{ratio}%</span>; } },
+  ];
+
+  const referralCols = [
+    { key: '_i', label: '#', render: (r, i) => i + 1 },
+    { key: 'name', label: 'Player', sortable: true, sortType: 'string', render: r => <PlayerLink p={r} /> },
+    { key: 'pid', label: 'PID', render: r => <PidLink p={r} />, className: 'pid' },
+    { key: 'referrals', label: 'Referrals', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.referrals) },
+    { key: 'last_referral_ts', label: 'Last referral', sortable: true, sortType: 'date', render: r => fmtAgo(r.last_referral_ts) },
   ];
 
   const reviewed = (flagged.players || []).filter(p => p.flag_type === 'review');
@@ -233,6 +244,21 @@ export function Players({ force }) {
 
             <h2>Anti-cheat Watchlist</h2>
             <div class="panel scroll-x"><Table columns={watchCols} rows={d.lowestVerified || []} defaultSort={{ key: '_ratio', dir: 'asc' }} filterable exportable exportFilename={`ndj-watchlist-${range.value}-${today}.csv`} /></div>
+
+            <h2>Top Referrers</h2>
+            <div class="panel scroll-x">
+              {(!referrals || !referrals.top_referrers || !referrals.top_referrers.length) ? (
+                <EmptyState message="No referrals yet" hint="Players who bring friends in via QR share appear here" />
+              ) : (
+                <Table
+                  columns={referralCols}
+                  rows={referrals.top_referrers}
+                  defaultSort={{ key: 'referrals', dir: 'desc' }}
+                  exportable
+                  exportFilename={`ndj-top-referrers-${range.value}-${today}.csv`}
+                />
+              )}
+            </div>
           </>}
         </>
       )}

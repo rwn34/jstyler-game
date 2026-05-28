@@ -2349,6 +2349,124 @@ async function handleStatsFlaggedPlayers(env, force) {
   }, force);
 }
 
+async function handleAdminReferrals(env, url) {
+  const pid = url.searchParams.get('pid');
+  const range = url.searchParams.get('range') || '30d';
+  const startTs = rangeStartTs(range);
+
+  // Detail mode
+  if (pid) {
+    if (!PID_REGEX.test(pid)) return errResponse('invalid pid', 400);
+
+    const [referredByRow, referredRows, nameRow] = await Promise.all([
+      env.DB.prepare(
+        "SELECT JSON_EXTRACT(data,'$.meta') as referrer_pid, server_ts FROM events WHERE pid = ? AND type = 'ui_event' AND JSON_EXTRACT(data,'$.action') = 'referral_open' ORDER BY server_ts DESC LIMIT 1"
+      ).bind(pid).first(),
+      env.DB.prepare(
+        "SELECT pid, server_ts FROM events WHERE type = 'ui_event' AND JSON_EXTRACT(data,'$.action') = 'referral_open' AND JSON_EXTRACT(data,'$.meta') = ? ORDER BY server_ts DESC LIMIT 200"
+      ).bind(pid).all(),
+      env.DB.prepare("SELECT MAX(name) as name FROM events WHERE pid = ?").bind(pid).first(),
+    ]);
+
+    let referredBy = null;
+    if (referredByRow && referredByRow.referrer_pid) {
+      const referrerNameRow = await env.DB.prepare("SELECT MAX(name) as name FROM events WHERE pid = ?").bind(referredByRow.referrer_pid).first();
+      referredBy = {
+        pid: referredByRow.referrer_pid,
+        name: (referrerNameRow && referrerNameRow.name) || '(anon)',
+        ts: referredByRow.server_ts,
+      };
+    }
+
+    const referred = [];
+    if (referredRows && referredRows.results) {
+      for (const r of referredRows.results) {
+        const nr = await env.DB.prepare("SELECT MAX(name) as name FROM events WHERE pid = ?").bind(r.pid).first();
+        referred.push({
+          pid: r.pid,
+          name: (nr && nr.name) || '(anon)',
+          ts: r.server_ts,
+        });
+      }
+    }
+
+    return {
+      ok: true,
+      data: {
+        pid,
+        name: (nameRow && nameRow.name) || '(anon)',
+        referredBy,
+        referred,
+        hasMore: referred.length >= 200,
+      },
+    };
+  }
+
+  // Summary mode
+  const [totalRow, uniqueReferrersRow, uniqueRefereesRow, topReferrersRows, timeseriesRows] = await Promise.all([
+    env.DB.prepare(
+      "SELECT COUNT(*) as c FROM events WHERE type = 'ui_event' AND JSON_EXTRACT(data,'$.action') = 'referral_open' AND server_ts > ?"
+    ).bind(startTs).first(),
+    env.DB.prepare(
+      "SELECT COUNT(DISTINCT JSON_EXTRACT(data,'$.meta')) as c FROM events WHERE type = 'ui_event' AND JSON_EXTRACT(data,'$.action') = 'referral_open' AND server_ts > ?"
+    ).bind(startTs).first(),
+    env.DB.prepare(
+      "SELECT COUNT(DISTINCT pid) as c FROM events WHERE type = 'ui_event' AND JSON_EXTRACT(data,'$.action') = 'referral_open' AND server_ts > ?"
+    ).bind(startTs).first(),
+    env.DB.prepare(
+      `SELECT JSON_EXTRACT(data,'$.meta') as referrer_pid, COUNT(*) as referrals, MAX(server_ts) as last_referral_ts
+       FROM events
+       WHERE type = 'ui_event' AND JSON_EXTRACT(data,'$.action') = 'referral_open' AND server_ts > ?
+       GROUP BY referrer_pid
+       ORDER BY referrals DESC, last_referral_ts DESC
+       LIMIT 20`
+    ).bind(startTs).all(),
+    env.DB.prepare(
+      `SELECT CAST(server_ts / 86400000 AS INTEGER) as day_epoch, COUNT(*) as count
+       FROM events
+       WHERE type = 'ui_event' AND JSON_EXTRACT(data,'$.action') = 'referral_open' AND server_ts > ?
+       GROUP BY day_epoch
+       ORDER BY day_epoch`
+    ).bind(startTs).all(),
+  ]);
+
+  const topReferrers = [];
+  if (topReferrersRows && topReferrersRows.results) {
+    for (const r of topReferrersRows.results) {
+      const nr = await env.DB.prepare("SELECT MAX(name) as name FROM events WHERE pid = ?").bind(r.referrer_pid).first();
+      topReferrers.push({
+        pid: r.referrer_pid,
+        name: (nr && nr.name) || '(anon)',
+        referrals: r.referrals,
+        last_referral_ts: r.last_referral_ts,
+      });
+    }
+  }
+
+  const timeseries = [];
+  if (timeseriesRows && timeseriesRows.results) {
+    for (const r of timeseriesRows.results) {
+      timeseries.push({
+        date: new Date(r.day_epoch * 86400000).toISOString().slice(0, 10),
+        count: r.count,
+      });
+    }
+  }
+
+  return {
+    ok: true,
+    data: {
+      summary: {
+        total_referral_opens: (totalRow && totalRow.c) || 0,
+        unique_referrers: (uniqueReferrersRow && uniqueReferrersRow.c) || 0,
+        unique_referees: (uniqueRefereesRow && uniqueRefereesRow.c) || 0,
+      },
+      top_referrers: topReferrers,
+      timeseries,
+    },
+  };
+}
+
 async function handleAdminSyncResetPin(request, env) {
   const body = await readJsonBody(request);
   const { keyHash, newPin } = body || {};
@@ -3388,6 +3506,9 @@ export default {
       }
       if (path === '/admin/aggregate' && request.method === 'POST') {
         return await handleAdminAggregate(request, env);
+      }
+      if (path === '/admin/referrals' && request.method === 'GET') {
+        return jsonResponse(await handleAdminReferrals(env, url));
       }
       if ((path === '/' || path === '/dashboard') && request.method === 'GET') {
         let html;

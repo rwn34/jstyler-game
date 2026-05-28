@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'preact/hooks';
 import { currentPlayerPid } from '../state.js';
-import { fetchJson } from '../api.js';
+import { fetchJson, getReferrals } from '../api.js';
 import { fmtNum, fmtMs, fmtAgo, fmtDateTime, escapeHtml, truncatePid } from '../format.js';
 import { LEVEL_NAMES, COUNTRY_FLAGS, COUNTRY_NAMES } from '../constants.js';
 import { Card } from './Card.jsx';
@@ -12,6 +12,7 @@ import { ErrorState } from './ErrorState.jsx';
 
 export function PlayerModal() {
   const [data, setData] = useState(null);
+  const [referrals, setReferrals] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const modalRef = useRef(null);
@@ -20,11 +21,14 @@ export function PlayerModal() {
   const pid = currentPlayerPid.value;
 
   useEffect(() => {
-    if (!pid) { setData(null); return; }
+    if (!pid) { setData(null); setReferrals(null); return; }
     triggerRef.current = document.activeElement;
     setLoading(true); setError(null);
-    fetchJson('/stats/player?pid=' + encodeURIComponent(pid))
-      .then(d => setData(d))
+    Promise.all([
+      fetchJson('/stats/player?pid=' + encodeURIComponent(pid)),
+      getReferrals(pid),
+    ])
+      .then(([playerData, refData]) => { setData(playerData); setReferrals(refData); })
       .catch(e => setError(e))
       .finally(() => setLoading(false));
   }, [pid]);
@@ -132,6 +136,8 @@ function PlayerDetail({ d, pid, setData }) {
 
       <PlayerActions d={d} pid={pid} setData={setData} />
 
+      <ReferralsSection referrals={referrals} />
+
       <div class="grid">
         <Card label="Sessions" val={fmtNum(d.sessionCount)} />
         <Card label="Days Active" val={fmtNum(d.daysActive)} />
@@ -220,6 +226,49 @@ function PlayerDetail({ d, pid, setData }) {
             </div>
           );
         })}
+      </div>
+    </>
+  );
+}
+
+function ReferralsSection({ referrals }) {
+  if (!referrals) return null;
+
+  return (
+    <>
+      <h2>Referrals</h2>
+      <div class="panel">
+        <div style="font-size:.7rem;color:#bbb;margin-bottom:8px">
+          {referrals.referredBy ? (
+            <div>
+              Referred by:{' '}
+              <a href="javascript:void(0)" onClick={() => { currentPlayerPid.value = referrals.referredBy.pid; }} style="color:#0ff;text-decoration:none">
+                {escapeHtml(referrals.referredBy.name)} ({truncatePid(referrals.referredBy.pid)})
+              </a>
+              {' '}· {fmtAgo(referrals.referredBy.ts)}
+            </div>
+          ) : (
+            <div>Referred by: organic (no QR scan)</div>
+          )}
+        </div>
+
+        {referrals.referred && referrals.referred.length > 0 ? (
+          <>
+            <div style="font-size:.65rem;color:#888;margin-bottom:6px">Referred {referrals.referred.length} player{referrals.referred.length > 1 ? 's' : ''}{referrals.hasMore ? ' (200+ shown)' : ''}:</div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              {referrals.referred.map(r => (
+                <div key={r.pid} style="font-size:.7rem">
+                  <a href="javascript:void(0)" onClick={() => { currentPlayerPid.value = r.pid; }} style="color:#0ff;text-decoration:none">
+                    {escapeHtml(r.name)} ({truncatePid(r.pid)})
+                  </a>
+                  {' '}· {fmtAgo(r.ts)}
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div style="font-size:.7rem;color:#888">No referrals yet</div>
+        )}
       </div>
     </>
   );

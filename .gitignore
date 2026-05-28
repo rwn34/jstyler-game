@@ -24,6 +24,8 @@ test-screenshots/
 smoke_test.js
 .ai/reports/smoke-test-stdout-*.txt
 e2e-temp/
+auth.json
+test-results/
 
 # Build auto-detect hash
 .zipgame-last-build-hash

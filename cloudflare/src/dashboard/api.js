@@ -13,3 +13,15 @@ export async function fetchJson(path, { range, force } = {}) {
   if (!j.ok) throw new Error(j.error || 'API error');
   return j.data;
 }
+
+export async function getReferrals(pid, { force } = {}) {
+  const path = pid ? '/admin/referrals?pid=' + encodeURIComponent(pid) : '/admin/referrals';
+  const sep = path.indexOf('?') >= 0 ? '&' : '?';
+  const url = API + path + sep + 'range=' + rangeSignal.value + (force ? '&force=1' : '');
+  const res = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
+  if (res.status === 401) { location.href = '/'; throw new Error('unauthorized'); }
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const j = await res.json();
+  if (!j.ok) throw new Error(j.error || 'API error');
+  return j.data;
+}
