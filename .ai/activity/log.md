@@ -1,3 +1,12 @@
+## 2026-05-28 — 012: Extend per-user lockout to /sync/load and /sync/save
+- Extended DB-backed per-(username, mmyy) lockout from forgot-pin to sync/load + sync/save
+- Both endpoints now check `userLockKey = hashSyncKey(username, mmyy, '', SYNC_SALT)` before PIN verification
+- `SYNC_LOCKOUT_THRESHOLD` changed from 10 to 5 per handoff spec
+- Per-keyHash lockout preserved as defense-in-depth layer
+- Smoke test: 20/20 passing (including new per-user lockout test with automatic cleanup)
+- Deployed `c6875421-a3bb-4f49-93de-1392ba4fe16f`
+- Commit: `f97ba87`
+
 ## 2026-05-28 — 013: Mock-based PlayerModal Referrals test + referrals prop fix
 - Added deterministic Playwright tests 18/18m for PlayerModal Referrals section
 - Mocked /stats/players, /stats/player, /admin/referrals to control test data
