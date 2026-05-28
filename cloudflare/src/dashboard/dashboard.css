@@ -283,6 +283,27 @@ tr:hover td{background:rgba(0,255,255,.03)}
 
 @keyframes pulse{0%{opacity:1}50%{opacity:.5}100%{opacity:1}}
 
+
+
+/* Health Verdict banner */
+.health-verdict{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,0.4);border:1px solid rgba(0,229,255,0.2);border-radius:10px;padding:12px 16px;margin-bottom:12px;backdrop-filter:blur(8px);transition:all .15s}
+.health-verdict:hover{border-color:rgba(0,255,255,.3)}
+.health-verdict.live{border-color:rgba(0,255,136,.25);background:rgba(0,255,136,.04)}
+.health-verdict.warn{border-color:rgba(255,170,0,.25);background:rgba(255,170,0,.04)}
+.health-verdict.bad{border-color:rgba(255,68,68,.25);background:rgba(255,68,68,.04)}
+.hv-icon{font-size:1.2rem;flex-shrink:0}
+.hv-body{min-width:0}
+.hv-headline{font-size:.8rem;font-weight:700;color:#fff;letter-spacing:.5px}
+.hv-sub{font-size:.6rem;color:#aaa;margin-top:2px}
+.health-verdict.live .hv-headline{color:#0f8}
+.health-verdict.warn .hv-headline{color:#fa0}
+.health-verdict.bad .hv-headline{color:#f44}
+
+/* Data freshness indicator */
+.data-fresh{font-size:.65rem;color:#aaa;font-family:monospace;margin-left:4px}
+.data-fresh.warn{color:#fa0}
+.data-fresh.bad{color:#f44}
+
 /* Player modal full-screen on mobile */
 @media (max-width: 720px) {
   .player-modal{padding:8px}

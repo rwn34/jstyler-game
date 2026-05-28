@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'preact/hooks';
 import { range, currentTab, loadedAt } from './state.js';
+import { DataFreshness, useFreshnessTick } from './components/DataFreshness.jsx';
 import { compareEnabled } from './lib/compare.js';
 import { fmtTime } from './format.js';
 import { Tabs } from './components/Tabs.jsx';
@@ -19,6 +20,7 @@ import { Feedback } from './tabs/Feedback.jsx';
 const RANGES = ['1d', '2d', '3d', '7d', '14d', '31d', 'all'];
 
 export function App() {
+  useFreshnessTick();
   const [forceKey, setForceKey] = useState(0);
 
   const checkNow = useCallback(() => {
@@ -42,7 +44,7 @@ export function App() {
       <header>
         <h1>★ N3ON DashJ <span class="sub">LIVE METRICS</span></h1>
         <div id="status">
-          <span class="live">●</span> Live • Range {range.value.toUpperCase()} • {fmtTime(Date.now())} UTC+7
+          <span class="live">●</span> Live • Range {range.value.toUpperCase()} • {fmtTime(Date.now())} UTC+7 • <DataFreshness />
         </div>
       </header>
 

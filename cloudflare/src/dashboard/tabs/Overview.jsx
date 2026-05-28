@@ -1,29 +1,48 @@
 import { useState, useEffect } from 'preact/hooks';
 import { range, loadedAt } from '../state.js';
 import { fetchWithCompare, computeDelta } from '../lib/compare.js';
+import { fetchJson } from '../api.js';
 import { fmtNum, fmtDate } from '../format.js';
 import { LEVEL_NAMES } from '../constants.js';
 import { Card } from '../components/Card.jsx';
 import { BarRow } from '../components/BarRow.jsx';
 import { LoadingPane } from '../components/LoadingPane.jsx';
 import { ErrorState } from '../components/ErrorState.jsx';
+import { HealthVerdict } from '../components/HealthVerdict.jsx';
 
 export function Overview({ force }) {
   const [d, setD] = useState(null);
   const [prev, setPrev] = useState(null);
   const [err, setErr] = useState(null);
+  const [alerts, setAlerts] = useState(null);
 
   useEffect(() => {
     const cached = loadedAt.value.overview;
     if (!force && cached && Date.now() - cached < 240000) return;
     setErr(null);
-    fetchWithCompare('/stats', { force })
-      .then(r => { setD(r.current); setPrev(r.previous); loadedAt.value = { ...loadedAt.value, overview: Date.now() }; })
+    Promise.all([
+      fetchWithCompare('/stats', { force }),
+      fetchJson('/stats/anomalies', { force }),
+    ])
+      .then(([stats, anomaly]) => {
+        setD(stats.current);
+        setPrev(stats.previous);
+        setAlerts(anomaly);
+        loadedAt.value = { ...loadedAt.value, overview: Date.now() };
+      })
       .catch(setErr);
   }, [range.value, force]);
 
-  if (err) return <ErrorState error={err} onRetry={() => { loadedAt.value = { ...loadedAt.value, overview: 0 }; setErr(null); setD(null); }} />;
+  if (err) return <ErrorState error={err} onRetry={() => { loadedAt.value = { ...loadedAt.value, overview: 0 }; setErr(null); setD(null); setAlerts(null); }} />;
   if (!d) return <LoadingPane />;
+
+  const alertsData = alerts ? {
+    high: (alerts.alerts || []).filter(a => a.severity === 'high').length,
+    medium: (alerts.alerts || []).filter(a => a.severity === 'medium').length,
+  } : { high: 0, medium: 0 };
+
+  const dauToday = d.activeInRange || 0;
+  const dau7d = prev?.activeInRange || 0;
 
   const winRate = (d.winMatches + d.deathMatches) > 0 ? Math.round(d.winMatches / (d.winMatches + d.deathMatches) * 100) : 0;
   const convertRate = (d.anonPlayers + d.namedPlayers) > 0 ? Math.round(d.namedPlayers / (d.anonPlayers + d.namedPlayers) * 100) : 0;
@@ -31,6 +50,13 @@ export function Overview({ force }) {
 
   return (
     <>
+      <HealthVerdict
+        alerts={alertsData}
+        dau7d={dau7d}
+        dauToday={dauToday}
+        lastCheck={alerts?.computedAt || loadedAt.value.overview}
+      />
+
       <div class="grid">
         <Card label="Online Now" val={fmtNum(d.online)} cls="live" hint="last 5 min" delta={prev ? computeDelta(d.online, prev.online) : null} />
         <Card label="Active in Range" val={fmtNum(d.activeInRange)} hint="unique players" delta={prev ? computeDelta(d.activeInRange, prev.activeInRange) : null} />

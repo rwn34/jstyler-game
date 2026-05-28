@@ -1,3 +1,26 @@
+## 2026-05-28 — claude-code (kimi handoff 009: sprint 2 phase 3 first-pair — Overview health verdict + data-freshness)
+- Wrote `.ai/handoffs/to-kimi/open/009-overview-health-and-data-freshness.md`.
+- Two small dashboard P0 items from the original UX audit, packaged together (~30-45 min total Kimi time): Overview health verdict banner (🟢/🟡/🔴 derived from alerts + DAU collapse) at top of Overview tab; per-tab data-freshness indicator ("Data: 3m ago") tied to existing `loadedAt` signal, mounted in App.jsx header bar.
+- Both pure frontend. No worker code changes, no migrations, no client changes.
+- Validation plan A-E baked in (health states + verdict click→Live, freshness updates + tab-switch behavior + CHECK NOW reset, mobile reflow, ARIA roles, perf, two new Playwright tests 22 + 23 with mobile variants, Overview screenshot baselines regenerated).
+- Self-grep-verify required per AGENTS.md §7. Handoff lists 6 explicit `rg` commands. Third handoff under the rule; expectation is now baseline.
+- Explicit deferrals: alerts ack/mute/jump-to-source (separate phase 3 handoff), cross-tab drilldown, global filter bar, Players 9-tables consolidation, D3 close-out, O1 sync_load/save lockout, phase 2.5 anti-fraud.
+
+## 2026-05-28 — claude-code (sprint 2 phase 2 ACCEPTED — referrals shipped)
+- Read + resolved Kimi's `to-claude/open/008-referrals-complete.md`. Worker `fc582831-4138-447d-9a12-2375127521a2` live, commit `9a14e71`.
+- **Self-grep-verify protocol applied successfully for the first time.** Kimi's handoff included 7 organized snippet blocks with rg output next to each claim. Independent spot-check confirmed line numbers (handleAdminReferrals:2352, router:3510-3511, ReferralsSection:139+234, Top Referrers:248, Playwright tests:281+330). Verification took ~2 min vs 15-20 min for pre-rule handoffs. Rule stays.
+- Accepted one deviation: PlayerModal Playwright tests 18/18m attempted then removed due to data-dependent PID flakiness in Recently Active table. Coverage preserved via (1) synthetic API smoke with 3 inserted+queried+deleted rows, (2) manual dashboard verification, (3) visual snapshot of Players tab containing the widget. Future improvement: mock /stats/players to control the clicked PID — tracked.
+- Perf met: summary 180ms (<500ms target), detail 120ms (<300ms target). EmptyState wired for organic players + zero-referrals widget. Segment-aware visibility (All only) confirmed by Playwright test 17.
+- Sprint 2 phase 2 OFFICIALLY CLOSED. Backlog: D3 close-out (~30 min subTab consumption), O1 (sync_load/save lockout extension), phase 2.5 anti-fraud (data-dependent), phase 3 UX audit P1 items.
+
+## 2026-05-28 — 008: Referrals endpoint + widget
+- Built `/admin/referrals` backend endpoint (summary + detail modes)
+- Added PlayerModal referrals section (referred_by + referred list)
+- Added Top Referrers widget to Per Player tab
+- Synthetic smoke test passed; deployed `fc582831-4138-447d-9a12-2375127521a2`
+- Playwright: 21/21 passing, 20 screenshots regenerated
+- Commit: `9a14e71`
+
 ## 2026-05-28 — claude-code (kimi handoff 008: referrals endpoint + PlayerModal widget — sprint 2 phase 2)
 - Wrote `.ai/handoffs/to-kimi/open/008-referrals-endpoint-and-widget.md`.
 - Scope: new `/admin/referrals` endpoint (auth-gated, two modes: summary + detail-by-pid) + PlayerModal "Referrals" section showing incoming + outgoing referrals with clickable PIDs + "Top Referrers" widget on Per Player tab (All segment only).

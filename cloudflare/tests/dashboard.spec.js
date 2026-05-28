@@ -287,6 +287,22 @@ test.describe('Desktop (1280x800)', () => {
     expect(networkErrors).toEqual([]);
   });
 
+  test('22. Health verdict banner renders on Overview', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+    await page.goto(`${BASE_URL}#/overview?range=7d`);
+    await expect(page.locator('.health-verdict')).toBeVisible();
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
+  test('23. Data freshness indicator shows on header', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+    await page.goto(`${BASE_URL}#/overview?range=7d`);
+    await expect(page.locator('.data-fresh')).toBeVisible();
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
   // PlayerModal referrals section is covered by synthetic smoke test and visual snapshots.
 });
 
@@ -331,6 +347,22 @@ test.describe('Mobile (380x800)', () => {
     const { consoleErrors, networkErrors } = setupErrorCollection(page);
     await page.goto(`${BASE_URL}#/players?range=7d`);
     await expect(page.locator('h2', { hasText: 'Top Referrers' })).toBeVisible();
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
+  test('22m. Health verdict banner renders on Overview', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+    await page.goto(`${BASE_URL}#/overview?range=7d`);
+    await expect(page.locator('.health-verdict')).toBeVisible();
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
+  test('23m. Data freshness indicator shows on header', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+    await page.goto(`${BASE_URL}#/overview?range=7d`);
+    await expect(page.locator('.data-fresh')).toBeVisible();
     expect(consoleErrors).toEqual([]);
     expect(networkErrors).toEqual([]);
   });

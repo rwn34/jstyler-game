@@ -3225,31 +3225,55 @@ async function handleAnomalies(env, force) {
       return { ok: true, data: { alerts: [], computedAt: now, note: 'No aggregated data yet. Run /admin/aggregate to backfill.' } };
     }
 
-    // Per-level anomalies
+    // Per-level anomalies — bulk fetch to avoid N sequential queries
+    const [recentAll, baselineAll, dailyAll, deathDailyAll] = await Promise.all([
+      env.DB.prepare(
+        'SELECT level, SUM(starts) as starts, SUM(completes) as completes, SUM(deaths) as deaths, AVG(avg_ms) as avg_ms FROM stats_daily WHERE level >= 0 AND level < 20 AND date >= ? AND date <= ? GROUP BY level'
+      ).bind(d7ago, today).all(),
+      env.DB.prepare(
+        'SELECT level, SUM(starts) as starts, SUM(completes) as completes, SUM(deaths) as deaths, AVG(avg_ms) as avg_ms FROM stats_daily WHERE level >= 0 AND level < 20 AND date >= ? AND date < ? GROUP BY level'
+      ).bind(d35ago, d7ago).all(),
+      env.DB.prepare(
+        'SELECT level, starts, completes FROM stats_daily WHERE level >= 0 AND level < 20 AND date >= ? AND date < ? AND starts > 0'
+      ).bind(d35ago, d7ago).all(),
+      env.DB.prepare(
+        'SELECT level, starts, deaths FROM stats_daily WHERE level >= 0 AND level < 20 AND date >= ? AND date < ? AND starts > 0'
+      ).bind(d35ago, d7ago).all(),
+    ]);
+
+    const recentMap = {};
+    if (recentAll && recentAll.results) for (const r of recentAll.results) recentMap[r.level] = r;
+    const baselineMap = {};
+    if (baselineAll && baselineAll.results) for (const r of baselineAll.results) baselineMap[r.level] = r;
+
+    // Group daily rows by level
+    const dailyByLevel = {};
+    if (dailyAll && dailyAll.results) {
+      for (const r of dailyAll.results) {
+        if (!dailyByLevel[r.level]) dailyByLevel[r.level] = [];
+        dailyByLevel[r.level].push(r);
+      }
+    }
+    const deathDailyByLevel = {};
+    if (deathDailyAll && deathDailyAll.results) {
+      for (const r of deathDailyAll.results) {
+        if (!deathDailyByLevel[r.level]) deathDailyByLevel[r.level] = [];
+        deathDailyByLevel[r.level].push(r);
+      }
+    }
+
     for (let level = 0; level < 20; level++) {
-      // Recent 7 days
-      const recent = await env.DB.prepare(
-        'SELECT SUM(starts) as starts, SUM(completes) as completes, SUM(deaths) as deaths, AVG(avg_ms) as avg_ms FROM stats_daily WHERE level=? AND date >= ? AND date <= ?'
-      ).bind(level, d7ago, today).first();
-
-      // Baseline: days 8-35
-      const baseline = await env.DB.prepare(
-        'SELECT SUM(starts) as starts, SUM(completes) as completes, SUM(deaths) as deaths, AVG(avg_ms) as avg_ms FROM stats_daily WHERE level=? AND date >= ? AND date < ?'
-      ).bind(level, d35ago, d7ago).first();
-
+      const recent = recentMap[level];
+      const baseline = baselineMap[level];
       if (!recent || !baseline || !baseline.starts || baseline.starts < 5) continue;
 
       const recentCR = recent.starts > 0 ? recent.completes / recent.starts : 0;
       const baselineCR = baseline.starts > 0 ? baseline.completes / baseline.starts : 0;
 
-      // Daily completion rates for stddev
-      const dailyRows = await env.DB.prepare(
-        'SELECT starts, completes FROM stats_daily WHERE level=? AND date >= ? AND date < ? AND starts > 0'
-      ).bind(level, d35ago, d7ago).all();
-
+      const dailyRows = dailyByLevel[level] || [];
       let stddev = 0;
-      if (dailyRows && dailyRows.results && dailyRows.results.length > 1) {
-        const rates = dailyRows.results.map(r => r.completes / r.starts);
+      if (dailyRows.length > 1) {
+        const rates = dailyRows.map(r => r.completes / r.starts);
         const mean = rates.reduce((a, b) => a + b, 0) / rates.length;
         const variance = rates.reduce((a, r) => a + (r - mean) ** 2, 0) / rates.length;
         stddev = Math.sqrt(variance);
@@ -3271,12 +3295,10 @@ async function handleAnomalies(env, force) {
       // Death rate spike
       const recentDR = recent.starts > 0 ? recent.deaths / recent.starts : 0;
       const baselineDR = baseline.starts > 0 ? baseline.deaths / baseline.starts : 0;
-      if (baselineDR > 0 && dailyRows && dailyRows.results) {
-        const deathDailyRows = await env.DB.prepare(
-          'SELECT starts, deaths FROM stats_daily WHERE level=? AND date >= ? AND date < ? AND starts > 0'
-        ).bind(level, d35ago, d7ago).all();
-        if (deathDailyRows && deathDailyRows.results && deathDailyRows.results.length > 1) {
-          const dRates = deathDailyRows.results.map(r => r.deaths / r.starts);
+      if (baselineDR > 0) {
+        const deathDailyRows = deathDailyByLevel[level] || [];
+        if (deathDailyRows.length > 1) {
+          const dRates = deathDailyRows.map(r => r.deaths / r.starts);
           const dMean = dRates.reduce((a, b) => a + b, 0) / dRates.length;
           const dVar = dRates.reduce((a, r) => a + (r - dMean) ** 2, 0) / dRates.length;
           const dStd = Math.sqrt(dVar);
@@ -3305,13 +3327,21 @@ async function handleAnomalies(env, force) {
       }
     }
 
-    // Global: verified % drop
-    const recentVerified = await env.DB.prepare(
-      "SELECT COUNT(*) as total, SUM(CASE WHEN verified=1 THEN 1 ELSE 0 END) as v FROM events WHERE server_ts >= ?"
-    ).bind(now - 7 * 86400000).first();
-    const baselineVerified = await env.DB.prepare(
-      "SELECT COUNT(*) as total, SUM(CASE WHEN verified=1 THEN 1 ELSE 0 END) as v FROM events WHERE server_ts >= ? AND server_ts < ?"
-    ).bind(now - 35 * 86400000, now - 7 * 86400000).first();
+    // Global: verified % drop & DAU drop (parallel)
+    const [recentVerified, baselineVerified, recentDAU, baselineDAU] = await Promise.all([
+      env.DB.prepare(
+        "SELECT COUNT(*) as total, SUM(CASE WHEN verified=1 THEN 1 ELSE 0 END) as v FROM events WHERE server_ts >= ?"
+      ).bind(now - 7 * 86400000).first(),
+      env.DB.prepare(
+        "SELECT COUNT(*) as total, SUM(CASE WHEN verified=1 THEN 1 ELSE 0 END) as v FROM events WHERE server_ts >= ? AND server_ts < ?"
+      ).bind(now - 35 * 86400000, now - 7 * 86400000).first(),
+      env.DB.prepare(
+        'SELECT AVG(unique_players) as avg_dau FROM stats_daily WHERE level=-1 AND date >= ?'
+      ).bind(d7ago).first(),
+      env.DB.prepare(
+        'SELECT AVG(unique_players) as avg_dau FROM stats_daily WHERE level=-1 AND date >= ? AND date < ?'
+      ).bind(d35ago, d7ago).first(),
+    ]);
 
     if (recentVerified && baselineVerified && recentVerified.total > 10 && baselineVerified.total > 10) {
       const recentPct = recentVerified.v / recentVerified.total * 100;
@@ -3327,13 +3357,17 @@ async function handleAnomalies(env, force) {
       }
     }
 
-    // Global: DAU drop
-    const recentDAU = await env.DB.prepare(
-      'SELECT AVG(unique_players) as avg_dau FROM stats_daily WHERE level=-1 AND date >= ?'
-    ).bind(d7ago).first();
-    const baselineDAU = await env.DB.prepare(
-      'SELECT AVG(unique_players) as avg_dau FROM stats_daily WHERE level=-1 AND date >= ? AND date < ?'
-    ).bind(d35ago, d7ago).first();
+    if (recentDAU && baselineDAU && baselineDAU.avg_dau > 0) {
+      const dauRatio = recentDAU.avg_dau / baselineDAU.avg_dau;
+      if (dauRatio < 0.7) {
+        alerts.push({
+          id: ++alertId, severity: 'low', type: 'dau_drop',
+          message: `DAU dropped to ${Math.round(dauRatio * 100)}% of baseline`,
+          value: Math.round(recentDAU.avg_dau), baseline: Math.round(baselineDAU.avg_dau),
+          sigma: 0, since: d7ago,
+        });
+      }
+    }
 
     if (recentDAU && baselineDAU && baselineDAU.avg_dau > 0) {
       const dauRatio = recentDAU.avg_dau / baselineDAU.avg_dau;

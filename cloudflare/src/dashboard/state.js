@@ -6,6 +6,7 @@ export const searchQuery = signal('');
 export const currentPlayerPid = signal(null);
 export const currentSegment = signal(''); // segment chip filter (e.g. 'flagged')
 export const loadedAt = signal({}); // { tabName: timestamp }
+export const agoTick = signal(0); // bumps every 30s to refresh fmtAgo displays
 
 // Persist range changes
 range.subscribe(v => localStorage.setItem('ndj_range', v));
