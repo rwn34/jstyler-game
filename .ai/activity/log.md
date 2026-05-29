@@ -1,3 +1,33 @@
+- **2026-05-29** — `018-free-tier-capacity-analysis` complete. Answer: **yes — with caveats**. Free tier holds 100 DAU × 15–30 min (🟢 across all dimensions), but D1 rows written hits ~39 % at 30 min. Three mitigations identified: batch online events (`/events/batch`), raise heartbeat to 180 s, cache `/stats` for 60 s. Break-even for paid plan: ~250–500 DAU depending on mitigations. Report committed, source handoff moved to `done/`.
+
+## 2026-05-29 — claude-code (handoff 018 dispatched — free-tier capacity analysis)
+- Wrote `.ai/handoffs/to-kimi/open/018-free-tier-capacity-analysis.md`. User wants to know if Cloudflare free tier will hold at 100 DAU × 15-30 min playtime each, given current ~5 DAU short-session behavior.
+- Terminology clarification baked in: user said "R2 database" but project uses **D1** for behavioral data (R2 is object storage, not used here).
+- Scope: read-only analysis. Measure current per-player baseline from D1 via `wrangler d1 execute` (events/session by type, session length, sync calls/day). Project to 100 DAU for both 15-min and 30-min playtime variants. Look up authoritative Cloudflare free-tier limits (Workers req/day, CPU-ms, D1 reads/writes/storage, cron). Compute headroom per dimension (🟢<40% / 🟡 40-80% / 🔴 >80%). Propose concrete mitigations for any 🟡 or 🔴: batch events (confirm `/events/batch` actually used by client), reduce heartbeat frequency, rate-limit per-pid bot defense, paid-plan break-even DAU.
+- Bonus: per-event-type budget share (heartbeat likely dominates; easiest knob), top-3 mitigation recommendations, one-line "will we fit?" answer.
+- Constraints: read-only DB queries, no code mutations, no deploys. If a free-tier-saving change is worth making, propose via follow-up handoff to claude-code — don't ship inside the analysis.
+- Self-validation includes statistical honesty: if sample size is too small (<5 DAU likely is) say so; don't fabricate confidence intervals. Cite Cloudflare docs URLs for every cited limit so user can re-verify if Cloudflare adjusts.
+- Output: `.ai/reports/free-tier-capacity-analysis-2026-05-29.md` (≤600 lines). Headroom summary table is the deliverable.
+- Estimate: ~45-60 min.
+
+## 2026-05-29 — claude-code (handoff 017 dispatched — Players 9-tables → 3-sections consolidation)
+- Wrote `.ai/handoffs/to-kimi/open/017-players-tables-consolidation.md`. Last untouched UX audit P1 item; ~1-1.5 hr; closes the dashboard refactor cycle.
+- Scope: inside the existing "All" top-level segment on Players, replace 9 stacked tables with 3 thematic sections (🏃 Activity / 📈 Progression / 💰 Economy), each with a chip-strip switching the table's data+columns. New tiny `PlayersSection.jsx` component (~50 LOC). Top-level segments (Flagged/Banned etc.) unchanged.
+- Default-chip-per-section, local state (no URL persistence — keeps URL combinatorics manageable since deep-link only goes to top-level segment).
+- Server side: investigation step first — confirm `/stats/players` endpoint already returns shapes for all 9 source tables. If a new chip (e.g., Top Earners) needs a field that doesn't exist, prefer client-side derivation over a new endpoint; flag if pushed to backend.
+- Validation A-E baked in: behavior parity, row-count + CSV parity per source table, accessibility (role=tablist, arrow-key nav, focus-visible), mobile 380px, +2 Playwright tests (34, 34m) with screenshot baselines regenerated.
+- Explicit scope guardrails: no backend changes, no URL-state for chips, no column rework, no Watchlist rework, no PlayerModal changes, no new visual style. Stop + ask if any guardrail starts to bind.
+- Self-grep-verify required per AGENTS.md §7; standard reminders (open/ not done/, commit + push, Playwright against deployed build).
+- After 017 lands: dashboard refactor cycle fully complete. Remaining backlog (phase 2.5 anti-fraud referrals, phase 2.5 column promotion, git history scrub) all data-dependent or explicitly parked. Natural stopping point.
+
+## 2026-05-29 — claude-code (016 ACCEPTED — multi-device sync end-to-end correct)
+- Read `to-claude/open/016-sync-merge-field-name-correction-complete.md`. Verdict: ✅ ACCEPTED.
+- Worker `de2209b8-d003-4bad-bcd6-799e15d5b079` live, commit `b3a9586` pushed (range `0d8b2a6..b3a9586`).
+- Spot-checked all cited lines: dead code (`dailyStageBadges`/`dailyStageChestClaimedDate`) fully purged; new `dailyCollection` rule at index.js:1834 (Map-based union by .date key, sorted, ≤90); new `dailyStats` rule at :1850 (newer-day-wins, same-day OR/min/max compound, stale-day no-op); SYNC MERGE SCHEMA comment updated at :1600-1601.
+- 36/36 synthetic smoke tests passing (was 18/18 in 015, doubled for the dailyStats edge cases). Smoke test added `assertEq` helper + 62s rate-limit cooldowns. All 6 acceptance criteria met (playDays regression, array union by date, newer-day-wins, same-day compound, stale no-op, bounds defense).
+- Three consecutive Kimi deliveries (014, 015, 016) under full protocol: file in `open/`, grep snippets, committed + pushed. The rule is genuinely internalized.
+- **Sprint 3 cloud-sync feedback work is COMPLETE pending two user actions:** (1) manual smoke of v1.2.65 (two-device round-trip, fresh-install onboarding link path, mobile 380px Cloud Sync, PWA reward color); (2) Cloudflare Pages upload of `deploy/20260529125659_v1.2.65.zip`. Server fully ready. Client fully ready. Multi-device users will now see consistent state on playDays/dailyCollection/dailyStats/lastChest regardless of sync order.
+
 ## 2026-05-29 — claude-code (006 + 015 ACCEPTED; field-name mismatch caught → 016 follow-up dispatched)
 - **Kiro 006 ✅ ACCEPTED.** All 11 v1.2.65 items shipped clean. Spot-checked: 03-save.js:432-434 (payload), :507-509 + :613-615 (load branches), 04-ui.js:268 (#ccc PWA color fix). Process disciplined — file in correct `open/`, grep snippets present, coordination notes for Kimi 015 explicit, build verification (boot span, SW CACHE_NAME, zip sha256) all aligned. v1.2.65 = `deploy/20260529125659_v1.2.65.zip` (196KB).
 - **Kimi 015 ✅ Work accepted.** Cleanest delivery to date: file in `open/`, grep snippets, **committed + pushed** (`0d8b2a6` on master — explicitly addressing the 014 uncommitted-deploy mistake). 18/18 synthetic merge tests passed. Smoke test fixed during run (wrong /api/sync/ paths corrected + 62s cooldown for rate limit).
