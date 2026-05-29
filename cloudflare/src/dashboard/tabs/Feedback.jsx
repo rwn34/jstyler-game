@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'preact/hooks';
 import { loadedAt } from '../state.js';
+import { FilterIgnoredNotice } from '../components/FilterIgnoredNotice.jsx';
 import { fetchJson } from '../api.js';
 import { fmtNum, fmtAgo, escapeHtml, truncatePid } from '../format.js';
 import { Card } from '../components/Card.jsx';
@@ -71,6 +72,7 @@ export function Feedback({ force }) {
 
   return (
     <>
+      <FilterIgnoredNotice />
       <div class="grid">
         <Card label="Total Feedback" val={fmtNum(d.total)} cls="gold" hint="all-time" />
         <Card label="Open" val={fmtNum(d.items.filter(i => i.status === 'open').length)} cls="warn" />

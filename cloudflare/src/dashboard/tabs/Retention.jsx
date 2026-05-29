@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'preact/hooks';
 import { range, loadedAt } from '../state.js';
+import { FilterIgnoredNotice } from '../components/FilterIgnoredNotice.jsx';
 import { fetchJson } from '../api.js';
 import { fmtNum, fmtMs } from '../format.js';
 import { Card } from '../components/Card.jsx';
@@ -38,6 +39,7 @@ export function Retention({ force }) {
 
   return (
     <>
+      <FilterIgnoredNotice />
       <h2>Cohort Retention (Last 12 Weeks)</h2>
       <div class="panel scroll-x">
         {retention.cohorts && retention.cohorts.length > 0

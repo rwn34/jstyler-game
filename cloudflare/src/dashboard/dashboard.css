@@ -315,4 +315,13 @@ tr:hover td{background:rgba(0,255,255,.03)}
   .player-modal .close-btn{position:sticky;top:0;margin-bottom:8px}
 }
 
+/* Filter ignored notice */
+.filter-ignored-notice{padding:8px 14px;margin:10px 0;background:rgba(255,170,0,.06);border:1px solid rgba(255,170,0,.2);border-radius:6px;color:#fa0;font-size:.7rem;font-family:monospace}
+
+/* Clickable table rows for filter origins */
+table tbody tr.clickable-row{cursor:pointer;transition:background .15s}
+table tbody tr.clickable-row:hover{background:rgba(0,255,255,.06)}
+table tbody tr.clickable-row td:first-child{border-left:2px solid transparent;transition:border-color .15s}
+table tbody tr.clickable-row:hover td:first-child{border-left-color:#0ff}
+
 @media (min-width:780px){body{padding:24px 32px;max-width:1280px;margin:0 auto}h1{font-size:1.8rem}}

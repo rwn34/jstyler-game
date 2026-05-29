@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'preact/hooks';
-import { range, loadedAt, currentPlayerPid } from '../state.js';
+import { range, loadedAt, currentPlayerPid, currentFilters } from '../state.js';
 import { fetchWithCompare, computeDelta } from '../lib/compare.js';
 import { fmtNum, escapeHtml, truncatePid } from '../format.js';
 import { Card } from '../components/Card.jsx';
@@ -28,7 +28,7 @@ export function Economy({ force }) {
     fetchWithCompare('/stats/economy', { force })
       .then(r => { setD(r.current); setPrev(r.previous); loadedAt.value = { ...loadedAt.value, economy: Date.now() }; })
       .catch(setErr);
-  }, [range.value, force]);
+  }, [range.value, force, currentFilters.value]);
 
   if (err) return <ErrorState error={err} onRetry={() => { loadedAt.value = { ...loadedAt.value, economy: 0 }; setErr(null); setD(null); }} />;
   if (!d) return <LoadingPane />;

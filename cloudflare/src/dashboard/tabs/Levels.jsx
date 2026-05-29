@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'preact/hooks';
-import { range, loadedAt } from '../state.js';
+import { range, loadedAt, currentFilters, currentTab } from '../state.js';
 import { fetchJson } from '../api.js';
 import { fmtNum, fmtMs } from '../format.js';
+import { writeHash, parseHash } from '../lib/url.js';
 import { LEVEL_NAMES, LEVEL_DIFFS } from '../constants.js';
 import { Table } from '../components/Table.jsx';
 import { Matrix } from '../components/Matrix.jsx';
@@ -30,7 +31,7 @@ export function Levels({ force }) {
       setMatrix(matrixData);
       loadedAt.value = { ...loadedAt.value, levels: Date.now() };
     }).catch(setErr);
-  }, [range.value, force]);
+  }, [range.value, force, currentFilters.value]);
 
   function loadHistogram(level) {
     if (histLevel === level) { setHistLevel(null); return; }
@@ -71,9 +72,26 @@ export function Levels({ force }) {
   }));
 
   const today = new Date().toISOString().slice(0, 10);
+
+  function toggleLevel(levelNum) {
+    const f = currentFilters.value;
+    if (f.level === String(levelNum)) {
+      const next = { ...f };
+      delete next.level;
+      currentFilters.value = next;
+      const h = parseHash();
+      writeHash(currentTab.value, h.subTab, range.value, null, '', next.cc, next.level, next.version, next.named);
+    } else {
+      const next = { ...f, level: String(levelNum) };
+      currentFilters.value = next;
+      const h = parseHash();
+      writeHash(currentTab.value, h.subTab, range.value, null, '', next.cc, next.level, next.version, next.named);
+    }
+  }
+
   const columns = [
     { key: 'idx', label: '#', sortable: true, sortType: 'number' },
-    { key: 'name', label: 'Name', sortable: true, sortType: 'string', render: r => <span style="cursor:pointer;text-decoration:underline" onClick={() => loadHistogram(r.level)}>{r.name}</span> },
+    { key: 'name', label: 'Name', sortable: true, sortType: 'string', render: r => <span style="cursor:pointer;text-decoration:underline" onClick={(e) => { e.stopPropagation(); loadHistogram(r.level); }}>{r.name}</span> },
     { key: 'diff', label: 'Diff', sortable: true, sortType: 'string', render: (r) => { const cls = r.diff === 'HARD' ? ' bad' : r.diff === 'MODERATE' ? ' warn' : ''; return <span class={`badge${cls}`}>{r.diff}</span>; } },
     { key: 'starts', label: 'Starts', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.starts) },
     { key: 'completes', label: 'Wins', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.completes) },
@@ -105,6 +123,7 @@ export function Levels({ force }) {
           filterPlaceholder="Filter by name…"
           exportable
           exportFilename={`ndj-levels-${range.value}-${today}.csv`}
+          onRowClick={r => toggleLevel(r.level)}
         />
       </div>
 

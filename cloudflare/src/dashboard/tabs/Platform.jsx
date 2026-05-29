@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
-import { range, loadedAt } from '../state.js';
+import { range, loadedAt, currentFilters } from '../state.js';
 import { fetchJson } from '../api.js';
-import { parseHash } from '../lib/url.js';
+import { parseHash, writeHash } from '../lib/url.js';
 import { fmtNum, fmtAgo, escapeHtml, truncatePid } from '../format.js';
 import { COUNTRY_FLAGS, COUNTRY_NAMES } from '../constants.js';
 import { Card } from '../components/Card.jsx';
@@ -55,7 +55,7 @@ export function Platform({ force }) {
         };
       })
       .catch(setErr);
-  }, [range.value, force]);
+  }, [range.value, force, currentFilters.value]);
 
   if (err) return <ErrorState error={err} onRetry={() => { loadedAt.value = { ...loadedAt.value, platformGeo: 0, platformVersions: 0, platformSync: 0 }; setErr(null); setGeoData(null); setVerData(null); setSyncData(null); }} />;
   if (!geoData || !verData || !syncData) return <LoadingPane />;
@@ -92,6 +92,22 @@ function GeoContent({ d, today }) {
   const topRegions = d.regions || {};
   const topRegionEntry = topCountry && topRegions[topCountry.cc] && topRegions[topCountry.cc][0];
 
+  function toggleCc(cc) {
+    const f = currentFilters.value;
+    if (f.cc === cc) {
+      const next = { ...f };
+      delete next.cc;
+      currentFilters.value = next;
+      const h = parseHash();
+      writeHash(currentTab.value, h.subTab, range.value, null, '', next.cc, next.level, next.version, next.named);
+    } else {
+      const next = { ...f, cc };
+      currentFilters.value = next;
+      const h = parseHash();
+      writeHash(currentTab.value, h.subTab, range.value, null, '', next.cc, next.level, next.version, next.named);
+    }
+  }
+
   const columns = [
     { key: 'cc', label: 'Country', sortable: true, sortType: 'string', render: r => <span>{COUNTRY_FLAGS[r.cc] || '🏳️'} {COUNTRY_NAMES[r.cc] || r.cc}</span> },
     { key: 'players', label: 'Players', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.players) },
@@ -117,7 +133,7 @@ function GeoContent({ d, today }) {
 
       <h2>Countries (range {range.value})</h2>
       <div class="panel scroll-x">
-        <Table columns={columns} rows={d.countries} defaultSort={{ key: 'players', dir: 'desc' }} exportable exportFilename={`ndj-geo-${range.value}-${today}.csv`} />
+        <Table columns={columns} rows={d.countries} defaultSort={{ key: 'players', dir: 'desc' }} exportable exportFilename={`ndj-geo-${range.value}-${today}.csv`} onRowClick={r => toggleCc(r.cc)} />
       </div>
 
       {topCountry && topRegions[topCountry.cc] && (
@@ -139,6 +155,22 @@ function VersionsContent({ d, today }) {
     return (startOfDay - (dayCount - 1 - i) * 86400000) / 1000;
   });
 
+  function toggleVersion(v) {
+    const f = currentFilters.value;
+    if (f.version === v) {
+      const next = { ...f };
+      delete next.version;
+      currentFilters.value = next;
+      const h = parseHash();
+      writeHash(currentTab.value, h.subTab, range.value, null, '', next.cc, next.level, next.version, next.named);
+    } else {
+      const next = { ...f, version: v };
+      currentFilters.value = next;
+      const h = parseHash();
+      writeHash(currentTab.value, h.subTab, range.value, null, '', next.cc, next.level, next.version, next.named);
+    }
+  }
+
   const cols = [
     { key: 'version', label: 'Version', sortable: true, sortType: 'string', render: r => <span class="badge">{escapeHtml(r.version)}</span> },
     { key: 'events', label: 'Events', align: 'right', sortable: true, sortType: 'number', render: r => fmtNum(r.events) },
@@ -155,7 +187,7 @@ function VersionsContent({ d, today }) {
 
       <h2>Version Breakdown</h2>
       <div class="panel scroll-x">
-        <Table columns={cols} rows={d.versions} defaultSort={{ key: 'events', dir: 'desc' }} exportable exportFilename={`ndj-versions-${range.value}-${today}.csv`} />
+        <Table columns={cols} rows={d.versions} defaultSort={{ key: 'events', dir: 'desc' }} exportable exportFilename={`ndj-versions-${range.value}-${today}.csv`} onRowClick={r => toggleVersion(r.version)} />
       </div>
 
       {d.versions.length > 0 && dayCount > 1 && (

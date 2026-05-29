@@ -1,3 +1,41 @@
+## 2026-05-29 — claude-code (014 ACCEPTED — cross-tab drilldown fully functional)
+- Read `to-claude/open/014-cross-tab-drilldown-close-out.md` from Kimi. Resolved → `done/`.
+- **Verdict: ✅ ACCEPTED. Cleanest completion handoff of the sequence.** Worker `3eb32509-dd98-4e59-b667-a6a3054df654` live.
+- Independent spot-check confirmed: `index.js:203` buildFilterClause; `api.js:5` withFilters; `Platform.jsx:95,136,158,190` toggleCc/toggleVersion + onRowClick; `Levels.jsx:76` toggleLevel; `compare.js:24` bonus integration (filters propagate to compare-period fetches too — a nice organic catch).
+- Perf validation E paste included: no full table scans. JSON_EXTRACT predicates use `idx_events_server_ts` range seeks; level uses covering `idx_events_level_type`; named scans `idx_events_pid_server_ts`. All acceptable; column promotion deferred to phase 2.5.
+- Two bugs self-caught during deploy: FilterStrip `writeHashFromSignals` typo + handleStatsSessions:963 unterminated string literal. Both fixed in the same patch.
+- **Process scorecard: this was the model handoff** under the AGENTS.md §7 protocol — file in `open/`, snippets present, perf paste, transparent self-bugs, no surprises. Trajectory: 007 skip → 008 gold → 009 skip → 010 done/-miss → 011/012 ✓ → 013 done/-miss → 014 ✓. Discipline now stable when not regressing.
+- ⚠️ Two housekeeping items Kimi flagged honestly: (1) **uncommitted** — 014 code is live in prod but not in git; needs `git add cloudflare/ && git commit` (kimi terminal). (2) Playwright not run against the new deployed build; needs `npx playwright test` from cloudflare/ to confirm 37/37 (29 pre-existing + 8 new). Neither blocks acceptance but both should close before next sprint.
+- Sprint 2 phase 3 SUBSTANTIALLY COMPLETE. Remaining backlog: Players 9-tables consolidation (last P1), phase 2.5 anti-fraud (waits for data), phase 2.5 column promotion (only if perf bites), git history scrub (parked).
+
+## 2026-05-28 — claude-code (kimi handoff 014: cross-tab drilldown close-out)
+- Wrote `.ai/handoffs/to-kimi/open/014-cross-tab-drilldown-close-out.md`. Closes the partial completion from 011 Feature 2.
+- Scope: three deliverables. (1) Server-side `buildFilterClause(url)` helper in index.js, applied to handleStats / handleStatsLevels / handleStatsPlayers / handleStatsSessions / handleStatsEconomy / handleStatsFeed / handleAnomalies — each appends WHERE clauses from `cc`/`level`/`version`/`named` URL params with regex input validation (silent ignore on bad values). (2) Client `withFilters(path)` helper in api.js; each filter-respecting tab wraps fetches and subscribes to `currentFilters.value` for re-fetch on change. (3) Clickable filter origins: Platform→Geo rows (cc), Platform→Versions rows (version), Per Level rows (level) — with toggle semantics (click active filter removes it).
+- New: `FilterIgnoredNotice.jsx` mounted on Retention/Daily/Feedback (tabs that intentionally don't filter — cohort/qualitative/singleton).
+- Validation plan A-F: server filter behavior + bookmark survival + perf budgets (Overview <500ms, Per Player/Per Level <800ms with `EXPLAIN QUERY PLAN` paste) + 4 new Playwright tests (30-33).
+- Out of scope (deferred): column promotion to indexed `events.country`/`events.app_version` (phase 2.5 if perf E fails), OR filter combinators, named-filter UI control, filter analytics.
+- Self-grep-verify required; reminder to land completion handoff in `to-claude/open/` not `done/` (010/013 misplacements flagged).
+- After 014 lands: only Players 9-tables consolidation + phase 2.5 items left. Natural stopping point for the dashboard refactor cycle if user wants to pause.
+
+## 2026-05-28 — claude-code (011/012/013 batch review — accepted with one partial)
+- **011 (alerts workflow + cross-tab drilldown):** ✅ Feature 1 ACCEPTED (ack/mute/jump/unack live, migration 005 applied, stable sha256 alert_id, LEFT JOIN merges status, auto-expire mute, 29/29 Playwright). ⚠️ **Feature 2 INFRASTRUCTURE-ONLY** — URL taxonomy + FilterStrip wired, BUT clickable filter origins on Geo/PerLevel rows and server-side `JSON_EXTRACT` predicates DEFERRED. Practical impact: cross-tab drilldown not user-functional yet beyond the alert→Levels jump path. Will write handoff 014 to close Feature 2 when signaled. Worker `1b062b61-d66c-4174-87d7-f82676508f71`, commit `76f0a27`.
+- **012 (sync lockout extension):** ✅ ACCEPTED. Per-user `userLockKey` lockout uniformly applied on /sync/load + /sync/save + /sync/forgot-pin. `SYNC_LOCKOUT_THRESHOLD` brought 10→5 (sprint-1 spec). 20/20 smoke tests including new LOCK<ts> case with auto-cleanup. Worker `c6875421-a3bb-4f49-93de-1392ba4fe16f`, commit `f97ba87`. Sprint-1 O1 carry-over OFFICIALLY CLOSED.
+- **013 (mock-based PlayerModal test):** ✅ ACCEPTED — **AND caught a real production bug**. The mock test exposed that `PlayerDetail` referenced `referrals` but it was never passed as a prop, so the Referrals section never rendered for real users from launch (handoff 008's "coverage triangle" of synthetic API + manual + visual missed this — the visual snapshot was Top Referrers on Players tab, NOT the modal's inner Referrals section). Bug fix: pass `referrals={referrals}` to PlayerDetail. 29/29 Playwright + 5 consecutive clean runs. Worker `90708148-906c-4fbd-8923-7857e7cadaf3`, commit `be683b9`. **This single catch retroactively justifies the entire mock-test pattern.**
+- **Process trajectory:** 010→done/(miss), 011→open/✓, 012→open/✓, 013→done/(miss). 2/3 correct directory placement this batch vs 0/2 previously. Discipline converging but not fully internalized — 013 reverted to direct done/ placement.
+
+## 2026-05-28 — 011: Alerts workflow + cross-tab drilldown (URL filters, FilterStrip, ack/mute/jump)
+- Migration `005_alerts_state.sql` + `handleAdminAlertsAck/Mute/Unack` endpoints in worker
+- `handleAnomalies` LEFT JOINs `alerts_state`, surfaces status/acked_at/mute_until, auto-hides muted, auto-deletes expired mutes
+- Dashboard `Live.jsx` ack/mute buttons, optimistic UI, "Show muted" toggle, acked-row graying, unack, jump-to-source
+- URL filter taxonomy: `cc`, `level`, `version`, `named` in `parseHash`/`writeHash`
+- New `currentFilters` signal + `FilterStrip` component with chip removal + clear-all
+- Bidirectional hash↔signal sync in `main.jsx`; `SubTabs` preserves filters on navigation
+- Alert jump-to-source routes per-level → `#/levels?level=N`, DAU → Overview, geo → Platform/Geo
+- Deferred: clickable filter origins on Geo/Level table rows; server-side `handleStats*` filter predicates
+- Playwright: 29/29 passing
+- Deployed `1b062b61-d66c-4174-87d7-f82676508f71`
+- Commit: `76f0a2775702bb22f2939b83f60d9185e63f86a6`
+
 ## 2026-05-28 — 012: Extend per-user lockout to /sync/load and /sync/save
 - Extended DB-backed per-(username, mmyy) lockout from forgot-pin to sync/load + sync/save
 - Both endpoints now check `userLockKey = hashSyncKey(username, mmyy, '', SYNC_SALT)` before PIN verification
@@ -69,7 +107,7 @@
 - Self-grep-verify required per AGENTS.md §7. Handoff lists 6 explicit `rg` commands. Third handoff under the rule; expectation is now baseline.
 - Explicit deferrals: alerts ack/mute/jump-to-source (separate phase 3 handoff), cross-tab drilldown, global filter bar, Players 9-tables consolidation, D3 close-out, O1 sync_load/save lockout, phase 2.5 anti-fraud.
 
-## 2026-05-28 — claude-code (sprint 2 phase 2 ACCEPTED — referrals shipped)
+## 2026-05-28 — claude-code (sprint 2 phase 1 ACCEPTED — referrals shipped)
 - Read + resolved Kimi's `to-claude/open/008-referrals-complete.md`. Worker `fc582831-4138-447d-9a12-2375127521a2` live, commit `9a14e71`.
 - **Self-grep-verify protocol applied successfully for the first time.** Kimi's handoff included 7 organized snippet blocks with rg output next to each claim. Independent spot-check confirmed line numbers (handleAdminReferrals:2352, router:3510-3511, ReferralsSection:139+234, Top Referrers:248, Playwright tests:281+330). Verification took ~2 min vs 15-20 min for pre-rule handoffs. Rule stays.
 - Accepted one deviation: PlayerModal Playwright tests 18/18m attempted then removed due to data-dependent PID flakiness in Recently Active table. Coverage preserved via (1) synthetic API smoke with 3 inserted+queried+deleted rows, (2) manual dashboard verification, (3) visual snapshot of Players tab containing the widget. Future improvement: mock /stats/players to control the clicked PID — tracked.
@@ -187,19 +225,16 @@
 - New: `Activity.jsx`, `Live.jsx`, `Platform.jsx`, `SubTabs.jsx` component. Modified: `Players.jsx` (+ segment chip), `Tabs.jsx`, `lib/url.js`. Deleted: 8 tab files. Bundle should drop from 165KB → ~150KB.
 - Validation plan baked in: URL alias roundtrip, data parity (KPI digits match old tabs), admin actions still work, CSV export, compare-period, ARIA + keyboard nav, mobile reflow, optional Playwright snapshots, wrangler-dev smoke walkthrough. 10 sections (A-J) each with explicit checkboxes Kimi must report.
 - Explicitly deferred to later sprints: cross-tab drilldown, global filters bar, Alerts ack workflow, Players 9-tables consolidation, Overview health verdict, data-freshness indicator.
-- Sequencing: SubTabs first, then aliasMap, then merges in size order, then Tabs registry, then delete olds, then validate, then deploy.
 
 ## 2026-05-27 — kiro-cli (build v1.2.61)
 - Action: Ran .\zipgame.ps1 (default). Auto-detect saw matching source hash, auto-applied -RollForward. v1.2.60 → v1.2.61 with same merged changelog content (recovery-code flow + multi-device fix + event_uuid dedup + in-game-changelog limit + mojibake fix). v1.2.60 entry removed from CHANGELOG.md (rolled forward).
 - Output: deploy/20260527195627_v1.2.61.zip (size: 191343 bytes, sha256: 7F1902A5BB1189D10743E20788CFF70B5C7C150846B9AEF93CB457BA326F7493)
 - Files: CHANGELOG.md, src/n3ondashj/index.html, src/n3ondashj/sw.js, src/n3ondashj/03-save.js, deploy/20260527195627_v1.2.61.zip, deploy/latest/, .zipgame-last-build-hash
 
-
 ## 2026-05-27 — kiro-cli (zipgame.ps1 auto-detect)
 - Action: Added hash-based auto-detection to zipgame.ps1 default flow. SHA-256 of game JS modules + shell HTML (version-strings and changelog-viewer region normalized out) + sw.js (CACHE_NAME normalized) + manifest stored in .zipgame-last-build-hash at repo root. Default invocation: matching hash -> auto-RollForward; differing hash -> normal bump with placeholder-rejection enforcement. Explicit flags (-RollForward, -NoBump, -AllowPlaceholder, -Version) override auto-detection.
 - Files: zipgame.ps1, .gitignore (+ .zipgame-last-build-hash), .zipgame-last-build-hash (created/updated by build)
 - Verification: real test run with hash matching auto-applied -RollForward; cleanup restored repo to v1.2.60 baseline.
-
 
 ## 2026-05-27 — kiro-cli (zipgame.ps1 hardening)
 - Action: Added -RollForward and -AllowPlaceholder flags to zipgame.ps1. Default invocation now refuses to ship a zip if CHANGELOG.md still has only the `- Build` placeholder for the new version (exit 2 with remediation hints). -RollForward renames the most recent changelog entry to the new version (rolling-forward rule). -AllowPlaceholder is the escape hatch.
@@ -208,7 +243,7 @@
 
 ## 2026-05-27 — kiro-cli (changelog merge + -NoBump rebuild)
 - Action: Applied rolling-forward rule for v1.2.60. Merged v1.2.59's content (in-game changelog limit raise + mojibake follow-up) into v1.2.60 entry, deleted v1.2.59 entry. Added recovery-code system + event_uuid dedup + multi-device indicator fix from handoffs 002+003 to v1.2.60 entry. Added `-NoBump` flag to zipgame.ps1. Regenerated v1.2.60 zip with corrected in-game changelog. Removed stale pre-merge v1.2.60 zip.
-- Files: CHANGELOG.md, src/n3ondashj/index.html (regenerated changelog HTML), deploy/20260527182654_v1.2.60.zip, deploy/latest/
+- Files: CHANGELOG.md, src/n3ondashj/index.html, src/n3ondashj/sw.js, src/n3ondashj/03-save.js, deploy/20260527182654_v1.2.60.zip, deploy/latest/
 - Removed: deploy/20260527163137_v1.2.60.zip (pre-merge stale)
 
 
@@ -231,9 +266,9 @@
   - Redeployed Worker `c22d9ad9-603d-40c6-969c-92c6a5a7cde7`
   - Added defensive try/catch around 3× DELETE FROM sync_lookup statements
   - Full prod smoke test: **17/17 passing**
-- **Git hygiene**: committed 41 files, pushed to master
-- **Cleanup**: deleted temp test files, updated .gitignore, swept handoff stubs
-- **Handoffs**: all Claude/Kimi stubs moved to done, Kiro handoff updated with correct deploy version
+  - Git hygiene: committed 41 files, pushed to master
+  - Cleanup: deleted temp test files, updated .gitignore, swept handoff stubs
+  - Handoffs: all Claude/Kimi stubs moved to done, Kiro handoff updated with correct deploy version
 
 
 ## 2026-05-16 — Kimi CLI
@@ -243,9 +278,10 @@
   - Redeployed Worker → version c22d9ad9-603d-40c6-969c-92c6a5a7cde7
   - Added defensive try/catch around 3× DELETE FROM sync_lookup statements
   - Full prod smoke test: **17/17 passing**
-- **Git hygiene**: committed 41 files (+3,401/-394), pushed to master
-- **Cleanup**: deleted temp test files, updated .gitignore, moved handoffs to done/
-- **Handoffs**: wrote 04-pbkdf2-deploy-and-smoke-test.md to Claude
+  - Git hygiene: committed 41 files (+3,401/-394), pushed to master
+  - Cleanup: deleted temp test files, updated .gitignore, moved handoffs to done/
+  - Handoffs: all Claude/Kimi stubs moved to done, Kiro handoff updated with correct deploy version
+
 
 # Cross-CLI Activity Log
 

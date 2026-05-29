@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useCallback } from 'preact/hooks';
 import { exportCsv } from '../lib/csv.js';
 
-export function Table({ columns, rows, emptyMessage, defaultSort, filterable, filterPlaceholder, exportable, exportFilename, pageSize }) {
+export function Table({ columns, rows, emptyMessage, defaultSort, filterable, filterPlaceholder, exportable, exportFilename, pageSize, onRowClick }) {
   const [sortKey, setSortKey] = useState(defaultSort ? defaultSort.key : null);
   const [sortDir, setSortDir] = useState(defaultSort ? defaultSort.dir : 'asc');
   const [filterText, setFilterText] = useState('');
@@ -103,7 +103,7 @@ export function Table({ columns, rows, emptyMessage, defaultSort, filterable, fi
         <tbody>
           {paged.length === 0 && <tr><td colspan={columns.length} style="color:#aaa;text-align:center;padding:12px">{filterText ? 'No matches' : (emptyMessage || 'No data')}</td></tr>}
           {paged.map((row, i) => (
-            <tr key={i}>
+            <tr key={i} class={onRowClick ? 'clickable-row' : ''} onClick={() => onRowClick && onRowClick(row)}>
               {columns.map(col => (
                 <td key={col.key} class={col.align === 'right' ? 'num' : col.className || ''} data-label={col.label}>
                   {col.render ? col.render(row, page * (pageSize || 0) + i) : row[col.key]}

@@ -58,7 +58,7 @@ function AlertsPane() {
     load();
     timer.current = setInterval(load, 60000);
     return () => clearInterval(timer.current);
-  }, []);
+  }, [currentFilters.value]);
 
   async function ackAlert(id) {
     setD(prev => {
@@ -206,7 +206,7 @@ function FeedPane() {
         setConnected(true);
       })
       .catch(e => { setErr(e); setConnected(false); });
-  }, []);
+  }, [currentFilters.value]);
 
   useEffect(() => {
     if (initialLoad.current) return;

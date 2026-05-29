@@ -1,7 +1,7 @@
 // Range comparison: compute delta % between current and previous period
 
 import { signal } from '@preact/signals';
-import { fetchJson } from '../api.js';
+import { fetchJson, withFilters } from '../api.js';
 import { range as rangeSignal } from '../state.js';
 
 export const compareEnabled = signal(localStorage.getItem('ndj_compare') === '1');
@@ -21,8 +21,9 @@ export async function fetchWithCompare(path, { force } = {}) {
   if (!compareEnabled.value) return { current, previous: null };
   const before = previousBefore();
   if (before == null) return { current, previous: null };
-  const sep = path.indexOf('?') >= 0 ? '&' : '?';
-  const prevPath = path + sep + 'before=' + before;
+  const filtered = withFilters(path);
+  const sep = filtered.indexOf('?') >= 0 ? '&' : '?';
+  const prevPath = filtered + sep + 'before=' + before;
   try {
     const previous = await fetchJson(prevPath, { force });
     return { current, previous };

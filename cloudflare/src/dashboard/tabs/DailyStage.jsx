@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'preact/hooks';
 import { range, loadedAt } from '../state.js';
+import { FilterIgnoredNotice } from '../components/FilterIgnoredNotice.jsx';
 import { fetchJson } from '../api.js';
 import { fmtNum, fmtMs } from '../format.js';
 import { Card } from '../components/Card.jsx';
@@ -42,6 +43,7 @@ export function DailyStage({ force }) {
 
   return (
     <>
+      <FilterIgnoredNotice />
       <div class="grid">
         <Card label="Attempts" val={fmtNum(d.starts)} hint="total starts" />
         <Card label="Unique Players" val={fmtNum(d.startPlayers)} cls="live" hint="tried daily" />

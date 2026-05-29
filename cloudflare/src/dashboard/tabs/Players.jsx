@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'preact/hooks';
-import { range, loadedAt, currentPlayerPid, currentSegment } from '../state.js';
+import { range, loadedAt, currentPlayerPid, currentSegment, currentFilters } from '../state.js';
 import { fetchJson, getReferrals } from '../api.js';
 import { fmtNum, fmtAgo, escapeHtml, truncatePid } from '../format.js';
 import { Table } from '../components/Table.jsx';
@@ -54,7 +54,7 @@ export function Players({ force }) {
         if (rData) setReferrals(rData);
       })
       .catch(setErr);
-  }, [range.value, force]);
+  }, [range.value, force, currentFilters.value]);
 
   if (err) return <ErrorState error={err} onRetry={() => { loadedAt.value = { ...loadedAt.value, players: 0, flaggedPlayers: 0 }; setErr(null); setD(null); setFlagged(null); }} />;
   if (!d || !flagged) return <LoadingPane />;

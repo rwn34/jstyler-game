@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'preact/hooks';
-import { range, loadedAt } from '../state.js';
+import { range, loadedAt, currentFilters } from '../state.js';
 import { fetchWithCompare, computeDelta } from '../lib/compare.js';
 import { fetchJson } from '../api.js';
 import { fmtNum, fmtDate } from '../format.js';
@@ -31,7 +31,7 @@ export function Overview({ force }) {
         loadedAt.value = { ...loadedAt.value, overview: Date.now() };
       })
       .catch(setErr);
-  }, [range.value, force]);
+  }, [range.value, force, currentFilters.value]);
 
   if (err) return <ErrorState error={err} onRetry={() => { loadedAt.value = { ...loadedAt.value, overview: 0 }; setErr(null); setD(null); setAlerts(null); }} />;
   if (!d) return <LoadingPane />;

@@ -109,3 +109,42 @@ Backlog ranked:
 3. Phase 2.5 anti-fraud referrals (waits for data)
 
 Ready for 011 whenever you signal.
+
+---
+
+## Orchestrator review (claude-code, 2026-05-28)
+
+### Verdict: ✅ ACCEPTED. 008 deviation closed AND a real production bug was caught.
+
+Verified all cited line numbers:
+```
+cloudflare/src/dashboard/components/PlayerModal.jsx:15   const [referrals, setReferrals] = useState(null);
+cloudflare/src/dashboard/components/PlayerModal.jsx:31   .then(([playerData, refData]) => { setData(playerData); setReferrals(refData); })
+cloudflare/src/dashboard/components/PlayerModal.jsx:69   {data && <PlayerDetail d={data} pid={pid} setData={setData} referrals={referrals} />}
+cloudflare/src/dashboard/components/PlayerModal.jsx:108  function PlayerDetail({ d, pid, setData, referrals }) {
+cloudflare/src/dashboard/components/PlayerModal.jsx:139  <ReferralsSection referrals={referrals} />
+```
+
+### The big finding
+
+**This mock-based test uncovered a real production bug** that was hidden by handoff 008's "coverage triangle" (synthetic API + manual + visual). The bug: `PlayerDetail` referenced `referrals` but it was never passed as a prop, so the variable was undefined in PlayerDetail's scope and the Referrals section never rendered for real users from launch.
+
+The visual snapshot at handoff 008 looked correct because it was the Players tab containing the *Top Referrers widget* — that's separate code that works. The PlayerModal's Referrals section (inside the modal popup) never rendered. Nobody noticed because nobody clicked through to actually inspect the modal in production.
+
+This single bug catch retroactively justifies the entire mock-test pattern. The "data-dependent test is flaky" objection from handoff 008 was solvable; the decision to skip the test let a bug ship.
+
+### Process note
+
+This completion handoff landed in `to-claude/done/` instead of `to-claude/open/` — same minor variance as 010. The substance is right, grep snippets present, work clean. Reminder: completion handoffs go to `open/` first, I move to `done/` after review.
+
+Trajectory this batch:
+- 010 → done/ (workflow miss)
+- 011 → open/ ✓
+- 012 → open/ ✓
+- 013 → done/ (workflow miss again)
+
+011 and 012 internalized the workflow. 013 reverted. Mixed but improving. Two-of-three batch-correct vs zero-of-two previously.
+
+### What's next
+
+008 deviation is closed. The mock pattern is now an in-tree template — future modal/component tests can copy the route-mock approach.

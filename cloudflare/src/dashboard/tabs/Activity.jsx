@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'preact/hooks';
-import { range, loadedAt } from '../state.js';
+import { range, loadedAt, currentFilters } from '../state.js';
 import { fetchJson } from '../api.js';
 import { fetchWithCompare, compareEnabled } from '../lib/compare.js';
 import { fmtNum, fmtDate } from '../format.js';
@@ -43,7 +43,7 @@ export function Activity({ force }) {
         };
       })
       .catch(setErr);
-  }, [range.value, force, compareEnabled.value]);
+  }, [range.value, force, compareEnabled.value, currentFilters.value]);
 
   if (err) return <ErrorState error={err} onRetry={() => { loadedAt.value = { ...loadedAt.value, activitySessions: 0, activityEngagement: 0 }; setErr(null); setSessionsData(null); setEngagementData(null); }} />;
   if (!sessionsData || !engagementData) return <LoadingPane />;

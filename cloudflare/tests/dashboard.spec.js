@@ -402,6 +402,153 @@ test.describe('Desktop (1280x800)', () => {
     expect(networkErrors).toEqual([]);
   });
 
+  test('30. Click-to-filter from Platform Geo sets cc filter', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+
+    await page.route(/\/stats\/geo/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            countries: [{ cc: 'US', sessions: 100, players: 50, completes: 30, deaths: 20, completion_rate: 60 }],
+            regions: { US: [{ region: 'CA', players: 20, sessions: 40 }] },
+          },
+        }),
+      });
+    });
+    await page.route(/\/stats\/appversion/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { range: '7d', totalEvents: 0, versions: [], generatedAt: Date.now() } }) });
+    });
+    await page.route(/\/stats\/sync/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { totalAccounts: 0, totalDevices: 0, avgDevicesPerAccount: 0, lastSyncAt: null, deviceDistribution: [], items: [] } }) });
+    });
+
+    await page.goto(`${BASE_URL}#/platform?range=7d`);
+    await page.waitForSelector('table tbody tr');
+    await page.locator('table tbody tr:first-child').click();
+
+    await expect(page.locator('.filter-strip')).toBeVisible();
+    await expect(page.locator('.filter-strip')).toContainText('US');
+    expect(await page.evaluate(() => location.hash)).toContain('cc=US');
+
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
+  test('31. Click-to-filter from Platform Versions sets version filter', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+
+    await page.route(/\/stats\/geo/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { countries: [], regions: {} } }) });
+    });
+    await page.route(/\/stats\/appversion/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            range: '7d', totalEvents: 100,
+            versions: [{ version: '1.2.3', events: 50, players: 10, pct: 50, series: [10, 20, 20] }],
+            generatedAt: Date.now(),
+          },
+        }),
+      });
+    });
+    await page.route(/\/stats\/sync/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { totalAccounts: 0, totalDevices: 0, avgDevicesPerAccount: 0, lastSyncAt: null, deviceDistribution: [], items: [] } }) });
+    });
+
+    await page.goto(`${BASE_URL}#/platform?range=7d`);
+    await page.locator('.subtabs [role="tab"]').filter({ hasText: /Versions/ }).click();
+    await page.waitForSelector('table tbody tr');
+    await page.locator('table tbody tr:first-child').click();
+
+    await expect(page.locator('.filter-strip')).toBeVisible();
+    await expect(page.locator('.filter-strip')).toContainText('1.2.3');
+    expect(await page.evaluate(() => location.hash)).toContain('version=1.2.3');
+
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
+  test('32. Click-to-filter from Levels sets level filter and clear-all removes it', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+
+    await page.route(/\/stats\/levels/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            range: '7d',
+            levels: Array.from({ length: 20 }, (_, i) => ({
+              level: i, starts: 100, completes: 50, deaths: 30, players: 40,
+              avgMs: 30000, medianMs: 25000, completionRate: 50, avgAttempts: 2,
+              deathCauses: {}, passed: 20, stuck: 5, minMs: 10000, maxMs: 60000,
+              avgDeaths: 1.5, avgGold: 10, avgSilver: 20, avgStyle: 3, resurrects: 2,
+            })),
+            generatedAt: Date.now(),
+          },
+        }),
+      });
+    });
+    await page.route(/\/stats\/death-matrix/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { allCauses: [], levels: [] } }) });
+    });
+
+    await page.goto(`${BASE_URL}#/levels?range=7d`);
+    await page.waitForSelector('table tbody tr');
+    await page.locator('table tbody tr:first-child').click();
+
+    await expect(page.locator('.filter-strip')).toBeVisible();
+    await expect(page.locator('.filter-strip')).toContainText('Level 0');
+    expect(await page.evaluate(() => location.hash)).toContain('level=0');
+
+    await page.locator('.filter-strip button').filter({ hasText: /Clear all/ }).click();
+    await expect(page.locator('.filter-strip')).not.toBeVisible();
+    expect(await page.evaluate(() => location.hash)).not.toContain('level=');
+
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
+  test('33. FilterIgnoredNotice shows on Retention, Daily, and Feedback when filters active', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+
+    await page.route(/\/stats\/retention/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { cohorts: [], generatedAt: Date.now() } }) });
+    });
+    await page.route(/\/stats\/funnel/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { stages: [], generatedAt: Date.now() } }) });
+    });
+    await page.route(/\/stats\/champion-funnel/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { stages: [], generatedAt: Date.now() } }) });
+    });
+    await page.route(/\/stats\/dailystage/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { starts: 0, completes: 0, deaths: 0, avgMs: 0, medianMs: 0, p95Ms: 0, topDeathCause: null, byStage: [], generatedAt: Date.now() } }) });
+    });
+    await page.route(/\/stats\/feedback/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { total: 0, avgRating: 0, byRating: [], recent: [], byTag: [], items: [], generatedAt: Date.now() } }) });
+    });
+
+    for (const tab of ['retention', 'dailystage', 'feedback']) {
+      await page.goto(`${BASE_URL}#/${tab}?range=7d&cc=US`);
+      await expect(page.locator('.filter-ignored-notice')).toBeVisible();
+      await expect(page.locator('.filter-ignored-notice')).toContainText('ignores the active filter');
+    }
+
+    await page.goto(`${BASE_URL}#/retention?range=7d`);
+    await expect(page.locator('.filter-ignored-notice')).not.toBeVisible();
+
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
+
   // PlayerModal referrals section is covered by synthetic smoke test and visual snapshots.
 });
 
@@ -532,6 +679,152 @@ test.describe('Mobile (380x800)', () => {
     const { consoleErrors, networkErrors } = setupErrorCollection(page);
     await page.goto(`${BASE_URL}#/overview?range=7d`);
     await expect(page.locator('.data-fresh')).toBeVisible();
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
+  test('30m. Click-to-filter from Platform Geo sets cc filter', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+
+    await page.route(/\/stats\/geo/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            countries: [{ cc: 'US', sessions: 100, players: 50, completes: 30, deaths: 20, completion_rate: 60 }],
+            regions: { US: [{ region: 'CA', players: 20, sessions: 40 }] },
+          },
+        }),
+      });
+    });
+    await page.route(/\/stats\/appversion/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { range: '7d', totalEvents: 0, versions: [], generatedAt: Date.now() } }) });
+    });
+    await page.route(/\/stats\/sync/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { totalAccounts: 0, totalDevices: 0, avgDevicesPerAccount: 0, lastSyncAt: null, deviceDistribution: [], items: [] } }) });
+    });
+
+    await page.goto(`${BASE_URL}#/platform?range=7d`);
+    await page.waitForSelector('table tbody tr');
+    await page.locator('table tbody tr:first-child').click();
+
+    await expect(page.locator('.filter-strip')).toBeVisible();
+    await expect(page.locator('.filter-strip')).toContainText('US');
+    expect(await page.evaluate(() => location.hash)).toContain('cc=US');
+
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
+  test('31m. Click-to-filter from Platform Versions sets version filter', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+
+    await page.route(/\/stats\/geo/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { countries: [], regions: {} } }) });
+    });
+    await page.route(/\/stats\/appversion/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            range: '7d', totalEvents: 100,
+            versions: [{ version: '1.2.3', events: 50, players: 10, pct: 50, series: [10, 20, 20] }],
+            generatedAt: Date.now(),
+          },
+        }),
+      });
+    });
+    await page.route(/\/stats\/sync/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { totalAccounts: 0, totalDevices: 0, avgDevicesPerAccount: 0, lastSyncAt: null, deviceDistribution: [], items: [] } }) });
+    });
+
+    await page.goto(`${BASE_URL}#/platform?range=7d`);
+    await page.locator('.subtabs [role="tab"]').filter({ hasText: /Versions/ }).click();
+    await page.waitForSelector('table tbody tr');
+    await page.locator('table tbody tr:first-child').click();
+
+    await expect(page.locator('.filter-strip')).toBeVisible();
+    await expect(page.locator('.filter-strip')).toContainText('1.2.3');
+    expect(await page.evaluate(() => location.hash)).toContain('version=1.2.3');
+
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
+  test('32m. Click-to-filter from Levels sets level filter and clear-all removes it', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+
+    await page.route(/\/stats\/levels/, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            range: '7d',
+            levels: Array.from({ length: 20 }, (_, i) => ({
+              level: i, starts: 100, completes: 50, deaths: 30, players: 40,
+              avgMs: 30000, medianMs: 25000, completionRate: 50, avgAttempts: 2,
+              deathCauses: {}, passed: 20, stuck: 5, minMs: 10000, maxMs: 60000,
+              avgDeaths: 1.5, avgGold: 10, avgSilver: 20, avgStyle: 3, resurrects: 2,
+            })),
+            generatedAt: Date.now(),
+          },
+        }),
+      });
+    });
+    await page.route(/\/stats\/death-matrix/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { allCauses: [], levels: [] } }) });
+    });
+
+    await page.goto(`${BASE_URL}#/levels?range=7d`);
+    await page.waitForSelector('table tbody tr');
+    await page.locator('table tbody tr:first-child').click();
+
+    await expect(page.locator('.filter-strip')).toBeVisible();
+    await expect(page.locator('.filter-strip')).toContainText('Level 0');
+    expect(await page.evaluate(() => location.hash)).toContain('level=0');
+
+    await page.locator('.filter-strip button').filter({ hasText: /Clear all/ }).click();
+    await expect(page.locator('.filter-strip')).not.toBeVisible();
+    expect(await page.evaluate(() => location.hash)).not.toContain('level=');
+
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
+  test('33m. FilterIgnoredNotice shows on Retention, Daily, and Feedback when filters active', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+
+    await page.route(/\/stats\/retention/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { cohorts: [], generatedAt: Date.now() } }) });
+    });
+    await page.route(/\/stats\/funnel/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { stages: [], generatedAt: Date.now() } }) });
+    });
+    await page.route(/\/stats\/champion-funnel/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { stages: [], generatedAt: Date.now() } }) });
+    });
+    await page.route(/\/stats\/dailystage/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { starts: 0, completes: 0, deaths: 0, avgMs: 0, medianMs: 0, p95Ms: 0, topDeathCause: null, byStage: [], generatedAt: Date.now() } }) });
+    });
+    await page.route(/\/stats\/feedback/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { total: 0, avgRating: 0, byRating: [], recent: [], byTag: [], items: [], generatedAt: Date.now() } }) });
+    });
+
+    for (const tab of ['retention', 'dailystage', 'feedback']) {
+      await page.goto(`${BASE_URL}#/${tab}?range=7d&cc=US`);
+      await expect(page.locator('.filter-ignored-notice')).toBeVisible();
+      await expect(page.locator('.filter-ignored-notice')).toContainText('ignores the active filter');
+    }
+
+    await page.goto(`${BASE_URL}#/retention?range=7d`);
+    await expect(page.locator('.filter-ignored-notice')).not.toBeVisible();
+
     expect(consoleErrors).toEqual([]);
     expect(networkErrors).toEqual([]);
   });

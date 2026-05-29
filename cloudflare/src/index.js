@@ -199,6 +199,36 @@ function rateLimitCheck(request, pid, isSession = false) {
   return { limited: false };
 }
 
+// === Filter helper for cross-tab drilldown ===
+function buildFilterClause(url) {
+  const clauses = [];
+  const binds = [];
+  const cc = url.searchParams.get('cc');
+  const level = url.searchParams.get('level');
+  const version = url.searchParams.get('version');
+  const named = url.searchParams.get('named');
+
+  if (cc && /^[A-Z]{2}$/.test(cc)) {
+    clauses.push("JSON_EXTRACT(data, '$._cc') = ?");
+    binds.push(cc);
+  }
+  if (level !== null && level !== '' && /^\d{1,2}$/.test(level)) {
+    clauses.push("level = ?");
+    binds.push(parseInt(level, 10));
+  }
+  if (version && version.length < 16 && /^[\w.\-]+$/.test(version)) {
+    clauses.push("JSON_EXTRACT(data, '$._v') = ?");
+    binds.push(version);
+  }
+  if (named === '1') {
+    clauses.push("name IS NOT NULL AND name != ''");
+  }
+  return {
+    whereClause: clauses.length ? ' AND ' + clauses.join(' AND ') : '',
+    binds,
+  };
+}
+
 async function hmacSHA256(key, message) {
   const k = await crypto.subtle.importKey(
     'raw',
@@ -521,16 +551,18 @@ async function handleEventsBatch(request, env) {
   return jsonResponse({ ok: true }, 200, true);
 }
 
-async function handleStats(env, range, force, before) {
+async function handleStats(env, range, force, before, url) {
   const cacheKey = 'stats:' + range + (before ? ':' + before : '');
   return cachedJson(cacheKey, async () => {
     const now = before || Date.now();
     const fiveMinAgo = now - ONLINE_WINDOW_MS;
     const startTs = rangeStartTs(range, before);
     const HEARTBEAT_MIN = 1.5;
+    const { whereClause, binds: fb } = buildFilterClause(url);
+    const hasFilter = fb.length > 0;
 
-    // Fast path: for 31d/all, try stats_daily first
-    if ((range === '31d' || range === 'all') && !before) {
+    // Fast path: for 31d/all, try stats_daily first (skip if filters active — stats_daily lacks JSON cols)
+    if ((range === '31d' || range === 'all') && !before && !hasFilter) {
       const dateFrom = range === 'all' ? '2000-01-01' : new Date(startTs).toISOString().slice(0, 10);
       const fastRow = await env.DB.prepare(
         'SELECT SUM(starts) as starts, SUM(completes) as completes, SUM(deaths) as deaths, SUM(sessions) as sessions, SUM(heartbeats) as hb, SUM(gold_earned) as ge, SUM(silver_earned) as se FROM stats_daily WHERE level=-1 AND date >= ?'
@@ -539,11 +571,11 @@ async function handleStats(env, range, force, before) {
       if (fastRow && fastRow.starts > 0) {
         // We have aggregated data — use it for the heavy totals, supplement with live queries for real-time fields
         const [onlineRow, activeRow, allPlayersRow, totalRow, verifiedRow] = await Promise.all([
-          env.DB.prepare('SELECT COUNT(DISTINCT pid) as o FROM events WHERE server_ts > ?').bind(fiveMinAgo).first(),
-          env.DB.prepare('SELECT COUNT(DISTINCT pid) as p FROM events WHERE server_ts > ?').bind(startTs).first(),
-          env.DB.prepare('SELECT COUNT(DISTINCT pid) as p FROM events').first(),
-          env.DB.prepare('SELECT COUNT(*) as c FROM events').first(),
-          env.DB.prepare('SELECT COUNT(*) as v FROM events WHERE verified = 1').first(),
+          env.DB.prepare('SELECT COUNT(DISTINCT pid) as o FROM events WHERE server_ts > ?' + whereClause).bind(fiveMinAgo, ...fb).first(),
+          env.DB.prepare('SELECT COUNT(DISTINCT pid) as p FROM events WHERE server_ts > ?' + whereClause).bind(startTs, ...fb).first(),
+          env.DB.prepare('SELECT COUNT(DISTINCT pid) as p FROM events' + (hasFilter ? ' WHERE 1=1' + whereClause : '')).bind(...fb).first(),
+          env.DB.prepare('SELECT COUNT(*) as c FROM events' + (hasFilter ? ' WHERE 1=1' + whereClause : '')).bind(...fb).first(),
+          env.DB.prepare('SELECT COUNT(*) as v FROM events WHERE verified = 1' + whereClause).bind(...fb).first(),
         ]);
 
         // Daily breakdown from stats_daily
@@ -590,14 +622,14 @@ async function handleStats(env, range, force, before) {
       winRow, deathMatchRow,
       anonRow, namedRow, namedFunnelRow,
     ] = await Promise.all([
-      env.DB.prepare('SELECT COUNT(*) as c FROM events').first(),
-      env.DB.prepare('SELECT COUNT(*) as v FROM events WHERE verified = 1').first(),
-      env.DB.prepare('SELECT COUNT(DISTINCT pid) as o FROM events WHERE server_ts > ?').bind(fiveMinAgo).first(),
-      env.DB.prepare('SELECT COUNT(DISTINCT pid) as p FROM events WHERE server_ts > ?').bind(startTs).first(),
-      env.DB.prepare('SELECT COUNT(DISTINCT pid) as p FROM events').first(),
-      env.DB.prepare('SELECT COUNT(*) as p FROM (SELECT pid, MIN(server_ts) as fs FROM events GROUP BY pid) WHERE fs > ?').bind(startTs).first(),
-      env.DB.prepare('SELECT COUNT(DISTINCT e.pid) as p FROM events e WHERE e.server_ts > ? AND e.pid IN (SELECT pid FROM events GROUP BY pid HAVING MIN(server_ts) <= ?)').bind(startTs, startTs).first(),
-      env.DB.prepare(`SELECT CASE WHEN p.fs > ? THEN 'new' ELSE 'ret' END as cohort, COUNT(*) as hb, COUNT(DISTINCT e.pid) as players FROM events e JOIN (SELECT pid, MIN(server_ts) as fs FROM events GROUP BY pid) p ON p.pid = e.pid WHERE e.type = 'heartbeat' AND e.server_ts > ? GROUP BY cohort`).bind(startTs, startTs).all(),
+      env.DB.prepare('SELECT COUNT(*) as c FROM events' + (hasFilter ? ' WHERE 1=1' + whereClause : '')).bind(...fb).first(),
+      env.DB.prepare('SELECT COUNT(*) as v FROM events WHERE verified = 1' + whereClause).bind(...fb).first(),
+      env.DB.prepare('SELECT COUNT(DISTINCT pid) as o FROM events WHERE server_ts > ?' + whereClause).bind(fiveMinAgo, ...fb).first(),
+      env.DB.prepare('SELECT COUNT(DISTINCT pid) as p FROM events WHERE server_ts > ?' + whereClause).bind(startTs, ...fb).first(),
+      env.DB.prepare('SELECT COUNT(DISTINCT pid) as p FROM events' + (hasFilter ? ' WHERE 1=1' + whereClause : '')).bind(...fb).first(),
+      env.DB.prepare('SELECT COUNT(*) as p FROM (SELECT pid, MIN(server_ts) as fs FROM events' + (hasFilter ? ' WHERE 1=1' + whereClause : '') + ' GROUP BY pid) WHERE fs > ?').bind(...fb, startTs).first(),
+      env.DB.prepare('SELECT COUNT(DISTINCT e.pid) as p FROM events e WHERE e.server_ts > ? AND e.pid IN (SELECT pid FROM events GROUP BY pid HAVING MIN(server_ts) <= ?)' + whereClause).bind(startTs, startTs, ...fb).first(),
+      env.DB.prepare(`SELECT CASE WHEN p.fs > ? THEN 'new' ELSE 'ret' END as cohort, COUNT(*) as hb, COUNT(DISTINCT e.pid) as players FROM events e JOIN (SELECT pid, MIN(server_ts) as fs FROM events GROUP BY pid) p ON p.pid = e.pid WHERE e.type = 'heartbeat' AND e.server_ts > ?` + whereClause + ' GROUP BY cohort').bind(startTs, startTs, ...fb).all(),
       // Median heartbeats per cohort (more representative than average — pro players are outliers)
       env.DB.prepare(`SELECT cohort, AVG(hb_count) as median_hb FROM (
         SELECT cohort, hb_count,
@@ -606,23 +638,23 @@ async function handleStats(env, range, force, before) {
         FROM (
           SELECT CASE WHEN p.fs > ? THEN 'new' ELSE 'ret' END as cohort, COUNT(*) as hb_count
           FROM events e JOIN (SELECT pid, MIN(server_ts) as fs FROM events GROUP BY pid) p ON p.pid = e.pid
-          WHERE e.type='heartbeat' AND e.server_ts > ?
+          WHERE e.type='heartbeat' AND e.server_ts > ?` + whereClause + `
           GROUP BY e.pid
         )
-      ) WHERE rn IN ((cnt+1)/2, (cnt+2)/2) GROUP BY cohort`).bind(startTs, startTs).all(),
-      env.DB.prepare('SELECT type, COUNT(*) as c FROM events WHERE server_ts > ? GROUP BY type').bind(startTs).all(),
-      env.DB.prepare("SELECT level, COUNT(*) as c FROM events WHERE type = 'level_complete' AND server_ts > ? GROUP BY level ORDER BY c DESC LIMIT 20").bind(startTs).all(),
-      env.DB.prepare("SELECT level, COUNT(*) as c FROM events WHERE type = 'level_death' AND server_ts > ? GROUP BY level ORDER BY c DESC LIMIT 20").bind(startTs).all(),
-      env.DB.prepare("SELECT CAST((server_ts - ?) / 86400000 AS INTEGER) as day, COUNT(*) as c FROM events WHERE server_ts > ? GROUP BY day ORDER BY day").bind(startTs, startTs).all(),
-      env.DB.prepare("SELECT level, AVG(CAST(JSON_EXTRACT(data, '$.time') AS REAL)) as avg_ms FROM events WHERE type = 'level_complete' AND verified = 1 AND CAST(JSON_EXTRACT(data,'$.time') AS REAL) >= 5000 AND server_ts > ? GROUP BY level").bind(startTs).all(),
-      env.DB.prepare("SELECT COUNT(*) as c FROM events WHERE type='level_complete' AND server_ts > ?").bind(startTs).first(),
-      env.DB.prepare("SELECT COUNT(*) as c FROM events WHERE type='level_death' AND server_ts > ?").bind(startTs).first(),
+      ) WHERE rn IN ((cnt+1)/2, (cnt+2)/2) GROUP BY cohort`).bind(startTs, startTs, ...fb).all(),
+      env.DB.prepare('SELECT type, COUNT(*) as c FROM events WHERE server_ts > ?' + whereClause + ' GROUP BY type').bind(startTs, ...fb).all(),
+      env.DB.prepare("SELECT level, COUNT(*) as c FROM events WHERE type = 'level_complete' AND server_ts > ?" + whereClause + ' GROUP BY level ORDER BY c DESC LIMIT 20').bind(startTs, ...fb).all(),
+      env.DB.prepare("SELECT level, COUNT(*) as c FROM events WHERE type = 'level_death' AND server_ts > ?" + whereClause + ' GROUP BY level ORDER BY c DESC LIMIT 20').bind(startTs, ...fb).all(),
+      env.DB.prepare("SELECT CAST((server_ts - ?) / 86400000 AS INTEGER) as day, COUNT(*) as c FROM events WHERE server_ts > ?" + whereClause + ' GROUP BY day ORDER BY day').bind(startTs, startTs, ...fb).all(),
+      env.DB.prepare("SELECT level, AVG(CAST(JSON_EXTRACT(data, '$.time') AS REAL)) as avg_ms FROM events WHERE type = 'level_complete' AND verified = 1 AND CAST(JSON_EXTRACT(data,'$.time') AS REAL) >= 5000 AND server_ts > ?" + whereClause + ' GROUP BY level').bind(startTs, ...fb).all(),
+      env.DB.prepare("SELECT COUNT(*) as c FROM events WHERE type='level_complete' AND server_ts > ?" + whereClause).bind(startTs, ...fb).first(),
+      env.DB.prepare("SELECT COUNT(*) as c FROM events WHERE type='level_death' AND server_ts > ?" + whereClause).bind(startTs, ...fb).first(),
       // Trial / bounced: pids active in range with NO non-null name on any event
-      env.DB.prepare("SELECT COUNT(DISTINCT pid) as c FROM events WHERE server_ts > ? AND pid NOT IN (SELECT DISTINCT pid FROM events WHERE name IS NOT NULL)").bind(startTs).first(),
+      env.DB.prepare("SELECT COUNT(DISTINCT pid) as c FROM events WHERE server_ts > ? AND pid NOT IN (SELECT DISTINCT pid FROM events WHERE name IS NOT NULL)" + whereClause).bind(startTs, ...fb).first(),
       // Named players in range (for ratio)
-      env.DB.prepare("SELECT COUNT(DISTINCT pid) as c FROM events WHERE server_ts > ? AND pid IN (SELECT DISTINCT pid FROM events WHERE name IS NOT NULL)").bind(startTs).first(),
+      env.DB.prepare("SELECT COUNT(DISTINCT pid) as c FROM events WHERE server_ts > ? AND pid IN (SELECT DISTINCT pid FROM events WHERE name IS NOT NULL)" + whereClause).bind(startTs, ...fb).first(),
       // name_set events in range (count of users who completed onboarding)
-      env.DB.prepare("SELECT COUNT(*) as c FROM events WHERE type='name_set' AND server_ts > ?").bind(startTs).first(),
+      env.DB.prepare("SELECT COUNT(*) as c FROM events WHERE type='name_set' AND server_ts > ?" + whereClause).bind(startTs, ...fb).first(),
     ]);
 
     const today = {};
@@ -702,13 +734,15 @@ async function handleStats(env, range, force, before) {
 }
 
 // === Per-level detailed stats (all 20 levels) ===
-async function handleStatsLevels(env, range, force, before) {
+async function handleStatsLevels(env, range, force, before, url) {
   const cacheKey = 'levels:' + range + (before ? ':' + before : '');
   return cachedJson(cacheKey, async () => {
     const startTs = rangeStartTs(range, before);
+    const { whereClause, binds: fb } = buildFilterClause(url);
+    const hasFilter = fb.length > 0;
 
-    // Fast path: for 31d/all, try stats_daily
-    if ((range === '31d' || range === 'all') && !before) {
+    // Fast path: for 31d/all, try stats_daily (skip if filters active)
+    if ((range === '31d' || range === 'all') && !before && !hasFilter) {
       const dateFrom = range === 'all' ? '2000-01-01' : new Date(startTs).toISOString().slice(0, 10);
       const fastRows = await env.DB.prepare(
         'SELECT level, SUM(starts) as starts, SUM(completes) as completes, SUM(deaths) as deaths, SUM(unique_players) as players, AVG(avg_ms) as avg_ms, AVG(p50_ms) as p50_ms FROM stats_daily WHERE level < 20 AND date >= ? GROUP BY level'
@@ -739,21 +773,21 @@ async function handleStatsLevels(env, range, force, before) {
     }
 
     const [starts, completes, deaths, completeAgg, deathCauses, passedRows, medianRows] = await Promise.all([
-      env.DB.prepare("SELECT level, COUNT(*) as c FROM events WHERE type='level_start' AND level IS NOT NULL AND server_ts > ? GROUP BY level").bind(startTs).all(),
-      env.DB.prepare("SELECT level, COUNT(*) as c, COUNT(DISTINCT pid) as players FROM events WHERE type='level_complete' AND level IS NOT NULL AND server_ts > ? GROUP BY level").bind(startTs).all(),
-      env.DB.prepare("SELECT level, COUNT(*) as c FROM events WHERE type='level_death' AND level IS NOT NULL AND server_ts > ? GROUP BY level").bind(startTs).all(),
-      env.DB.prepare("SELECT level, AVG(CAST(JSON_EXTRACT(data,'$.time') AS REAL)) as avg_ms, MIN(CAST(JSON_EXTRACT(data,'$.time') AS REAL)) as min_ms, MAX(CAST(JSON_EXTRACT(data,'$.time') AS REAL)) as max_ms, AVG(CAST(JSON_EXTRACT(data,'$.deaths') AS REAL)) as avg_deaths, AVG(CAST(JSON_EXTRACT(data,'$.gold') AS REAL)) as avg_gold, AVG(CAST(JSON_EXTRACT(data,'$.silver') AS REAL)) as avg_silver, AVG(CAST(JSON_EXTRACT(data,'$.style') AS REAL)) as avg_style, SUM(CASE WHEN JSON_EXTRACT(data,'$.resurrected')=1 THEN 1 ELSE 0 END) as resurrects FROM events WHERE type='level_complete' AND verified=1 AND CAST(JSON_EXTRACT(data,'$.time') AS REAL) >= 5000 AND level IS NOT NULL AND server_ts > ? GROUP BY level").bind(startTs).all(),
-      env.DB.prepare("SELECT level, JSON_EXTRACT(data,'$.cause') as cause, COUNT(*) as c FROM events WHERE type='level_death' AND level IS NOT NULL AND server_ts > ? GROUP BY level, cause").bind(startTs).all(),
+      env.DB.prepare("SELECT level, COUNT(*) as c FROM events WHERE type='level_start' AND level IS NOT NULL AND server_ts > ?" + whereClause + ' GROUP BY level').bind(startTs, ...fb).all(),
+      env.DB.prepare("SELECT level, COUNT(*) as c, COUNT(DISTINCT pid) as players FROM events WHERE type='level_complete' AND level IS NOT NULL AND server_ts > ?" + whereClause + ' GROUP BY level').bind(startTs, ...fb).all(),
+      env.DB.prepare("SELECT level, COUNT(*) as c FROM events WHERE type='level_death' AND level IS NOT NULL AND server_ts > ?" + whereClause + ' GROUP BY level').bind(startTs, ...fb).all(),
+      env.DB.prepare("SELECT level, AVG(CAST(JSON_EXTRACT(data,'$.time') AS REAL)) as avg_ms, MIN(CAST(JSON_EXTRACT(data,'$.time') AS REAL)) as min_ms, MAX(CAST(JSON_EXTRACT(data,'$.time') AS REAL)) as max_ms, AVG(CAST(JSON_EXTRACT(data,'$.deaths') AS REAL)) as avg_deaths, AVG(CAST(JSON_EXTRACT(data,'$.gold') AS REAL)) as avg_gold, AVG(CAST(JSON_EXTRACT(data,'$.silver') AS REAL)) as avg_silver, AVG(CAST(JSON_EXTRACT(data,'$.style') AS REAL)) as avg_style, SUM(CASE WHEN JSON_EXTRACT(data,'$.resurrected')=1 THEN 1 ELSE 0 END) as resurrects FROM events WHERE type='level_complete' AND verified=1 AND CAST(JSON_EXTRACT(data,'$.time') AS REAL) >= 5000 AND level IS NOT NULL AND server_ts > ?" + whereClause + ' GROUP BY level').bind(startTs, ...fb).all(),
+      env.DB.prepare("SELECT level, JSON_EXTRACT(data,'$.cause') as cause, COUNT(*) as c FROM events WHERE type='level_death' AND level IS NOT NULL AND server_ts > ?" + whereClause + ' GROUP BY level, cause').bind(startTs, ...fb).all(),
       // Distinct players who started but never completed (stuck) — per level
       env.DB.prepare(`
         SELECT s.level,
           COUNT(DISTINCT s.pid) as starters,
           COUNT(DISTINCT c.pid) as passers
-        FROM (SELECT pid, level FROM events WHERE type='level_start' AND level IS NOT NULL AND server_ts > ? GROUP BY pid, level) s
-        LEFT JOIN (SELECT pid, level FROM events WHERE type='level_complete' AND level IS NOT NULL GROUP BY pid, level) c
+        FROM (SELECT pid, level FROM events WHERE type='level_start' AND level IS NOT NULL AND server_ts > ?` + whereClause + ` GROUP BY pid, level) s
+        LEFT JOIN (SELECT pid, level FROM events WHERE type='level_complete' AND level IS NOT NULL` + whereClause + ` GROUP BY pid, level) c
           ON c.pid = s.pid AND c.level = s.level
         GROUP BY s.level
-      `).bind(startTs).all(),
+      `).bind(startTs, ...fb, ...fb).all(),
       // Median completion time per level (resilient to pro outliers)
       env.DB.prepare(`SELECT level, AVG(time) as median_ms FROM (
         SELECT level, time,
@@ -762,9 +796,9 @@ async function handleStatsLevels(env, range, force, before) {
         FROM (
           SELECT level, CAST(JSON_EXTRACT(data,'$.time') AS REAL) as time
           FROM events
-          WHERE type='level_complete' AND verified=1 AND CAST(JSON_EXTRACT(data,'$.time') AS REAL) >= 5000 AND level IS NOT NULL AND server_ts > ?
+          WHERE type='level_complete' AND verified=1 AND CAST(JSON_EXTRACT(data,'$.time') AS REAL) >= 5000 AND level IS NOT NULL AND server_ts > ?` + whereClause + `
         )
-      ) WHERE rn IN ((cnt+1)/2, (cnt+2)/2) GROUP BY level`).bind(startTs).all(),
+      ) WHERE rn IN ((cnt+1)/2, (cnt+2)/2) GROUP BY level`).bind(startTs, ...fb).all(),
     ]);
 
     const levels = {};
@@ -826,30 +860,32 @@ async function handleStatsLevels(env, range, force, before) {
 }
 
 // === Per-player ranking ===
-async function handleStatsPlayers(env, range, force, before) {
+async function handleStatsPlayers(env, range, force, before, url) {
   const cacheKey = 'players:' + range + (before ? ':' + before : '');
   return cachedJson(cacheKey, async () => {
     const startTs = rangeStartTs(range, before);
+    const { whereClause, binds: fb } = buildFilterClause(url);
+    const hasFilter = fb.length > 0;
     const [topActive, topCompleters, topDiers, topGold, topChampions, topVerified, newList, retList, perseverance, recent] = await Promise.all([
-      env.DB.prepare("SELECT pid, MAX(name) as name, COUNT(*) as events, MAX(server_ts) as last_seen FROM events WHERE server_ts > ? GROUP BY pid HAVING name IS NOT NULL ORDER BY events DESC LIMIT 30").bind(startTs).all(),
-      env.DB.prepare("SELECT pid, MAX(name) as name, COUNT(*) as completions, COUNT(DISTINCT level) as unique_levels FROM events WHERE type='level_complete' AND server_ts > ? GROUP BY pid HAVING name IS NOT NULL ORDER BY completions DESC LIMIT 30").bind(startTs).all(),
-      env.DB.prepare("SELECT pid, MAX(name) as name, COUNT(*) as deaths FROM events WHERE type='level_death' AND server_ts > ? GROUP BY pid HAVING name IS NOT NULL ORDER BY deaths DESC LIMIT 30").bind(startTs).all(),
-      env.DB.prepare("SELECT pid, MAX(name) as name, SUM(CAST(JSON_EXTRACT(data,'$.gold') AS REAL)) as total_gold, SUM(CAST(JSON_EXTRACT(data,'$.silver') AS REAL)) as total_silver FROM events WHERE type='level_complete' AND server_ts > ? GROUP BY pid HAVING name IS NOT NULL ORDER BY total_gold DESC LIMIT 30").bind(startTs).all(),
-      env.DB.prepare("SELECT pid, MAX(name) as name, COUNT(DISTINCT level) as cleared FROM events WHERE type='level_complete' GROUP BY pid HAVING cleared >= 20 AND name IS NOT NULL ORDER BY MIN(server_ts) ASC LIMIT 50").all(),
-      env.DB.prepare("SELECT pid, MAX(name) as name, SUM(CASE WHEN verified=1 THEN 1 ELSE 0 END) as v, COUNT(*) as total FROM events WHERE server_ts > ? GROUP BY pid HAVING total >= 10 AND name IS NOT NULL ORDER BY (CAST(SUM(CASE WHEN verified=1 THEN 1 ELSE 0 END) AS REAL) / COUNT(*)) ASC LIMIT 30").bind(startTs).all(),
-      env.DB.prepare("SELECT p.pid, MAX(e.name) as name, p.fs as first_seen, MAX(e.server_ts) as last_seen, COUNT(e.id) as events FROM (SELECT pid, MIN(server_ts) as fs FROM events GROUP BY pid HAVING fs > ?) p JOIN events e ON e.pid = p.pid GROUP BY p.pid HAVING name IS NOT NULL ORDER BY p.fs DESC LIMIT 30").bind(startTs).all(),
-      env.DB.prepare("SELECT p.pid, MAX(e.name) as name, p.fs as first_seen, MAX(e.server_ts) as last_seen, COUNT(e.id) as events FROM (SELECT pid, MIN(server_ts) as fs FROM events GROUP BY pid HAVING fs <= ?) p JOIN events e ON e.pid = p.pid WHERE e.server_ts > ? GROUP BY p.pid HAVING name IS NOT NULL ORDER BY MAX(e.server_ts) DESC LIMIT 30").bind(startTs, startTs).all(),
+      env.DB.prepare("SELECT pid, MAX(name) as name, COUNT(*) as events, MAX(server_ts) as last_seen FROM events WHERE server_ts > ?" + whereClause + ' GROUP BY pid HAVING name IS NOT NULL ORDER BY events DESC LIMIT 30').bind(startTs, ...fb).all(),
+      env.DB.prepare("SELECT pid, MAX(name) as name, COUNT(*) as completions, COUNT(DISTINCT level) as unique_levels FROM events WHERE type='level_complete' AND server_ts > ?" + whereClause + ' GROUP BY pid HAVING name IS NOT NULL ORDER BY completions DESC LIMIT 30').bind(startTs, ...fb).all(),
+      env.DB.prepare("SELECT pid, MAX(name) as name, COUNT(*) as deaths FROM events WHERE type='level_death' AND server_ts > ?" + whereClause + ' GROUP BY pid HAVING name IS NOT NULL ORDER BY deaths DESC LIMIT 30').bind(startTs, ...fb).all(),
+      env.DB.prepare("SELECT pid, MAX(name) as name, SUM(CAST(JSON_EXTRACT(data,'$.gold') AS REAL)) as total_gold, SUM(CAST(JSON_EXTRACT(data,'$.silver') AS REAL)) as total_silver FROM events WHERE type='level_complete' AND server_ts > ?" + whereClause + ' GROUP BY pid HAVING name IS NOT NULL ORDER BY total_gold DESC LIMIT 30').bind(startTs, ...fb).all(),
+      env.DB.prepare("SELECT pid, MAX(name) as name, COUNT(DISTINCT level) as cleared FROM events WHERE type='level_complete'" + whereClause + ' GROUP BY pid HAVING cleared >= 20 AND name IS NOT NULL ORDER BY MIN(server_ts) ASC LIMIT 50').bind(...fb).all(),
+      env.DB.prepare("SELECT pid, MAX(name) as name, SUM(CASE WHEN verified=1 THEN 1 ELSE 0 END) as v, COUNT(*) as total FROM events WHERE server_ts > ?" + whereClause + ' GROUP BY pid HAVING total >= 10 AND name IS NOT NULL ORDER BY (CAST(SUM(CASE WHEN verified=1 THEN 1 ELSE 0 END) AS REAL) / COUNT(*)) ASC LIMIT 30').bind(startTs, ...fb).all(),
+      env.DB.prepare("SELECT p.pid, MAX(e.name) as name, p.fs as first_seen, MAX(e.server_ts) as last_seen, COUNT(e.id) as events FROM (SELECT pid, MIN(server_ts) as fs FROM events" + (hasFilter ? ' WHERE 1=1' + whereClause : '') + ' GROUP BY pid HAVING fs > ?) p JOIN events e ON e.pid = p.pid' + (hasFilter ? ' WHERE 1=1' + whereClause : '') + ' GROUP BY p.pid HAVING name IS NOT NULL ORDER BY p.fs DESC LIMIT 30').bind(...fb, startTs, ...fb).all(),
+      env.DB.prepare("SELECT p.pid, MAX(e.name) as name, p.fs as first_seen, MAX(e.server_ts) as last_seen, COUNT(e.id) as events FROM (SELECT pid, MIN(server_ts) as fs FROM events" + (hasFilter ? ' WHERE 1=1' + whereClause : '') + ' GROUP BY pid HAVING fs <= ?) p JOIN events e ON e.pid = p.pid WHERE e.server_ts > ?' + whereClause + ' GROUP BY p.pid HAVING name IS NOT NULL ORDER BY MAX(e.server_ts) DESC LIMIT 30').bind(...fb, startTs, startTs, ...fb).all(),
       // Motivation: max deaths-on-one-level-without-clearing-it (perseverance) + longest consecutive complete streak
       env.DB.prepare(`
         SELECT
           d.pid,
           MAX(e.name) as name,
           MAX(d.deaths_on_level) as perseverance,
-          (SELECT COUNT(DISTINCT level) FROM events WHERE pid = d.pid AND type='level_complete' AND server_ts > ?) as streak
+          (SELECT COUNT(DISTINCT level) FROM events WHERE pid = d.pid AND type='level_complete' AND server_ts > ?` + whereClause + `) as streak
         FROM (
           SELECT pid, level, COUNT(*) as deaths_on_level
           FROM events
-          WHERE type='level_death' AND server_ts > ?
+          WHERE type='level_death' AND server_ts > ?` + whereClause + `
           GROUP BY pid, level
           HAVING level NOT IN (SELECT DISTINCT level FROM events WHERE type='level_complete' AND pid = events.pid)
         ) d
@@ -858,8 +894,8 @@ async function handleStatsPlayers(env, range, force, before) {
         HAVING name IS NOT NULL
         ORDER BY (perseverance + streak * 5) DESC
         LIMIT 30
-      `).bind(startTs, startTs).all(),
-      env.DB.prepare("SELECT pid, MAX(name) as name, MAX(server_ts) as last_seen, MIN(server_ts) as first_seen FROM events WHERE server_ts > ? GROUP BY pid HAVING name IS NOT NULL ORDER BY last_seen DESC LIMIT 30").bind(startTs).all(),
+      `).bind(startTs, ...fb, startTs, ...fb).all(),
+      env.DB.prepare("SELECT pid, MAX(name) as name, MAX(server_ts) as last_seen, MIN(server_ts) as first_seen FROM events WHERE server_ts > ?" + whereClause + ' GROUP BY pid HAVING name IS NOT NULL ORDER BY last_seen DESC LIMIT 30').bind(startTs, ...fb).all(),
     ]);
 
     // Tag recent with new/returning
@@ -887,20 +923,21 @@ async function handleStatsPlayers(env, range, force, before) {
 }
 
 // === Sessions / funnel / hourly heat ===
-async function handleStatsSessions(env, range, force, before) {
+async function handleStatsSessions(env, range, force, before, url) {
   // TODO Phase 4+: fast path via stats_daily for range='31d'/'all'
   const cacheKey = 'sessions:' + range + (before ? ':' + before : '');
   return cachedJson(cacheKey, async () => {
     const startTs = rangeStartTs(range, before);
     const HEARTBEAT_MIN = 1.5;
+    const { whereClause, binds: fb } = buildFilterClause(url);
 
     const [sessionsCount, funnel, hourly, daily, deathCauses, devices, sessionDurations, dowHourly] = await Promise.all([
-      env.DB.prepare("SELECT COUNT(*) as c FROM events WHERE type='session_start' AND server_ts > ?").bind(startTs).first(),
-      env.DB.prepare("SELECT type, COUNT(*) as c FROM events WHERE type IN ('session_start','level_start','level_complete','level_death','purchase') AND server_ts > ? GROUP BY type").bind(startTs).all(),
-      env.DB.prepare("SELECT CAST((server_ts / 3600000) % 24 AS INTEGER) as hr, COUNT(*) as c FROM events WHERE server_ts > ? GROUP BY hr").bind(startTs).all(),
-      env.DB.prepare("SELECT CAST((server_ts - ?) / 86400000 AS INTEGER) as day, COUNT(DISTINCT pid) as players, COUNT(*) as events, SUM(CASE WHEN type='session_start' THEN 1 ELSE 0 END) as sessions, SUM(CASE WHEN type='level_complete' THEN 1 ELSE 0 END) as completions FROM events WHERE server_ts > ? GROUP BY day ORDER BY day").bind(startTs, startTs).all(),
-      env.DB.prepare("SELECT JSON_EXTRACT(data,'$.cause') as cause, COUNT(*) as c FROM events WHERE type='level_death' AND server_ts > ? GROUP BY cause ORDER BY c DESC").bind(startTs).all(),
-      env.DB.prepare("SELECT CASE WHEN JSON_EXTRACT(data,'$.ua') LIKE '%Mobi%' OR JSON_EXTRACT(data,'$.ua') LIKE '%Android%' THEN 'mobile' WHEN JSON_EXTRACT(data,'$.ua') LIKE '%iPad%' OR JSON_EXTRACT(data,'$.ua') LIKE '%Tablet%' THEN 'tablet' ELSE 'desktop' END as device, COUNT(*) as c, COUNT(DISTINCT pid) as players FROM events WHERE type='session_start' AND server_ts > ? GROUP BY device").bind(startTs).all(),
+      env.DB.prepare("SELECT COUNT(*) as c FROM events WHERE type='session_start' AND server_ts > ?" + whereClause).bind(startTs, ...fb).first(),
+      env.DB.prepare("SELECT type, COUNT(*) as c FROM events WHERE type IN ('session_start','level_start','level_complete','level_death','purchase') AND server_ts > ?" + whereClause + ' GROUP BY type').bind(startTs, ...fb).all(),
+      env.DB.prepare("SELECT CAST((server_ts / 3600000) % 24 AS INTEGER) as hr, COUNT(*) as c FROM events WHERE server_ts > ?" + whereClause + ' GROUP BY hr').bind(startTs, ...fb).all(),
+      env.DB.prepare("SELECT CAST((server_ts - ?) / 86400000 AS INTEGER) as day, COUNT(DISTINCT pid) as players, COUNT(*) as events, SUM(CASE WHEN type='session_start' THEN 1 ELSE 0 END) as sessions, SUM(CASE WHEN type='level_complete' THEN 1 ELSE 0 END) as completions FROM events WHERE server_ts > ?" + whereClause + ' GROUP BY day ORDER BY day').bind(startTs, startTs, ...fb).all(),
+      env.DB.prepare("SELECT JSON_EXTRACT(data,'$.cause') as cause, COUNT(*) as c FROM events WHERE type='level_death' AND server_ts > ?" + whereClause + ' GROUP BY cause ORDER BY c DESC').bind(startTs, ...fb).all(),
+      env.DB.prepare("SELECT CASE WHEN JSON_EXTRACT(data,'$.ua') LIKE '%Mobi%' OR JSON_EXTRACT(data,'$.ua') LIKE '%Android%' THEN 'mobile' WHEN JSON_EXTRACT(data,'$.ua') LIKE '%iPad%' OR JSON_EXTRACT(data,'$.ua') LIKE '%Tablet%' THEN 'tablet' ELSE 'desktop' END as device, COUNT(*) as c, COUNT(DISTINCT pid) as players FROM events WHERE type='session_start' AND server_ts > ?" + whereClause + ' GROUP BY device').bind(startTs, ...fb).all(),
       // Session duration distribution: count heartbeats per session approximated by pid+day, classify
       env.DB.prepare(`
         SELECT CASE
@@ -912,19 +949,19 @@ async function handleStatsSessions(env, range, force, before) {
         FROM (
           SELECT pid, CAST(server_ts / 86400000 AS INTEGER) as day, COUNT(*) as hb_count
           FROM events
-          WHERE type='heartbeat' AND server_ts > ?
+          WHERE type='heartbeat' AND server_ts > ?` + whereClause + `
           GROUP BY pid, day
         )
         GROUP BY bucket
-      `).bind(startTs).all(),
+      `).bind(startTs, ...fb).all(),
       // Day-of-week × hour heatmap
       env.DB.prepare(`
         SELECT
           CAST(strftime('%w', server_ts/1000, 'unixepoch') AS INTEGER) as dow,
           CAST((server_ts / 3600000) % 24 AS INTEGER) as hr,
           COUNT(*) as c
-        FROM events WHERE server_ts > ? GROUP BY dow, hr
-      `).bind(startTs).all(),
+        FROM events WHERE server_ts > ?` + whereClause + ` GROUP BY dow, hr
+      `).bind(startTs, ...fb).all(),
     ]);
 
     const funnelMap = {};
@@ -991,12 +1028,14 @@ async function handleStatsUI(env, range, force, before) {
 }
 
 // === Economy: time-series of gold/silver minted vs spent ===
-async function handleStatsEconomy(env, range, force, before) {
+async function handleStatsEconomy(env, range, force, before, url) {
   return cachedJson('economy:' + range + (before ? ':' + before : ''), async () => {
     const startTs = rangeStartTs(range, before);
+    const { whereClause, binds: fb } = buildFilterClause(url);
+    const hasFilter = fb.length > 0;
 
-    // Fast path: for 31d/all, use stats_daily for time-series
-    if ((range === '31d' || range === 'all') && !before) {
+    // Fast path: for 31d/all, use stats_daily for time-series (skip if filters active)
+    if ((range === '31d' || range === 'all') && !before && !hasFilter) {
       const dateFrom = range === 'all' ? '2000-01-01' : new Date(startTs).toISOString().slice(0, 10);
       const fastRows = await env.DB.prepare(
         'SELECT date, gold_earned, silver_earned, gold_spent, silver_spent, sessions FROM stats_daily WHERE level=-1 AND date >= ? ORDER BY date'
@@ -1042,20 +1081,20 @@ async function handleStatsEconomy(env, range, force, before) {
     }
 
     const [goldEarned, silverEarned, goldSpent, silverSpent, topItems, byCategory, topSpenders, totals] = await Promise.all([
-      env.DB.prepare(`SELECT CAST((server_ts - ?) / 86400000 AS INTEGER) as day, SUM(CAST(JSON_EXTRACT(data,'$.gold') AS REAL)) as v FROM events WHERE type='level_complete' AND verified=1 AND server_ts > ? GROUP BY day ORDER BY day`).bind(startTs, startTs).all(),
-      env.DB.prepare(`SELECT CAST((server_ts - ?) / 86400000 AS INTEGER) as day, SUM(CAST(JSON_EXTRACT(data,'$.silver') AS REAL)) as v FROM events WHERE type='level_complete' AND verified=1 AND server_ts > ? GROUP BY day ORDER BY day`).bind(startTs, startTs).all(),
-      env.DB.prepare(`SELECT CAST((server_ts - ?) / 86400000 AS INTEGER) as day, SUM(CAST(JSON_EXTRACT(data,'$.cost') AS REAL)) as v FROM events WHERE type='purchase' AND JSON_EXTRACT(data,'$.currency')='gold' AND server_ts > ? GROUP BY day ORDER BY day`).bind(startTs, startTs).all(),
-      env.DB.prepare(`SELECT CAST((server_ts - ?) / 86400000 AS INTEGER) as day, SUM(CAST(JSON_EXTRACT(data,'$.cost') AS REAL)) as v FROM events WHERE type='purchase' AND JSON_EXTRACT(data,'$.currency')='silver' AND server_ts > ? GROUP BY day ORDER BY day`).bind(startTs, startTs).all(),
-      env.DB.prepare(`SELECT JSON_EXTRACT(data,'$.kind') as kind, JSON_EXTRACT(data,'$.id') as id, JSON_EXTRACT(data,'$.cat') as cat, JSON_EXTRACT(data,'$.currency') as currency, COUNT(*) as buys, COUNT(DISTINCT pid) as buyers, SUM(CAST(JSON_EXTRACT(data,'$.cost') AS REAL)) as total_spent FROM events WHERE type='purchase' AND server_ts > ? GROUP BY kind, id ORDER BY buys DESC LIMIT 50`).bind(startTs).all(),
-      env.DB.prepare(`SELECT JSON_EXTRACT(data,'$.kind') as kind, JSON_EXTRACT(data,'$.cat') as cat, COUNT(*) as buys, SUM(CAST(JSON_EXTRACT(data,'$.cost') AS REAL)) as total_spent FROM events WHERE type='purchase' AND server_ts > ? GROUP BY kind, cat ORDER BY buys DESC`).bind(startTs).all(),
-      env.DB.prepare(`SELECT pid, MAX(name) as name, JSON_EXTRACT(data,'$.currency') as currency, SUM(CAST(JSON_EXTRACT(data,'$.cost') AS REAL)) as total_spent, COUNT(*) as buys FROM events WHERE type='purchase' AND server_ts > ? GROUP BY pid, currency ORDER BY total_spent DESC LIMIT 30`).bind(startTs).all(),
+      env.DB.prepare(`SELECT CAST((server_ts - ?) / 86400000 AS INTEGER) as day, SUM(CAST(JSON_EXTRACT(data,'$.gold') AS REAL)) as v FROM events WHERE type='level_complete' AND verified=1 AND server_ts > ?` + whereClause + ' GROUP BY day ORDER BY day').bind(startTs, startTs, ...fb).all(),
+      env.DB.prepare(`SELECT CAST((server_ts - ?) / 86400000 AS INTEGER) as day, SUM(CAST(JSON_EXTRACT(data,'$.silver') AS REAL)) as v FROM events WHERE type='level_complete' AND verified=1 AND server_ts > ?` + whereClause + ' GROUP BY day ORDER BY day').bind(startTs, startTs, ...fb).all(),
+      env.DB.prepare(`SELECT CAST((server_ts - ?) / 86400000 AS INTEGER) as day, SUM(CAST(JSON_EXTRACT(data,'$.cost') AS REAL)) as v FROM events WHERE type='purchase' AND JSON_EXTRACT(data,'$.currency')='gold' AND server_ts > ?` + whereClause + ' GROUP BY day ORDER BY day').bind(startTs, startTs, ...fb).all(),
+      env.DB.prepare(`SELECT CAST((server_ts - ?) / 86400000 AS INTEGER) as day, SUM(CAST(JSON_EXTRACT(data,'$.cost') AS REAL)) as v FROM events WHERE type='purchase' AND JSON_EXTRACT(data,'$.currency')='silver' AND server_ts > ?` + whereClause + ' GROUP BY day ORDER BY day').bind(startTs, startTs, ...fb).all(),
+      env.DB.prepare(`SELECT JSON_EXTRACT(data,'$.kind') as kind, JSON_EXTRACT(data,'$.id') as id, JSON_EXTRACT(data,'$.cat') as cat, JSON_EXTRACT(data,'$.currency') as currency, COUNT(*) as buys, COUNT(DISTINCT pid) as buyers, SUM(CAST(JSON_EXTRACT(data,'$.cost') AS REAL)) as total_spent FROM events WHERE type='purchase' AND server_ts > ?` + whereClause + ' GROUP BY kind, id ORDER BY buys DESC LIMIT 50').bind(startTs, ...fb).all(),
+      env.DB.prepare(`SELECT JSON_EXTRACT(data,'$.kind') as kind, JSON_EXTRACT(data,'$.cat') as cat, COUNT(*) as buys, SUM(CAST(JSON_EXTRACT(data,'$.cost') AS REAL)) as total_spent FROM events WHERE type='purchase' AND server_ts > ?` + whereClause + ' GROUP BY kind, cat ORDER BY buys DESC').bind(startTs, ...fb).all(),
+      env.DB.prepare(`SELECT pid, MAX(name) as name, JSON_EXTRACT(data,'$.currency') as currency, SUM(CAST(JSON_EXTRACT(data,'$.cost') AS REAL)) as total_spent, COUNT(*) as buys FROM events WHERE type='purchase' AND server_ts > ?` + whereClause + ' GROUP BY pid, currency ORDER BY total_spent DESC LIMIT 30').bind(startTs, ...fb).all(),
       env.DB.prepare(`SELECT
         SUM(CASE WHEN type='level_complete' AND verified=1 THEN CAST(JSON_EXTRACT(data,'$.gold') AS REAL) ELSE 0 END) as gold_earned,
         SUM(CASE WHEN type='level_complete' AND verified=1 THEN CAST(JSON_EXTRACT(data,'$.silver') AS REAL) ELSE 0 END) as silver_earned,
         SUM(CASE WHEN type='purchase' AND JSON_EXTRACT(data,'$.currency')='gold' THEN CAST(JSON_EXTRACT(data,'$.cost') AS REAL) ELSE 0 END) as gold_spent,
         SUM(CASE WHEN type='purchase' AND JSON_EXTRACT(data,'$.currency')='silver' THEN CAST(JSON_EXTRACT(data,'$.cost') AS REAL) ELSE 0 END) as silver_spent,
         SUM(CASE WHEN type='session_start' THEN 1 ELSE 0 END) as sessions
-        FROM events WHERE server_ts > ?`).bind(startTs).first(),
+        FROM events WHERE server_ts > ?` + whereClause).bind(startTs, ...fb).first(),
     ]);
 
     function toSeries(rows) {
@@ -1348,12 +1387,15 @@ async function handleStatsSync(env, force) {
 }
 
 // === Recent events feed (last 100) + summary ===
-async function handleStatsFeed(env, force) {
-  return cachedJson('feed:latest', async () => {
+async function handleStatsFeed(env, force, url) {
+  const { whereClause, binds: fb } = buildFilterClause(url);
+  const hasFilter = fb.length > 0;
+  const cacheKey = 'feed:latest' + (hasFilter ? ':' + fb.join('|') : '');
+  return cachedJson(cacheKey, async () => {
     const fiveMinAgo = Date.now() - 5 * 60 * 1000;
     const [rows, summaryRows] = await Promise.all([
-      env.DB.prepare("SELECT pid, name, type, level, data, server_ts, verified FROM events ORDER BY server_ts DESC LIMIT 100").all(),
-      env.DB.prepare("SELECT type, COUNT(*) as c FROM events WHERE server_ts > ? GROUP BY type").bind(fiveMinAgo).all(),
+      env.DB.prepare("SELECT pid, name, type, level, data, server_ts, verified FROM events" + (hasFilter ? ' WHERE 1=1' + whereClause : '') + ' ORDER BY server_ts DESC LIMIT 100').bind(...fb).all(),
+      env.DB.prepare("SELECT type, COUNT(*) as c FROM events WHERE server_ts > ?" + whereClause + ' GROUP BY type').bind(fiveMinAgo, ...fb).all(),
     ]);
     const summary = {};
     if (summaryRows && summaryRows.results) for (const r of summaryRows.results) summary[r.type] = r.c;
@@ -3283,7 +3325,10 @@ async function makeAlertId(type, severity, message, since) {
 }
 
 // === Anomaly detection ===
-async function handleAnomalies(env, force) {
+async function handleAnomalies(env, force, url) {
+  const { whereClause, binds: fb } = buildFilterClause(url);
+  const levelFilter = url.searchParams.get('level');
+  const levelFilterNum = levelFilter !== null && /^\d{1,2}$/.test(levelFilter) ? parseInt(levelFilter, 10) : null;
   return cachedJson('anomalies', async () => {
     const now = Date.now();
     const alerts = [];
@@ -3341,7 +3386,8 @@ async function handleAnomalies(env, force) {
       }
     }
 
-    for (let level = 0; level < 20; level++) {
+    const levelsToCheck = levelFilterNum !== null ? [levelFilterNum] : Array.from({ length: 20 }, (_, i) => i);
+    for (const level of levelsToCheck) {
       const recent = recentMap[level];
       const baseline = baselineMap[level];
       if (!recent || !baseline || !baseline.starts || baseline.starts < 5) continue;
@@ -3409,11 +3455,11 @@ async function handleAnomalies(env, force) {
     // Global: verified % drop & DAU drop (parallel)
     const [recentVerified, baselineVerified, recentDAU, baselineDAU] = await Promise.all([
       env.DB.prepare(
-        "SELECT COUNT(*) as total, SUM(CASE WHEN verified=1 THEN 1 ELSE 0 END) as v FROM events WHERE server_ts >= ?"
-      ).bind(now - 7 * 86400000).first(),
+        "SELECT COUNT(*) as total, SUM(CASE WHEN verified=1 THEN 1 ELSE 0 END) as v FROM events WHERE server_ts >= ?" + whereClause
+      ).bind(now - 7 * 86400000, ...fb).first(),
       env.DB.prepare(
-        "SELECT COUNT(*) as total, SUM(CASE WHEN verified=1 THEN 1 ELSE 0 END) as v FROM events WHERE server_ts >= ? AND server_ts < ?"
-      ).bind(now - 35 * 86400000, now - 7 * 86400000).first(),
+        "SELECT COUNT(*) as total, SUM(CASE WHEN verified=1 THEN 1 ELSE 0 END) as v FROM events WHERE server_ts >= ? AND server_ts < ?" + whereClause
+      ).bind(now - 35 * 86400000, now - 7 * 86400000, ...fb).first(),
       env.DB.prepare(
         'SELECT AVG(unique_players) as avg_dau FROM stats_daily WHERE level=-1 AND date >= ?'
       ).bind(d7ago).first(),
@@ -3552,34 +3598,34 @@ export default {
       const force = url.searchParams.get('force') === '1';
       const before = url.searchParams.get('before') ? parseInt(url.searchParams.get('before'), 10) : null;
       if (path === '/stats' && request.method === 'GET') {
-        return jsonResponse(await handleStats(env, range, force, before));
+        return jsonResponse(await handleStats(env, range, force, before, url));
       }
       if (path === '/stats/levels' && request.method === 'GET') {
-        return jsonResponse(await handleStatsLevels(env, range, force, before));
+        return jsonResponse(await handleStatsLevels(env, range, force, before, url));
       }
       if (path === '/stats/players' && request.method === 'GET') {
-        return jsonResponse(await handleStatsPlayers(env, range, force, before));
+        return jsonResponse(await handleStatsPlayers(env, range, force, before, url));
       }
       if (path === '/stats/sessions' && request.method === 'GET') {
-        return jsonResponse(await handleStatsSessions(env, range, force, before));
+        return jsonResponse(await handleStatsSessions(env, range, force, before, url));
       }
       if (path === '/stats/ui' && request.method === 'GET') {
         return jsonResponse(await handleStatsUI(env, range, force, before));
       }
       if (path === '/stats/economy' && request.method === 'GET') {
-        return jsonResponse(await handleStatsEconomy(env, range, force, before));
+        return jsonResponse(await handleStatsEconomy(env, range, force, before, url));
       }
       if (path === '/stats/dailystage' && request.method === 'GET') {
         return jsonResponse(await handleStatsDailyStage(env, range, force, before));
       }
       if (path === '/stats/feed' && request.method === 'GET') {
-        return jsonResponse(await handleStatsFeed(env, force));
+        return jsonResponse(await handleStatsFeed(env, force, url));
       }
       if (path === '/stats/feed/stream' && request.method === 'GET') {
         return jsonResponse(await handleFeedStream(env, url));
       }
       if (path === '/stats/anomalies' && request.method === 'GET') {
-        return jsonResponse(await handleAnomalies(env, force));
+        return jsonResponse(await handleAnomalies(env, force, url));
       }
       if (path === '/stats/appversion' && request.method === 'GET') {
         return jsonResponse(await handleStatsAppVersion(env, range, force, before));
