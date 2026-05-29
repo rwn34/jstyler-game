@@ -47,6 +47,7 @@ showWelcomeFromFriendToast();
 }catch(e){}
 })();
 function showWelcomeFromFriendToast(){var t=document.createElement('div');t.textContent='Welcomed via friend';t.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(0,255,255,0.15);color:#0ff;border:1px solid #0ff;padding:8px 16px;border-radius:8px;font-family:monospace;font-size:0.8rem;z-index:9999;backdrop-filter:blur(8px);box-shadow:0 0 12px rgba(0,255,255,0.3);';document.body.appendChild(t);setTimeout(function(){t.style.transition='opacity 500ms';t.style.opacity='0';},3500);setTimeout(function(){if(t.parentNode)t.parentNode.removeChild(t);},4200);}
+function showGhostNotSyncedToast(){try{if(localStorage.getItem('ndj_ghostNoticeSeen')==='1')return;}catch(e){return;}try{localStorage.setItem('ndj_ghostNoticeSeen','1');}catch(e){}var t=document.createElement('div');t.textContent='\uD83D\uDC7B Ghost rival data is local-only. Replay times sync; ghost runs do not.';t.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(128,0,255,0.15);color:#c8f;border:1px solid #c8f;padding:8px 16px;border-radius:8px;font-family:monospace;font-size:0.7rem;z-index:9999;backdrop-filter:blur(8px);box-shadow:0 0 12px rgba(128,0,255,0.3);max-width:90vw;text-align:center;';document.body.appendChild(t);setTimeout(function(){t.style.transition='opacity 500ms';t.style.opacity='0';},5000);setTimeout(function(){if(t.parentNode)t.parentNode.removeChild(t);},5700);}
 
 // v2: session token + HMAC signing for anti-cheat
 var _sessionToken=null,_sessionExpiresAt=0,_sessionPromise=null;
@@ -428,6 +429,9 @@ function buildSyncData(){
         streakFreezes:load('streakFreezes',0),
         frozenDays:load('frozenDays',[]),
         dailyStreak:load('dailyStreak',0),
+        playDays:load('playDays',[]),
+        dailyCollection:load('dailyCollection',[]),
+        dailyStats:load('dailyStats',{}),
         sfx:sfxOn,
         mus:musOn,
         ctrl:ctrlMode,
@@ -500,6 +504,9 @@ function mergeSyncData(cloud){
     if(Array.isArray(cloud.frozenDays)){save('frozenDays',cloud.frozenDays);}
     if(typeof cloud.lastChest==='number'){lastChestClaim=cloud.lastChest;save('lastChest',lastChestClaim);}
     if(typeof cloud.lastResurrect==='number'){lastResurrectTime=cloud.lastResurrect;save('lastResurrect',lastResurrectTime);}
+    if(Array.isArray(cloud.playDays)){var trimmed=cloud.playDays.slice(-31);save('playDays',trimmed);playDays=trimmed;}
+    if(Array.isArray(cloud.dailyCollection)){dailyCollection=cloud.dailyCollection.slice();save('dailyCollection',dailyCollection);}
+    if(cloud.dailyStats&&typeof cloud.dailyStats==='object'){save('dailyStats',cloud.dailyStats);}
 }
 
 function queueSync(data,rewards,purchases){
@@ -528,6 +535,7 @@ function saveSync(data,rewards,purchases){
     }).then(function(r){return r.json();}).then(function(d){
         if(d&&d.ok){
             pendingPurchases=[];save('pendingPurchases',pendingPurchases);
+            try{localStorage.setItem('ndj_lastSyncAt',''+Date.now());}catch(e){}
             if(d.rejectedPurchases&&d.rejectedPurchases.length>0){
                 // Refund rejected purchases locally
                 for(var i=0;i<d.rejectedPurchases.length;i++){
@@ -602,6 +610,9 @@ function replaceSyncData(cloud){
     if(Array.isArray(cloud.hintsSeen)){hintsSeen=cloud.hintsSeen.slice();save('hintsSeen',hintsSeen);}
     if(typeof cloud.tutorialDone==='boolean'){save('tutorialDone',cloud.tutorialDone);}
     if(typeof cloud.ctrlPicked==='boolean'){save('ctrlPicked',cloud.ctrlPicked);}
+    if(Array.isArray(cloud.playDays)){var trimmed=cloud.playDays.slice(-31);save('playDays',trimmed);playDays=trimmed;}
+    if(Array.isArray(cloud.dailyCollection)){dailyCollection=cloud.dailyCollection.slice();save('dailyCollection',dailyCollection);}
+    if(cloud.dailyStats&&typeof cloud.dailyStats==='object'){save('dailyStats',cloud.dailyStats);}
 }
 
 function checkSyncCredentials(username,mmyy,pin,callback){
@@ -625,6 +636,8 @@ function loadSync(username,mmyy,pin,callback,replace){
         if(d&&d.ok&&d.data){
             if(replace)replaceSyncData(d.data);
             else mergeSyncData(d.data);
+            try{localStorage.setItem('ndj_lastSyncAt',''+Date.now());}catch(e){}
+            if(replace&&typeof showGhostNotSyncedToast==='function')setTimeout(showGhostNotSyncedToast,1500);
             if(typeof callback==='function')callback(true,d);
             // Reflect authoritative server state into local recovery-code flag.
             var serverFlag=(d.requiresRecoveryCodeSetup!==undefined

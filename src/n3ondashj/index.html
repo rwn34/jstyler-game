@@ -224,6 +224,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 @keyframes chestPulse{0%,100%{box-shadow:0 0 6px rgba(255,170,0,0.5),inset 0 0 4px rgba(255,170,0,0.3);transform:scale(1);}50%{box-shadow:0 0 18px rgba(255,170,0,0.9),inset 0 0 8px rgba(255,170,0,0.6);transform:scale(1.08);}}
 .rank-grid{display:flex;flex-direction:column;gap:18px;}
 @media (orientation: landscape) and (min-width: 580px){.rank-grid{display:grid !important;grid-template-columns:1fr 1fr !important;gap:24px !important;}}
+@media (max-width: 640px){.sync-advanced-grid{grid-template-columns:1fr !important;}}
 #onboard{position:fixed;inset:0;z-index:600;background:radial-gradient(ellipse at center,#0a0a20 0%,#020208 100%);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;overflow-y:auto;}
 #onboard.active{display:flex}
 #onboard .onb-logo{font-weight:900;letter-spacing:6px;background:linear-gradient(90deg,#0ff,#f0f);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:0 0 30px rgba(0,255,255,0.4);text-align:center;}
@@ -677,8 +678,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     <button onclick="saveSettings()" style="width:100%;">SAVE & BACK</button>
     <button id="btnInstall" class="btn-install" onclick="installPWA()" style="width:100%; padding: 10px 0;">INSTALL APP</button>
     <div style="display:flex; gap:10px;">
-        <button onclick="showExport()" style="flex:1; padding: 10px 0; background:linear-gradient(135deg,#0aa,#055);">EXPORT SAVE</button>
-        <button onclick="showImport()" style="flex:1; padding: 10px 0; background:linear-gradient(135deg,#fa0,#d80);">IMPORT SAVE</button>
+        <div style="flex:1;padding:10px;font-size:0.6rem;color:#888;text-align:center;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;">☁️ Saves are now stored in the cloud. Use the Cloud Sync panel to link devices.</div>
     </div>
     <div style="display:flex; gap:10px; margin-top:4px;">
         <button onclick="openContactUs()" title="Contact Us" style="width:44px;height:40px;background:linear-gradient(135deg,#555,#333);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">✉️</button>
@@ -1415,7 +1415,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     <div id="storeBalance" style="font-family:monospace;font-size:0.8rem;white-space:nowrap;"></div>
     <h2 style="color:#ffd700;margin:0;font-size:1rem;white-space:nowrap;">★ STORE</h2>
     <div onclick="updateShopkeeper()" style="cursor:pointer;display:flex;align-items:center;gap:4px;min-width:0;">
-        <span style="font-size:1.2rem;line-height:1;">🤖</span>
+        <span style="font-size:1.2rem;line-height:1;">💡</span>
         <span id="shopkeeperIdx" style="font-size:0.55rem;color:#666;font-family:monospace;">— / —</span>
         <span style="font-size:0.65rem;color:#0ff;">▶</span>
         <span id="shopkeeperMsgInline" class="sk-inline" style="font-size:0.5rem;color:#aaa;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none;flex:1;min-width:0;">Tip</span>
@@ -1553,6 +1553,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 
 <div id="onbWarn" class="onb-warn"></div>
 <button id="onbStart" class="onb-start" onclick="finishOnboard()">START PLAYING</button>
+<div style="margin-top:12px;text-align:center;font-size:0.6rem;color:#888;">Already have a save? <a href="#" onclick="event.preventDefault();linkExistingDevice();" style="color:#0ff;text-decoration:underline;">Link this device →</a></div>
 </div>
 
 <div id="ctrlPicker" style="position:fixed;inset:0;z-index:500;background:rgba(2,2,5,0.97);display:none;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:20px;">
@@ -1700,25 +1701,32 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
                 <button id="syncAutoToggle" onclick="toggleSyncAuto()" style="padding:4px 12px;font-size:0.65rem;font-weight:700;border:none;border-radius:4px;background:#0f8;color:#000;cursor:pointer;">ON</button>
             </div>
             <button onclick="syncNow()" style="width:100%;padding:10px 0;background:linear-gradient(135deg,#0aa,#055);border:none;border-radius:8px;cursor:pointer;color:#fff;font-weight:700;font-size:0.75rem;letter-spacing:1px;margin-top:8px;">🔄 SYNC NOW</button>
-            <div id="syncChangePinSection" style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.1);">
+            <details class="sync-secondary" style="margin-top:12px;border-top:1px solid rgba(255,255,255,0.1);padding-top:12px;">
+            <summary style="cursor:pointer;font-size:0.7rem;color:#888;font-weight:700;letter-spacing:1px;list-style:none;display:flex;align-items:center;gap:6px;">⚙️ Advanced Actions <span style="font-size:0.55rem;color:#666;">▼</span></summary>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;" class="sync-advanced-grid">
+            <div id="syncChangePinSection">
                 <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">CHANGE PIN <span style="color:#666;font-size:0.55rem;">— know your current PIN</span></div>
                 <input id="syncOldPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="Current PIN" style="width:100%;padding:8px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.7rem;outline:none;text-align:center;margin-bottom:6px;">
                 <input id="syncNewPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="New PIN" style="width:100%;padding:8px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.7rem;outline:none;text-align:center;margin-bottom:6px;">
                 <button onclick="changeSyncPinUI()" style="width:100%;padding:8px 0;background:linear-gradient(135deg,#555,#333);border:none;border-radius:8px;cursor:pointer;color:#fff;font-weight:700;font-size:0.7rem;letter-spacing:1px;">CHANGE PIN</button>
             </div>
-            <div id="syncForgotPinSection" style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.1);">
+            <div id="syncForgotPinSection">
                 <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">FORGOT PIN <span style="color:#666;font-size:0.55rem;">— reset without old PIN</span></div>
                 <div style="font-size:0.55rem;color:#fa0;margin-bottom:6px;line-height:1.4;">After the transition window, a recovery code will be required. Set one up below.</div>
                 <input id="syncForgotNewPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="New PIN (6 digits)" style="width:100%;padding:8px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.7rem;outline:none;text-align:center;margin-bottom:6px;">
                 <input id="forgotRecoveryCode" type="text" maxlength="19" placeholder="Recovery code (optional during transition)" style="width:100%;padding:8px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-family:monospace;font-size:0.65rem;outline:none;text-align:center;margin-bottom:6px;text-transform:uppercase;">
                 <button onclick="forgotSyncPinUI()" style="width:100%;padding:8px 0;background:linear-gradient(135deg,#a50,#830);border:none;border-radius:8px;cursor:pointer;color:#fff;font-weight:700;font-size:0.7rem;letter-spacing:1px;">RESET PIN</button>
             </div>
-            <div id="syncRecoverySection" style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.1);">
+            <div id="syncRecoverySection">
                 <div style="font-size:0.65rem;color:#888;margin-bottom:4px;">RECOVERY CODE</div>
                 <div id="recoveryCodeStatus" style="font-size:0.6rem;margin-bottom:6px;">Recovery code: <span style="color:#888;">—</span></div>
                 <button onclick="showRecoveryCodeModal()" style="width:100%;padding:8px 0;background:linear-gradient(135deg,#333,#222);border:none;border-radius:8px;cursor:pointer;color:#aaa;font-weight:700;font-size:0.7rem;letter-spacing:1px;">Set / replace recovery code</button>
             </div>
+            <div>
             <button onclick="showSyncLinkTab()" style="width:100%;padding:10px 0;background:linear-gradient(135deg,#333,#222);border:none;border-radius:8px;cursor:pointer;color:#aaa;font-weight:700;font-size:0.75rem;letter-spacing:1px;margin-top:8px;">🔗 LINK ANOTHER DEVICE</button>
+            </div>
+            </div>
+            </details>
         </div>
         <div id="syncStatus" style="font-size:0.65rem;color:#f80;text-align:center;min-height:16px;"></div>
         <button onclick="closeSyncPanel()" style="width:100%;padding:12px 0;background:linear-gradient(135deg,#555,#333);color:#fff;font-weight:700;border:none;border-radius:8px;cursor:pointer;font-size:0.8rem;letter-spacing:1px;">CLOSE</button>

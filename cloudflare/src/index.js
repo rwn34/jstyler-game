@@ -1582,6 +1582,28 @@ async function clearSyncFails(keyHash, env) {
   await env.DB.prepare('DELETE FROM sync_attempts WHERE key_hash = ?').bind(keyHash).run();
 }
 
+// ============================================================================
+// SYNC MERGE SCHEMA
+// ----------------------------------------------------------------------------
+// When data flows from a device's incoming save into the cloud row, each field
+// uses one of these merge strategies:
+//
+//   Cloud-wins (latest): equippedSkills, equippedCosmetics, settings,
+//     dailyStreak, streakFreezes, frozenDays, lastChest, lastResurrect,
+//     hintsSeen, tutorialDone, ctrlPicked, championStatus (except unlocked)
+//   Max:                 scores[L], bestTimes[L] (lower is better → min),
+//                        chips[L] (per-index OR), consumableInv[k],
+//                        globalData[k], silver, goldSpent, bonusGold,
+//                        stats[L].attempts, completions, hazards, silver,
+//                        timePlayed, contentVersion
+//   Union (dedupe):      unlocked[], ownedSkills[], ownedCosmetics[], playDays[]
+//   Union by date:       dailyStageBadges{}
+//   Max date string:     dailyStageChestClaimedDate
+//
+// If a client sends a field not in this schema, it's treated as cloud-wins
+// (last write). Bounds: array fields capped at sensible limits (31, 90, etc.)
+// to defend against malicious payloads.
+// ============================================================================
 async function handleSyncSave(request, env) {
   const body = await readJsonBody(request);
   const { username, mmyy, pin, deviceId, data, rewards, pendingPurchases, ts } = body || {};
@@ -1800,6 +1822,30 @@ async function handleSyncSave(request, env) {
           if (Array.isArray(data.hintsSeen)) mergedData.hintsSeen = data.hintsSeen;
           if ('tutorialDone' in data) mergedData.tutorialDone = data.tutorialDone;
           if ('ctrlPicked' in data) mergedData.ctrlPicked = data.ctrlPicked;
+
+          // playDays: union of all device contributions, trim to trailing 31 days
+          if (Array.isArray(data.playDays)) {
+            const merged = new Set([...(Array.isArray(parsed.playDays) ? parsed.playDays : []), ...data.playDays]);
+            const cutoff = new Date(serverTs - 31 * 86400000).toISOString().slice(0, 10);
+            mergedData.playDays = [...merged].filter(d => typeof d === 'string' && d >= cutoff).sort().slice(0, 31);
+          }
+
+          // dailyStageBadges: union by date (latest write wins on collision), trim to last 90 days
+          if (data.dailyStageBadges && typeof data.dailyStageBadges === 'object' && !Array.isArray(data.dailyStageBadges)) {
+            const merged = { ...(parsed.dailyStageBadges && typeof parsed.dailyStageBadges === 'object' && !Array.isArray(parsed.dailyStageBadges) ? parsed.dailyStageBadges : {}), ...data.dailyStageBadges };
+            const cutoff = new Date(serverTs - 90 * 86400000).toISOString().slice(0, 10);
+            mergedData.dailyStageBadges = Object.fromEntries(
+              Object.entries(merged).filter(([k]) => typeof k === 'string' && k >= cutoff).slice(0, 90)
+            );
+          }
+
+          // dailyStageChestClaimedDate: max date string (most recent wins)
+          if (typeof data.dailyStageChestClaimedDate === 'string') {
+            const existingDate = (typeof parsed.dailyStageChestClaimedDate === 'string' && parsed.dailyStageChestClaimedDate) || '';
+            mergedData.dailyStageChestClaimedDate = data.dailyStageChestClaimedDate > existingDate
+              ? data.dailyStageChestClaimedDate
+              : existingDate;
+          }
         }
       } catch (_) {}
 

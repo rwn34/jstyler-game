@@ -265,7 +265,7 @@ function claimPwaReward(){
     save('pwaRewardPending',false);
     queueSync();
     hidePwaBanner();
-    addFloat(W.innerWidth/2,W.innerHeight-60,'+100 ♦','#ffd700');
+    addFloat(W.innerWidth/2,W.innerHeight-60,'+100 ♦','#ccc');
     vib(10);
     if($('lsTopSilver'))$('lsTopSilver').textContent=silverWallet;
 }
@@ -769,7 +769,7 @@ function openProfile(){
 function closeProfile(){$('profile').classList.remove('active');}
 function renderProfile(){
     var rankInfo=getPlayerRankInfo();
-    $('pfRank').textContent=rankInfo.current.name;
+    $('pfRank').textContent=rankInfo.current.name+' \u00b7 '+rankInfo.score.toLocaleString()+' pts';
     $('pfRank').style.color=rankInfo.current.color;
     $('pfRank').style.borderColor=rankInfo.current.color;
     $('pfName').textContent=getDisplayName();
@@ -1277,7 +1277,7 @@ function claimDailyChestFromHome(){
     $('ovBtnCancel').style.display='none';
     ov.classList.add('active');
 }
-function updateShopkeeper(){var el=$('shopkeeperMsg');var elInline=$('shopkeeperMsgInline');if(!el&&!elInline)return;var i=Math.floor(Math.random()*TIPS.length);var text=TIPS[i];if(el)el.textContent=text;if(elInline)elInline.textContent=text;var idx=$('shopkeeperIdx');if(idx)idx.textContent=(i+1)+' / '+TIPS.length;}
+function updateShopkeeper(){var el=$('shopkeeperMsg');var elInline=$('shopkeeperMsgInline');if(!el&&!elInline)return;var idx=0;try{idx=parseInt(localStorage.getItem('ndj_storeTipIdx'))||0;}catch(e){}idx=idx%TIPS.length;var text=TIPS[idx];if(el)el.textContent=text;if(elInline)elInline.textContent=text;var idxEl=$('shopkeeperIdx');if(idxEl)idxEl.textContent=(idx+1)+' / '+TIPS.length;try{localStorage.setItem('ndj_storeTipIdx',''+(idx+1));}catch(e){}}
 
 var ITEM_RULES={
 ghost:{usage:'Always active when equipped',limit:'No usage limit',cooldown:'None',rules:'Records your fastest run on each level. The ghost replays alongside you on subsequent runs of the SAME level. Toggle visibility with the \ud83d\udc7b button bottom-left.'},
@@ -2560,6 +2560,9 @@ function openSyncPanel(){
         $('syncTabLink').style.display='block';
     }
 }
+function linkExistingDevice(){
+    openSyncLinkPanel();
+}
 function openSyncLinkPanel(){
     // Temporarily hide onboarding/overlay so sync panel (z-500) is visible
     var onboard=$('onboard');
@@ -2733,6 +2736,7 @@ function changeSyncPinUI(){
         if(success){
             status.textContent='PIN changed! Other devices must re-link.';status.style.color='#0f8';
             $('syncOldPin').value='';$('syncNewPin').value='';
+            try{localStorage.removeItem('ndj_ghostNoticeSeen');}catch(e){}
         }else{
             status.textContent=error||'PIN change failed.';status.style.color='#f80';
         }
@@ -2866,8 +2870,10 @@ function updateSyncIdentityDisplay(){
 function updateSyncStatusText(){
     var el=$('pfSyncStatus');
     if(!el)return;
+    var lastSyncStr='';
+    try{var ls=localStorage.getItem('ndj_lastSyncAt');if(ls){var ago=Date.now()-parseInt(ls);if(ago<60000)lastSyncStr=' • Last sync: just now';else if(ago<3600000)lastSyncStr=' • Last sync: '+Math.floor(ago/60000)+'m ago';else if(ago<86400000)lastSyncStr=' • Last sync: '+Math.floor(ago/3600000)+'h ago';else lastSyncStr=' • Last sync: '+Math.floor(ago/86400000)+'d ago';}else{lastSyncStr=' • Last sync: never';}}catch(e){}
     if(typeof syncRegistered!=='undefined'&&syncRegistered){
-        el.textContent='☁️ Cloud Sync — Registered'+(syncAuto?' • Auto-sync ON':'');
+        el.textContent='☁️ Cloud Sync — Registered'+(syncAuto?' • Auto-sync ON':'')+lastSyncStr;
         el.style.color='#0f8';
     }else{
         el.textContent='☁️ Cloud Sync — Not Registered';

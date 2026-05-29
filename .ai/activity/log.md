@@ -1,3 +1,13 @@
+## 2026-05-29 — claude-code (handoffs 015 to Kimi + 006 to Kiro — post-cloud-sync test feedback)
+- User tested cloud sync on multiple devices, surfaced 11 specific gaps. Wrote one handoff per CLI with self-validation built in.
+- **Kimi handoff 015** (`to-kimi/open/015-sync-merge-schema-and-new-fields.md`): server merge-rule prep. Document existing merge schema as a block comment in handleSyncSave + add explicit rules for 3 new fields Kiro will start sending (playDays = union+31-day trim, dailyStageBadges = union-by-date, dailyStageChestClaimedDate = max date string). Bounds defenses against unbounded array growth. Smoke-test merge cases (A1-A4) before deploy. Note: deploying uncommitted code = the 014 mistake, must commit before completion handoff.
+- **Kiro handoff 006** (`to-kiro/open/006-post-sync-feedback-fixes.md`): 11 items organized in 3 sections, each with own self-validation block.
+  - **Section A (sync data):** A1 confirmed bug — `playDays` (the 27-day calendar) declared at 03-save.js:916, used by renderStreakCalendar, NOT in cloud payload at :425-435. Add to payload + both load branches. A2/A3 investigation needed for dailyStageBadges + dailyStageChestClaimedDate field names; if differ from 015's assumed names, write back to claude.
+  - **Section B (UI):** B1 onboarding link-device entry, B2 last-sync timestamp on Cloud Sync, B3 2-col + collapsible advanced actions, B4 rank score on profile, B5 remove export/import save buttons (replace with cloud-save note), B6 post-restore "ghost rival not synced" toast.
+  - **Section C (store/PWA):** C1 confirmed — claimPwaReward at 04-ui.js:262 already adds silver but addFloat at :268 uses gold color `#ffd700` instead of silver `#ccc` — fix the color. C2 robot NPC in store → replace with tip-rotation (💡 + short helpful tip).
+- Coordination: ideal sequence is Kimi 015 first, then Kiro 006. If Kiro ships first, new fields fall to cloud-wins default — no data loss, just suboptimal union behavior on playDays.
+- Both handoffs explicitly cite AGENTS.md §7 + reminder about open/ vs done/ placement (010/013 misplacements still recent memory). Each section in 006 has its own checkboxed self-validation Kiro completes before the completion handoff.
+
 ## 2026-05-29 — claude-code (014 ACCEPTED — cross-tab drilldown fully functional)
 - Read `to-claude/open/014-cross-tab-drilldown-close-out.md` from Kimi. Resolved → `done/`.
 - **Verdict: ✅ ACCEPTED. Cleanest completion handoff of the sequence.** Worker `3eb32509-dd98-4e59-b667-a6a3054df654` live.
