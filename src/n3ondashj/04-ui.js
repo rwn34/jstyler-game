@@ -2711,6 +2711,7 @@ function confirmLinkDevice(){
             playerMmyy=mmyy;save('playerMmyy',playerMmyy);
             syncPin=pin;save('syncPin',syncPin);
             syncRegistered=true;save('syncRegistered',true);
+            try{localStorage.removeItem('ndj_ghostNoticeSeen');}catch(e){}
             // Show restart prompt
             var restartHtml='<div style="text-align:center;padding:12px;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.3);border-radius:8px;margin-top:8px;">';
             restartHtml+='<div style="font-size:0.75rem;color:#0f8;font-weight:700;margin-bottom:6px;">🎉 All data received!</div>';
@@ -2852,6 +2853,7 @@ function forgotSyncPinUI(){
         if(success){
             status.textContent='PIN reset! Re-link your other devices.';status.style.color='#0f8';
             $('syncForgotNewPin').value='';$('syncOldPin').value='';
+            try{localStorage.removeItem('ndj_ghostNoticeSeen');}catch(e){}
             updateSyncIdentityDisplay();
             updateSyncStatusText();
         }else{

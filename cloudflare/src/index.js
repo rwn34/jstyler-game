@@ -1597,8 +1597,8 @@ async function clearSyncFails(keyHash, env) {
 //                        stats[L].attempts, completions, hazards, silver,
 //                        timePlayed, contentVersion
 //   Union (dedupe):      unlocked[], ownedSkills[], ownedCosmetics[], playDays[]
-//   Union by date:       dailyStageBadges{}
-//   Max date string:     dailyStageChestClaimedDate
+//   Union by .date key:  dailyCollection[]   (array of {date, name, time, rankIdx})
+//   Compound merge:      dailyStats{}        (single-day object; newer-day wins, same-day OR/min/max)
 //
 // If a client sends a field not in this schema, it's treated as cloud-wins
 // (last write). Bounds: array fields capped at sensible limits (31, 90, etc.)
@@ -1830,21 +1830,49 @@ async function handleSyncSave(request, env) {
             mergedData.playDays = [...merged].filter(d => typeof d === 'string' && d >= cutoff).sort().slice(0, 31);
           }
 
-          // dailyStageBadges: union by date (latest write wins on collision), trim to last 90 days
-          if (data.dailyStageBadges && typeof data.dailyStageBadges === 'object' && !Array.isArray(data.dailyStageBadges)) {
-            const merged = { ...(parsed.dailyStageBadges && typeof parsed.dailyStageBadges === 'object' && !Array.isArray(parsed.dailyStageBadges) ? parsed.dailyStageBadges : {}), ...data.dailyStageBadges };
+          // dailyCollection: array of {date, name, time, rankIdx} — union by date, latest write wins on collision, trim to last 90 days
+          if (Array.isArray(data.dailyCollection)) {
             const cutoff = new Date(serverTs - 90 * 86400000).toISOString().slice(0, 10);
-            mergedData.dailyStageBadges = Object.fromEntries(
-              Object.entries(merged).filter(([k]) => typeof k === 'string' && k >= cutoff).slice(0, 90)
-            );
+            const byDate = new Map();
+            for (const entry of (Array.isArray(parsed.dailyCollection) ? parsed.dailyCollection : [])) {
+              if (entry && typeof entry.date === 'string' && entry.date >= cutoff) byDate.set(entry.date, entry);
+            }
+            for (const entry of data.dailyCollection) {
+              if (entry && typeof entry.date === 'string' && entry.date >= cutoff) byDate.set(entry.date, entry);
+            }
+            mergedData.dailyCollection = [...byDate.values()]
+              .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+              .slice(-90);
           }
 
-          // dailyStageChestClaimedDate: max date string (most recent wins)
-          if (typeof data.dailyStageChestClaimedDate === 'string') {
-            const existingDate = (typeof parsed.dailyStageChestClaimedDate === 'string' && parsed.dailyStageChestClaimedDate) || '';
-            mergedData.dailyStageChestClaimedDate = data.dailyStageChestClaimedDate > existingDate
-              ? data.dailyStageChestClaimedDate
-              : existingDate;
+          // dailyStats: {day, played, completed, bestTime, deaths, reward} — single object for the current day
+          // Merge: compare .day strings; later date wins outright; same day → OR booleans, min bestTime, max deaths, prefer non-null reward
+          if (data.dailyStats && typeof data.dailyStats === 'object') {
+            const cur = (parsed.dailyStats && typeof parsed.dailyStats === 'object') ? parsed.dailyStats : null;
+            const incoming = data.dailyStats;
+            const incomingDay = typeof incoming.day === 'string' ? incoming.day : '';
+            const curDay = cur && typeof cur.day === 'string' ? cur.day : '';
+            if (!cur || incomingDay > curDay) {
+              mergedData.dailyStats = incoming;
+            } else if (incomingDay === curDay && incomingDay) {
+              mergedData.dailyStats = {
+                day: curDay,
+                played: !!(cur.played || incoming.played),
+                completed: !!(cur.completed || incoming.completed),
+                bestTime: (() => {
+                  const a = typeof cur.bestTime === 'number' ? cur.bestTime : null;
+                  const b = typeof incoming.bestTime === 'number' ? incoming.bestTime : null;
+                  if (a == null) return b;
+                  if (b == null) return a;
+                  return Math.min(a, b);
+                })(),
+                deaths: Math.max(
+                  typeof cur.deaths === 'number' ? cur.deaths : 0,
+                  typeof incoming.deaths === 'number' ? incoming.deaths : 0
+                ),
+                reward: incoming.reward != null ? incoming.reward : cur.reward,
+              };
+            }
           }
         }
       } catch (_) {}

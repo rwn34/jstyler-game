@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.2.65 — May 29, 2026
+
+### Added
+- **Link existing device** entry on onboarding — skip name/control setup if you already have a cloud save
+- **Last-sync timestamp** on Cloud Sync status panel (e.g., "Last sync: 3m ago")
+- **Rank score** (e.g., "12,450 pts") shown on profile alongside rank name
+- **Post-restore notice:** ghost rival data is local-only, your replay times sync but ghost runs do not
+
+### Changed
+- Cloud Sync panel reorganized: primary actions on top, advanced options (Change PIN, Reset PIN, Recovery Code, Link Device) collapsed by default
+- Store: replaced robot NPC icon with rotating 💡 tip icon
+
+### Fixed
+- **Day-streak calendar (`playDays`) now syncs across devices** — previously empty after sync-load on a new device
+- **Daily-stage badges (`dailyCollection`) and daily stats now sync** — previously lost on device transfer
+- **PWA install reward** now displays in silver color (was incorrectly shown in gold; the wallet credit was always silver)
+- Removed redundant Save Export/Import buttons from Settings (Cloud Sync supersedes them; functions retained internally)
+
 ## v1.2.64 — May 27, 2026
 
 ### Added
