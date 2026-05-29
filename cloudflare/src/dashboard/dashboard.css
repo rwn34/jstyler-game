@@ -325,3 +325,8 @@ table tbody tr.clickable-row td:first-child{border-left:2px solid transparent;tr
 table tbody tr.clickable-row:hover td:first-child{border-left-color:#0ff}
 
 @media (min-width:780px){body{padding:24px 32px;max-width:1280px;margin:0 auto}h1{font-size:1.8rem}}
+
+/* Players section layout */
+.players-section{margin-bottom:24px}
+.players-section > h2{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:.9rem}
+.players-section .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}

@@ -297,11 +297,11 @@ test.describe('Desktop (1280x800)', () => {
     expect(networkErrors).toEqual([]);
   });
 
-  test('17. Top Referrers widget renders on Per Player tab', async ({ page }) => {
+  test('17. Players All segment shows 3 thematic sections', async ({ page }) => {
     const { consoleErrors, networkErrors } = setupErrorCollection(page);
     await page.goto(`${BASE_URL}#/players?range=7d`);
-    // Top Referrers is only shown in "All" segment (default)
-    await expect(page.locator('h2', { hasText: 'Top Referrers' })).toBeVisible();
+    await expect(page.locator('section.players-section')).toHaveCount(3);
+    await expect(page.locator('section.players-section h2')).toContainText(['🏃 Activity', '📈 Progression', '💰 Economy']);
     expect(consoleErrors).toEqual([]);
     expect(networkErrors).toEqual([]);
   });
@@ -426,8 +426,8 @@ test.describe('Desktop (1280x800)', () => {
     });
 
     await page.goto(`${BASE_URL}#/platform?range=7d`);
-    await page.waitForSelector('table tbody tr');
-    await page.locator('table tbody tr:first-child').click();
+    await page.waitForSelector('table tbody tr.clickable-row');
+    await page.locator('table tbody tr.clickable-row:first-child').click();
 
     await expect(page.locator('.filter-strip')).toBeVisible();
     await expect(page.locator('.filter-strip')).toContainText('US');
@@ -463,8 +463,8 @@ test.describe('Desktop (1280x800)', () => {
 
     await page.goto(`${BASE_URL}#/platform?range=7d`);
     await page.locator('.subtabs [role="tab"]').filter({ hasText: /Versions/ }).click();
-    await page.waitForSelector('table tbody tr');
-    await page.locator('table tbody tr:first-child').click();
+    await page.waitForSelector('table tbody tr.clickable-row');
+    await page.locator('table tbody tr.clickable-row:first-child').click();
 
     await expect(page.locator('.filter-strip')).toBeVisible();
     await expect(page.locator('.filter-strip')).toContainText('1.2.3');
@@ -549,6 +549,59 @@ test.describe('Desktop (1280x800)', () => {
   });
 
 
+  test('34. Players All segment shows 3 sections with chip-strips', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+
+    await page.route(/\/stats\/players/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: {
+        recentActive: [{ pid: 'p1', name: 'Alice', last_seen: Date.now(), cohort: 'new' }],
+        topActive: [{ pid: 'p2', name: 'Bob', events: 50, last_seen: Date.now() }],
+        highMotivation: [{ pid: 'p3', name: 'Carol', perseverance: 10, streak: 2 }],
+        newPlayers: [{ pid: 'p4', name: 'Dan', events: 5, first_seen: Date.now() }],
+        returningPlayers: [{ pid: 'p5', name: 'Eve', events: 20, last_seen: Date.now(), first_seen: Date.now() - 86400000 }],
+        champions: [{ pid: 'p6', name: 'Frank', cleared: 20 }],
+        topCompleters: [{ pid: 'p7', name: 'Grace', completions: 15, unique_levels: 15 }],
+        topGold: [{ pid: 'p8', name: 'Heidi', total_gold: 100, total_silver: 200 }],
+        generatedAt: Date.now(),
+      }}) });
+    });
+    await page.route(/\/stats\/flagged-players/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { players: [] } }) });
+    });
+
+    await page.goto(`${BASE_URL}#/players?range=7d`);
+
+    // Wait for sections to render
+    await page.waitForSelector('section.players-section');
+
+    // Should have exactly 3 sections
+    const sections = page.locator('section.players-section');
+    await expect(sections).toHaveCount(3);
+
+    // Verify section titles
+    await expect(page.locator('section.players-section h2')).toContainText(['🏃 Activity', '📈 Progression', '💰 Economy']);
+
+    // Each section should have a chip-strip with at least 2 chips
+    const chips = page.locator('section.players-section [role="tablist"] button[role="tab"]');
+    await expect(chips).toHaveCount(9); // 3 + 4 + 2
+
+    // Default chips should be selected
+    const activeChips = page.locator('section.players-section [role="tablist"] button[role="tab"][aria-selected="true"]');
+    await expect(activeChips).toHaveCount(3);
+
+    // Click "Most Active" in Activity section and verify table updates
+    const activitySection = page.locator('section.players-section').nth(0);
+    await activitySection.locator('button[role="tab"]').filter({ hasText: 'Most Active' }).click();
+    await expect(activitySection.locator('button[role="tab"][aria-selected="true"]')).toContainText('Most Active');
+
+    // Switch to Flagged segment — 3-section layout should hide
+    await page.locator('.segment-chip').filter({ hasText: '🚩 Flagged' }).click();
+    await expect(page.locator('section.players-section')).toHaveCount(0);
+
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
   // PlayerModal referrals section is covered by synthetic smoke test and visual snapshots.
 });
 
@@ -589,10 +642,11 @@ test.describe('Mobile (380x800)', () => {
     expect(networkErrors).toEqual([]);
   });
 
-  test('17m. Top Referrers widget renders on Per Player tab', async ({ page }) => {
+  test('17m. Players All segment shows 3 thematic sections on mobile', async ({ page }) => {
     const { consoleErrors, networkErrors } = setupErrorCollection(page);
     await page.goto(`${BASE_URL}#/players?range=7d`);
-    await expect(page.locator('h2', { hasText: 'Top Referrers' })).toBeVisible();
+    await expect(page.locator('section.players-section')).toHaveCount(3);
+    await expect(page.locator('section.players-section h2')).toContainText(['🏃 Activity', '📈 Progression', '💰 Economy']);
     expect(consoleErrors).toEqual([]);
     expect(networkErrors).toEqual([]);
   });
@@ -707,8 +761,8 @@ test.describe('Mobile (380x800)', () => {
     });
 
     await page.goto(`${BASE_URL}#/platform?range=7d`);
-    await page.waitForSelector('table tbody tr');
-    await page.locator('table tbody tr:first-child').click();
+    await page.waitForSelector('table tbody tr.clickable-row');
+    await page.locator('table tbody tr.clickable-row:first-child').click();
 
     await expect(page.locator('.filter-strip')).toBeVisible();
     await expect(page.locator('.filter-strip')).toContainText('US');
@@ -744,8 +798,8 @@ test.describe('Mobile (380x800)', () => {
 
     await page.goto(`${BASE_URL}#/platform?range=7d`);
     await page.locator('.subtabs [role="tab"]').filter({ hasText: /Versions/ }).click();
-    await page.waitForSelector('table tbody tr');
-    await page.locator('table tbody tr:first-child').click();
+    await page.waitForSelector('table tbody tr.clickable-row');
+    await page.locator('table tbody tr.clickable-row:first-child').click();
 
     await expect(page.locator('.filter-strip')).toBeVisible();
     await expect(page.locator('.filter-strip')).toContainText('1.2.3');
@@ -824,6 +878,42 @@ test.describe('Mobile (380x800)', () => {
 
     await page.goto(`${BASE_URL}#/retention?range=7d`);
     await expect(page.locator('.filter-ignored-notice')).not.toBeVisible();
+
+    expect(consoleErrors).toEqual([]);
+    expect(networkErrors).toEqual([]);
+  });
+
+  test('34m. Players All segment shows 3 sections with chip-strips on mobile', async ({ page }) => {
+    const { consoleErrors, networkErrors } = setupErrorCollection(page);
+
+    await page.route(/\/stats\/players/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: {
+        recentActive: [{ pid: 'p1', name: 'Alice', last_seen: Date.now(), cohort: 'new' }],
+        topActive: [{ pid: 'p2', name: 'Bob', events: 50, last_seen: Date.now() }],
+        highMotivation: [{ pid: 'p3', name: 'Carol', perseverance: 10, streak: 2 }],
+        newPlayers: [{ pid: 'p4', name: 'Dan', events: 5, first_seen: Date.now() }],
+        returningPlayers: [{ pid: 'p5', name: 'Eve', events: 20, last_seen: Date.now(), first_seen: Date.now() - 86400000 }],
+        champions: [{ pid: 'p6', name: 'Frank', cleared: 20 }],
+        topCompleters: [{ pid: 'p7', name: 'Grace', completions: 15, unique_levels: 15 }],
+        topGold: [{ pid: 'p8', name: 'Heidi', total_gold: 100, total_silver: 200 }],
+        generatedAt: Date.now(),
+      }}) });
+    });
+    await page.route(/\/stats\/flagged-players/, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { players: [] } }) });
+    });
+
+    await page.goto(`${BASE_URL}#/players?range=7d`);
+
+    await page.waitForSelector('section.players-section');
+
+    const sections = page.locator('section.players-section');
+    await expect(sections).toHaveCount(3);
+
+    await expect(page.locator('section.players-section h2')).toContainText(['🏃 Activity', '📈 Progression', '💰 Economy']);
+
+    const activeChips = page.locator('section.players-section [role="tablist"] button[role="tab"][aria-selected="true"]');
+    await expect(activeChips).toHaveCount(3);
 
     expect(consoleErrors).toEqual([]);
     expect(networkErrors).toEqual([]);

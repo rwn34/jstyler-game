@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useMemo } from 'preact/hooks';
 import { range, loadedAt, currentPlayerPid, currentSegment, currentFilters } from '../state.js';
 import { fetchJson, getReferrals } from '../api.js';
 import { fmtNum, fmtAgo, escapeHtml, truncatePid } from '../format.js';
@@ -6,6 +6,7 @@ import { Table } from '../components/Table.jsx';
 import { LoadingPane } from '../components/LoadingPane.jsx';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { ErrorState } from '../components/ErrorState.jsx';
+import { PlayersSection } from '../components/PlayersSection.jsx';
 
 const SEGMENTS = [
   { id: 'all', label: 'All' },
@@ -188,6 +189,13 @@ export function Players({ force }) {
   const showFlagged = segment === 'flagged';
   const showBanned = segment === 'banned';
 
+  // Derive Top Earners client-side from the same topGold dataset (sort by total_silver)
+  const topEarners = useMemo(() => {
+    const arr = (d.topGold || []).slice();
+    arr.sort((a, b) => (b.total_silver || 0) - (a.total_silver || 0));
+    return arr;
+  }, [d.topGold]);
+
   return (
     <>
       <div class="segment-chips" role="group" aria-label="Player segments">
@@ -203,62 +211,63 @@ export function Players({ force }) {
         ))}
       </div>
 
-      {!showFlagged && !showBanned && (
+      {showAll && (
         <>
-          {(showAll || showActive) && <>
+          <PlayersSection
+            title="🏃 Activity"
+            chips={[
+              { id: 'recent', label: 'Recently Active', data: d.recentActive || [], columns: recentCols, defaultSort: { key: 'last_seen', dir: 'desc' } },
+              { id: 'most',   label: 'Most Active',     data: d.topActive || [],     columns: activeCols, defaultSort: { key: 'events', dir: 'desc' } },
+              { id: 'motiv',  label: 'High Motivation', data: d.highMotivation || [], columns: motivCols,  defaultSort: { key: '_score', dir: 'desc' } },
+            ]}
+            exportFilenamePrefix="ndj-activity"
+          />
+          <PlayersSection
+            title="📈 Progression"
+            chips={[
+              { id: 'new',        label: 'New',           data: d.newPlayers || [],    columns: newCols,       defaultSort: { key: 'first_seen', dir: 'desc' } },
+              { id: 'returning',  label: 'Returning',     data: d.returningPlayers || [], columns: retCols,    defaultSort: { key: 'last_seen', dir: 'desc' } },
+              { id: 'champions',  label: 'Champions',     data: d.champions || [],      columns: champCols,    defaultSort: null },
+              { id: 'completers', label: 'Top Completers',data: d.topCompleters || [],  columns: completerCols, defaultSort: { key: 'completions', dir: 'desc' } },
+            ]}
+            exportFilenamePrefix="ndj-progression"
+          />
+          <PlayersSection
+            title="💰 Economy"
+            chips={[
+              { id: 'wealthy', label: 'Wealthiest',  data: d.topGold || [],   columns: goldCols, defaultSort: { key: 'total_gold', dir: 'desc' } },
+              { id: 'earners', label: 'Top Earners', data: topEarners,        columns: goldCols, defaultSort: { key: 'total_silver', dir: 'desc' } },
+            ]}
+            exportFilenamePrefix="ndj-economy"
+          />
+        </>
+      )}
+
+      {!showAll && !showFlagged && !showBanned && (
+        <>
+          {showActive && <>
             <h2>Recently Active</h2>
             <div class="panel scroll-x"><Table columns={recentCols} rows={d.recentActive || []} defaultSort={{ key: 'last_seen', dir: 'desc' }} filterable exportable exportFilename={`ndj-recent-active-${range.value}-${today}.csv`} /></div>
           </>}
 
-          {showAll && <>
-            <h2>High Motivation (perseverance + streak)</h2>
-            <div class="panel scroll-x"><Table columns={motivCols} rows={d.highMotivation || []} defaultSort={{ key: '_score', dir: 'desc' }} filterable exportable exportFilename={`ndj-motivation-${range.value}-${today}.csv`} /></div>
-          </>}
-
-          {(showAll || showNew) && <>
+          {showNew && <>
             <h2>New Players (in range)</h2>
             <div class="panel scroll-x"><Table columns={newCols} rows={d.newPlayers || []} defaultSort={{ key: 'first_seen', dir: 'desc' }} filterable exportable exportFilename={`ndj-new-players-${range.value}-${today}.csv`} /></div>
           </>}
 
-          {(showAll || showReturning) && <>
+          {showReturning && <>
             <h2>Returning Players (in range)</h2>
             <div class="panel scroll-x"><Table columns={retCols} rows={d.returningPlayers || []} defaultSort={{ key: 'last_seen', dir: 'desc' }} filterable exportable exportFilename={`ndj-returning-${range.value}-${today}.csv`} /></div>
           </>}
 
-          {(showAll || showChampions) && <>
+          {showChampions && <>
             <h2>★ Champions (all 20 cleared, all-time)</h2>
             <div class="panel scroll-x"><Table columns={champCols} rows={d.champions || []} filterable exportable exportFilename={`ndj-champions-${today}.csv`} /></div>
           </>}
 
-          {(showAll || showActive) && <>
+          {showActive && <>
             <h2>Most Active</h2>
             <div class="panel scroll-x"><Table columns={activeCols} rows={d.topActive || []} defaultSort={{ key: 'events', dir: 'desc' }} filterable exportable exportFilename={`ndj-most-active-${range.value}-${today}.csv`} /></div>
-          </>}
-
-          {showAll && <>
-            <h2>Top Completers</h2>
-            <div class="panel scroll-x"><Table columns={completerCols} rows={d.topCompleters || []} defaultSort={{ key: 'completions', dir: 'desc' }} filterable exportable exportFilename={`ndj-completers-${range.value}-${today}.csv`} /></div>
-
-            <h2>Wealthiest</h2>
-            <div class="panel scroll-x"><Table columns={goldCols} rows={d.topGold || []} defaultSort={{ key: 'total_gold', dir: 'desc' }} filterable exportable exportFilename={`ndj-wealthiest-${range.value}-${today}.csv`} /></div>
-
-            <h2>Anti-cheat Watchlist</h2>
-            <div class="panel scroll-x"><Table columns={watchCols} rows={d.lowestVerified || []} defaultSort={{ key: '_ratio', dir: 'asc' }} filterable exportable exportFilename={`ndj-watchlist-${range.value}-${today}.csv`} /></div>
-
-            <h2>Top Referrers</h2>
-            <div class="panel scroll-x">
-              {(!referrals || !referrals.top_referrers || !referrals.top_referrers.length) ? (
-                <EmptyState message="No referrals yet" hint="Players who bring friends in via QR share appear here" />
-              ) : (
-                <Table
-                  columns={referralCols}
-                  rows={referrals.top_referrers}
-                  defaultSort={{ key: 'referrals', dir: 'desc' }}
-                  exportable
-                  exportFilename={`ndj-top-referrers-${range.value}-${today}.csv`}
-                />
-              )}
-            </div>
           </>}
         </>
       )}
