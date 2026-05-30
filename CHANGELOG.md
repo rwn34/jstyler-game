@@ -1,5 +1,34 @@
 # Changelog
 
+## v1.2.69 — May 29, 2026
+
+### Fixed
+- **Streak counter (🔥 X days)** now updates immediately after a cloud-sync load — previously it remained stuck at the pre-sync value until the next page reload, because the in-memory streak variable wasn't refreshed alongside its localStorage write.
+
+## v1.2.68 — May 29, 2026
+
+### Changed
+- **Stage-select tips** — rotation interval slowed to 4 seconds for easier reading; tips expanded from 20 to 50; rotation is now shuffled (each tip shown once before any repeats).
+- **Share popup** — message textarea + preview now both live in the right column alongside the QR; previously the preview sat in a third row below.
+
+## v1.2.67 — May 29, 2026
+
+### Added
+- **Rotating tips on stage-select** — bite-sized hints about skills, settings, and game features, cycling every 2 seconds. Aligned with the fullscreen toggle in landscape, the feedback button in portrait. Toggleable in Settings.
+
+### Changed
+- **Profile layout** — Cloud Sync section moved below the Rank / Global Stats grid for clearer information hierarchy.
+- **Profile rank display** — rank name and score points are now separate chips instead of a combined "Name · 12,450 pts" string.
+- **Share popup** — QR code and message textarea now sit side-by-side in two columns (QR on the left), making both visible without scrolling.
+
+### Removed
+- "Saves are now stored…" notice from Settings — Cloud Sync panel was already discoverable; the redundant note added clutter.
+
+## v1.2.66 — May 29, 2026
+
+### Fixed
+- **Daily stage now locks to landscape on launch** — previously the orientation lock and fullscreen request were skipped when entering a daily stage from the preview, leaving the player in the device's natural orientation despite the in-settings landscape default.
+
 ## v1.2.65 — May 29, 2026
 
 ### Added

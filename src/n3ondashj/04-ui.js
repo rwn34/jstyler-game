@@ -22,6 +22,64 @@ var pTrail=[];
 var platforms=[],spikes=[],chips=[],lasers=[],ziplines=[],particles=[];
 var wParts=[],wTimer=0,flash=0,deathFlash=0,gemFlash=0;
 var hudDistDisplay=0;
+var STAGE_TIPS=[
+  'Equip up to 3 skills at a time. Manage them in Store \u2192 Skills.',
+  'Coyote Boost doubles the window for jumping after walking off a platform.',
+  'Air Dash gives you a horizontal burst after your double jump.',
+  'Clipping absorbs your first hazard hit per run. Falls still kill.',
+  'Auto Resurrect respawns you on death \u2014 once every 2 minutes.',
+  'Magnet pulls nearby gems toward you automatically.',
+  'Slow Fall: hold jump while descending to halve your fall speed.',
+  'Bouncy platforms launch you 1.5\u00d7 higher AND reset your double jump.',
+  'Pulse platforms warn before disappearing \u2014 watch for the flicker.',
+  'Daily stage rotates every 24 hours. Champions earn gold; others earn silver.',
+  'Master Gems are hidden across all stages \u2014 visible only to Champions.',
+  'Cloud Sync lets you continue on any device. Settings \u2192 Cloud Save.',
+  'Adjust button size and position in pause \u2192 Adjust Layout.',
+  'Auto-retry your fails \u2014 set the delay in Settings \u2192 Auto-retry.',
+  'Storm stages have lightning. Watch for the flash before the strike.',
+  'Combo gems quickly for \u00d72 / \u00d73 / \u00d74 multipliers on style points.',
+  'Edge landings (within 5px of platform edge) earn bonus style points.',
+  'Save your recovery code \u2014 the only way back if you forget your PIN.',
+  'QR-share your game \u2014 friends nearby can scan and play in seconds.',
+  'Frame-rate independent: the game feels the same at 30, 60, or 144 fps.',
+  'Cosmetics never affect gameplay \u2014 wear what looks coolest.',
+  'Daily Chest gives 70% silver, 30% gold \u2014 don\'t miss your daily login.',
+  'Each stage has a unique day/night cycle \u2014 just visual, no gameplay impact.',
+  'Storm weather brings lightning. Use Clipping to absorb a strike.',
+  'Champion ceremony: clear all 20 stages and unlock 7 endgame perks.',
+  'First gold-gem pickup is permanent. Re-collecting only gives score.',
+  'Triple Jump consumable: 15s cooldown between uses.',
+  'Double Shield blocks 2 hazard hits \u2014 falls still kill you.',
+  'Time Freeze halts lasers and moving platforms for 10 seconds.',
+  'Death cosmetics play their animation only on real death.',
+  'Bouncy platforms reset double jump even mid-cooldown.',
+  'Pulse platforms hide every 4 seconds \u2014 time your jumps.',
+  'Ziplines speed you across gaps \u2014 hop off anytime.',
+  'Daily Master Chip: gold for Champions, silver for everyone else.',
+  'Watch tutorial tips that flash above your character at level start.',
+  'Lasers cycle: 100 frames ON, 80 frames OFF. Learn the rhythm.',
+  'Spikes never appear on the first 4 platforms or the finish.',
+  'Auto-Retry instantly relaunches you on death \u2014 for grinders.',
+  'Magnet skill pulls gems into your reach \u2014 great for dense levels.',
+  'Jump Buffer: press jump 6 frames before landing \u2014 it\'ll register.',
+  'Slow Fall + Low Gravity = max hang time. Ideal for exploration.',
+  'Dust Storm has the slipperiest physics in the game.',
+  'Frost Byte has the grippiest physics \u2014 all snow, no slide.',
+  'Void Walker is the lowest gravity \u2014 almost moonwalking.',
+  'Solar Flare has the heaviest gravity \u2014 fast falls, short jumps.',
+  'Player rank grows with gold, silver, clears, and matches combined.',
+  'Cyber Legend is the top rank \u2014 score 9,500 to reach it.',
+  'Sell unwanted items from the store for full refund \u2014 try before commitment.',
+  'Refer-a-friend: share your QR \u2014 friends get welcomed automatically.',
+  'Profile shows your hazard breakdown \u2014 see which traps kill you most.'
+];
+var _stageTipShuffled=null,_stageTipShuffleIdx=0;
+function _shuffleStageTips(){var arr=STAGE_TIPS.slice();for(var i=arr.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=arr[i];arr[i]=arr[j];arr[j]=t;}return arr;}
+function _nextStageTip(){if(!_stageTipShuffled||_stageTipShuffleIdx>=_stageTipShuffled.length){_stageTipShuffled=_shuffleStageTips();_stageTipShuffleIdx=0;}return _stageTipShuffled[_stageTipShuffleIdx++];}
+var _stageTipTimer=null;
+function startStageTips(){stopStageTips();if(load('stageTipsEnabled','1')!=='1'){var el=$('stageTip');if(el)el.classList.remove('visible');return;}var el=$('stageTip'),txt=$('stageTipText');if(!el||!txt)return;var advance=function(){el.classList.remove('visible');setTimeout(function(){txt.textContent=_nextStageTip();el.classList.add('visible');},350);};txt.textContent=_nextStageTip();el.classList.add('visible');_stageTipTimer=setInterval(advance,4000);}
+function stopStageTips(){if(_stageTipTimer){clearInterval(_stageTipTimer);_stageTipTimer=null;}var el=$('stageTip');if(el)el.classList.remove('visible');}
 var joy={a:false,sx:0,sy:0,cx:0,cy:0,dx:0,dy:0,mr:48};
 
 function showStageTooltip(text,color){
@@ -177,6 +235,7 @@ function initLevelSelect(){
     if(!playerName||!load('ctrlPicked',false)||!load('tutorialDone',false)){showOnboard();}
     $('levelSelect').classList.add('active');
     if(musOn && audioInitialized) startMusic();
+    startStageTips();
     updateLsChestBtn();
     updateLsDailyBtn();
     updateLsStreakBtn();
@@ -656,6 +715,7 @@ $('setCtrl').value=ctrlMode;
 $('setVibrate').value=vibrateOn?'1':'0';
 if($('setOrient'))$('setOrient').value=orient;
 if($('setAutoRetry'))$('setAutoRetry').value=autoRetryDelay;
+if($('setStageTips'))$('setStageTips').value=load('stageTipsEnabled','1');
 updateCtrlPreview($('ctrlPreview'),ctrlMode);
 }
 
@@ -742,6 +802,7 @@ vibrateOn=$('setVibrate').value==='1';
 save('ctrl',ctrlMode);save('vibrate',vibrateOn);
 if($('setOrient')){orient=$('setOrient').value;save('orient',orient);}
 if($('setAutoRetry')){autoRetryDelay=$('setAutoRetry').value;save('autoRetryDelay',autoRetryDelay);}
+if($('setStageTips')){save('stageTipsEnabled',$('setStageTips').value);startStageTips();}
 
 if(!musOn) stopMusic();
 $('settings').classList.remove('active');
@@ -769,7 +830,8 @@ function openProfile(){
 function closeProfile(){$('profile').classList.remove('active');}
 function renderProfile(){
     var rankInfo=getPlayerRankInfo();
-    $('pfRank').textContent=rankInfo.current.name+' \u00b7 '+rankInfo.score.toLocaleString()+' pts';
+    $('pfRank').textContent=rankInfo.current.name;
+    $('pfRankScore').textContent=rankInfo.score.toLocaleString()+' pts';
     $('pfRank').style.color=rankInfo.current.color;
     $('pfRank').style.borderColor=rankInfo.current.color;
     $('pfName').textContent=getDisplayName();
@@ -1052,11 +1114,12 @@ function shareGame(){
     $('ovTitle').textContent='\ud83d\udce4 SHARE';
     $('ovTitle').style.color='#0ff';
     $('ovMsg').innerHTML=
-        '<div id="shareQRBlock" style="text-align:center;margin-bottom:16px;"><div id="shareQRMount" style="display:inline-block;padding:8px;background:#fff;border-radius:8px;"></div><div style="font-size:0.7rem;color:#0ff;margin-top:6px;font-family:monospace;">\ud83d\udcf7 Scan to play \u2014 friends nearby</div><div id="shareURLDisplay" style="font-size:0.55rem;color:#888;margin-top:4px;font-family:monospace;word-break:break-all;"></div></div>'+
-        '<div style="font-size:0.7rem;color:#aaa;margin-bottom:8px;text-align:left;">Add a personal note. Stats and game link auto-include below.</div>'+
+        '<div id="shareTwoCol" style="display:flex;gap:12px;margin-bottom:12px;align-items:flex-start;">'+
+        '<div id="shareLeftCol" style="flex:0 0 200px;"><div id="shareQRBlock" style="text-align:center;"><div id="shareQRMount" style="display:inline-block;padding:8px;background:#fff;border-radius:8px;"></div><div style="font-size:0.7rem;color:#0ff;margin-top:6px;font-family:monospace;">\ud83d\udcf7 Scan to play \u2014 friends nearby</div><div id="shareURLDisplay" style="font-size:0.55rem;color:#888;margin-top:4px;font-family:monospace;word-break:break-all;"></div></div></div>'+
+        '<div id="shareRightCol" style="flex:1;min-width:0;"><div style="font-size:0.7rem;color:#aaa;margin-bottom:8px;text-align:left;">Add a personal note. Stats and game link auto-include below.</div>'+
         '<textarea id="shareCustomMsg" oninput="refreshSharePreview()" style="width:100%;height:60px;background:#111;color:#0ff;border:1px solid #0ff;padding:8px;font-family:monospace;font-size:0.75rem;border-radius:8px;resize:none;box-sizing:border-box;">Think you can beat my time? \ud83d\udca5</textarea>'+
         '<div style="font-size:0.6rem;color:#666;margin-top:8px;text-align:left;">Preview:</div>'+
-        '<div id="sharePreviewBody" style="background:#0a0a18;border:1px solid #333;border-radius:8px;padding:8px;font-family:monospace;font-size:0.65rem;color:#aaa;white-space:pre-wrap;text-align:left;max-height:120px;overflow-y:auto;margin-top:4px;"></div>';
+        '<div id="sharePreviewBody" style="background:#0a0a18;border:1px solid #333;border-radius:8px;padding:8px;font-family:monospace;font-size:0.65rem;color:#aaa;white-space:pre-wrap;text-align:left;max-height:80px;overflow-y:auto;margin-top:4px;"></div></div></div>';
     setTimeout(function(){
         refreshSharePreview();
         var ta=$('shareCustomMsg');
@@ -1442,6 +1505,7 @@ function pickCtrl(mode){ctrlMode=mode;save('ctrl',ctrlMode);$('ctrlPicker').styl
 var _onbCtrl='arrows';
 function selectOnbCtrl(mode){_onbCtrl=mode;document.querySelectorAll('#onboard .onb-ctrl').forEach(function(b){b.classList.toggle('active',b.dataset.ctrl===mode);});}
 function startDailyStage(){
+    attemptFullscreenAndLock();
     isDailyStage = true;
     if(!dailyLevelObj) dailyLevelObj = generateDailyLevel();
     curLvl = -1;
@@ -1450,6 +1514,7 @@ function startDailyStage(){
     _isFreshStageEntry = true;
     sessionStage = -2;
     // Hide home screen, show game (same pattern as startGame but skip stats tracking)
+    stopStageTips();
     $('levelSelect').classList.remove('active');
     $('gameCanvas').classList.add('active');
     $('gameTitleHUD').classList.add('active');

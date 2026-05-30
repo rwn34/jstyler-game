@@ -3,6 +3,7 @@ var st=normalizeLevelStat(levelStats[lvl]);
 st.attempts++;
 levelStats[lvl]=st;save('stats',levelStats);
 $('levelSelect').classList.remove('active');
+stopStageTips();
 $('gameCanvas').classList.add('active');
 
 $('gameTitleHUD').classList.add('active');
@@ -29,6 +30,7 @@ function startReplay(lvl){
     replayMode=true;
     _replayEnded=false;
     curLvl=lvl;
+    stopStageTips();
     $('levelSelect').classList.remove('active');
     $('gameCanvas').classList.add('active');
     $('gameTitleHUD').classList.add('active');

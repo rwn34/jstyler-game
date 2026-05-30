@@ -27,7 +27,7 @@ if(!isV2) {
 
 // === METRICS (anonymous, opt-out by setting METRIC_URL='') ===
 var METRIC_URL = 'https://ndj-metrics.jstylr.workers.dev'; // Cloudflare Worker — set to '' to disable metrics
-var APP_VERSION = 'v1.2.65'; // Build version — updated by zipgame.ps1
+var APP_VERSION = 'v1.2.69'; // Build version — updated by zipgame.ps1
 var playerId = load('playerId', null);
 if(!playerId){playerId='p_'+Math.random().toString(36).slice(2,10)+Date.now().toString(36);save('playerId',playerId);}
 
@@ -499,7 +499,7 @@ function mergeSyncData(cloud){
         save('championStatus',championStatus);
     }
     // Daily/streak
-    if(typeof cloud.dailyStreak==='number'){save('dailyStreak',cloud.dailyStreak);}
+    if(typeof cloud.dailyStreak==='number'){save('dailyStreak',cloud.dailyStreak);dailyStreak=cloud.dailyStreak;}
     if(typeof cloud.streakFreezes==='number'){save('streakFreezes',cloud.streakFreezes);}
     if(Array.isArray(cloud.frozenDays)){save('frozenDays',cloud.frozenDays);}
     if(typeof cloud.lastChest==='number'){lastChestClaim=cloud.lastChest;save('lastChest',lastChestClaim);}
@@ -602,7 +602,7 @@ function replaceSyncData(cloud){
         save('championStatus',championStatus);
     }
     // Daily/streak
-    if(typeof cloud.dailyStreak==='number'){save('dailyStreak',cloud.dailyStreak);}
+    if(typeof cloud.dailyStreak==='number'){save('dailyStreak',cloud.dailyStreak);dailyStreak=cloud.dailyStreak;}
     if(typeof cloud.streakFreezes==='number'){save('streakFreezes',cloud.streakFreezes);}
     if(Array.isArray(cloud.frozenDays)){save('frozenDays',cloud.frozenDays);}
     if(typeof cloud.lastChest==='number'){lastChestClaim=cloud.lastChest;save('lastChest',lastChestClaim);}
