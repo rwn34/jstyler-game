@@ -29,3 +29,11 @@ test-results/
 
 # Build auto-detect hash
 .zipgame-last-build-hash
+
+# Mobile wrapper build artifacts
+mobile/node_modules/
+mobile/android/app/build/
+mobile/android/build/
+mobile/android/.gradle/
+mobile/android/app/*.jks
+mobile/android/app/*.keystore

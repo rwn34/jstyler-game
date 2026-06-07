@@ -84,6 +84,11 @@ body{background:#050510;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;o
 .daily-btn { width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:0.85rem; color:#fff; padding:0; transition:all 0.2s; }
 .daily-btn:hover { background:rgba(0,229,255,0.2); border-color:#0ff; }
 .daily-btn span { font-size:0.6rem; margin-left:2px; }
+.daily-btn.done { background:linear-gradient(135deg,#0f8,#0a0); border-color:#0f8; color:#000; }
+.daily-btn.done:hover { background:linear-gradient(135deg,#2f8,#1a2); }
+.daily-btn.ready { animation:pulseDaily 1.5s ease-in-out infinite; }
+@keyframes pulseDaily { 0%,100%{box-shadow:0 0 0 rgba(0,255,255,0);} 50%{box-shadow:0 0 12px rgba(0,255,255,0.5);} }
+@keyframes pulseStatus { 0%,100%{box-shadow:0 0 0 rgba(0,255,255,0);transform:scale(1);} 50%{box-shadow:0 0 16px rgba(0,255,255,0.4);transform:scale(1.02);} }
 #lsGlobalStats { display:flex; flex-direction:column; align-items:center; gap:8px; width:100%; max-width:360px; margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.06); }
 .gs-row { display:flex; justify-content:center; gap:20px; flex-wrap:wrap; }
 .gs-stat { display:flex; align-items:baseline; gap:5px; cursor:pointer; transition:opacity 0.2s; }
@@ -578,7 +583,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     <canvas id="bootParticles" style="position:absolute;inset:0;z-index:2;"></canvas>
     <h1 style="z-index:1;">N3ON DashJ<span class="glitch" data-text="N3ON DashJ"></span></h1>
     <span class="sub" style="z-index:1;">jstylr</span>
-    <span style="z-index:1;font-size:.55rem;color:#444;font-family:monospace;">v1.2.69</span>
+    <span style="z-index:1;font-size:.55rem;color:#444;font-family:monospace;">v1.2.70</span>
     <div id="bootTips" style="z-index:1;font-size:0.6rem;color:#888;font-family:monospace;max-width:80vw;text-align:center;line-height:1.4;opacity:0;transition:opacity 0.5s ease;margin-top:-8px;"></div>
 </div>
 
@@ -694,7 +699,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
     <!-- Cloud Sync moved to Profile panel -->
     <div style="text-align: center; margin-top: 15px; font-family: monospace;">
         <div style="display:flex;gap:6px;width:100%;">
-            <button onclick="openChangelog()" style="flex:1;padding:8px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#333,#222);border:1px solid rgba(255,255,255,0.15);color:#aaa;">📋 UPDATE LOG &nbsp; <span style='color:#666;font-size:0.6rem;'>v1.2.69</span></button>
+            <button onclick="openChangelog()" style="flex:1;padding:8px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#333,#222);border:1px solid rgba(255,255,255,0.15);color:#aaa;">📋 UPDATE LOG &nbsp; <span style='color:#666;font-size:0.6rem;'>v1.2.70</span></button>
             <button onclick="restartGame()" title="Restart the game to apply updates" style="flex:0 0 auto;padding:8px 14px;font-size:0.7rem;font-weight:700;background:linear-gradient(135deg,#0a4,#062);border:1px solid rgba(0,255,136,0.3);color:#0f8;">🔄 RESTART</button>
         </div>
         <button onclick="showPrivacyPolicy()" style="background:transparent; border:none; color:#444; font-size:0.6rem; font-weight:normal; text-decoration:underline; cursor:pointer; padding:5px; box-shadow:none; margin-top:2px;">🔒 Privacy Policy</button>
@@ -763,6 +768,20 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
   <button onclick="closeChangelog()" style="background:rgba(255,68,68,0.2);border:1px solid #f44;color:#f44;padding:4px 12px;border-radius:6px;cursor:pointer;font-family:monospace;font-weight:700;font-size:.65rem;letter-spacing:1px;">✕ CLOSE</button>
 </div>
 <div style="width:100%;max-width:360px;max-height:60vh;overflow-y:auto;text-align:left;padding:10px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.1);">
+<div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.70</div>
+<ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
+<li>**Store system** — skill shop, cosmetic shop, consumables, chest rewards</li>
+<li>**PWA support** — manifest, service worker, offline caching, installable app</li>
+<li>**Ghost replay integrity** — ghost is now saved only on new best time. Prevents ghost/bestTime mismatch after migrations or cloud sync wipe ghost data while preserving best times.</li>
+<li>**Cloud sync achievement loss** — `masterGems` now union-merges from both devices instead of cloud overwriting local. `hintsSeen` type check fixed (was `Array.isArray` on a number). `tutorialDone` and `ctrlPicked` now merge via OR.</li>
+<li>**Cloud sync stale ghosts** — when cloud brings a better time, local ghost is auto-removed and user is notified via toast.</li>
+<li>**Boot / stage select redesign** — new visual layout, animated transitions</li>
+<li>**Visual improvements** — particle effects, UI polish, responsive layout</li>
+<li>**Control adjustments** — refined touch controls, joystick sizing, fullscreen behavior</li>
+<li>**Daily stage clarity** — button shows green "✓ DONE" when completed (was faded gray), pulsing cyan glow when ready.</li>
+<li>**Daily preview panel** — adds prominent completion status banner (green for done, pulsing cyan for ready). PLAY button becomes "🔁 RETRY" when already completed.</li>
+<li>**Streak calendar** — today's circle shows ✓ checkmark when daily is completed (green), · dot when pending (white). Added color legend below calendar.</li>
+</ul>
 <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.69</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">
 <li>**Streak counter (🔥 X days)** now updates immediately after a cloud-sync load — previously it remained stuck at the pre-sync value until the next page reload, because the in-memory streak variable wasn't refreshed alongside its localStorage write.</li>
@@ -1417,6 +1436,7 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
   </div>
   <div style="width:100%;max-width:340px;text-align:center;padding:16px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.1);margin-top:8px;">
     <div id="dpDate" style="font-size:0.75rem;color:#ccc;margin-bottom:4px;">📅 --</div>
+    <div id="dpStatus" style="font-size:0.75rem;font-weight:700;padding:6px 12px;border-radius:8px;margin-bottom:6px;display:none;"></div>
     <div id="dpDiff" style="font-size:1rem;font-weight:700;color:#0ff;margin-bottom:4px;">MODERATE</div>
     <div id="dpLayout" style="font-size:0.65rem;color:#fa0;font-weight:700;margin-bottom:8px;letter-spacing:1px;"></div>
     <div id="dpTheme" style="font-size:0.6rem;color:#aaa;margin-bottom:8px;line-height:1.5;word-wrap:break-word;"></div>

@@ -1,3 +1,26 @@
+## 2026-05-30 — kimi-cli (Android APK wrapper + Play Store build pipeline)
+- **GitHub push:** Committed 20 files (v1.2.65–v1.2.69: cloud sync polish, stage tips, share/profile UX, streak fix, archived cross-CLI handoffs 007/008/017/018/019). Pushed `master` → `origin/master` (`828d0cc..4d2600d`).
+- **APK wrapper created (`mobile/`):** Capacitor v7-based Android project wrapping N3ON DashJ for Google Play Store. Design goal: "people will not recognize this is html game anymore."
+  - Local asset packaging (all game files in `www/` → `android/app/src/main/assets/public/`). Fully offline play.
+  - Immersive sticky fullscreen via `MainActivity.java` (`SYSTEM_UI_FLAG_IMMERSIVE_STICKY` for API <30, `WindowInsetsController` for API 30+). Auto-restores on focus change.
+  - WebView configured: scrollbars disabled, overscroll disabled (`OVER_SCROLL_NEVER`), haptic feedback enabled.
+  - Native splash screen: AndroidX SplashScreen API with game icon (`icon-512.png`) on `#050510` background, 2.5s duration, fade-out 500ms.
+  - App icons replaced across all `mipmap-*` and `drawable-*` densities with game assets.
+  - Permissions: `INTERNET`, `VIBRATE`, `ACCESS_NETWORK_STATE`.
+  - Dark theme (`#050510`) matching game palette.
+- **Keystore created:** `mobile/android/app/my-release-key.jks` (alias `n3ondashj`, 10,000 days validity, owner `CN=rwn34, O=jstylr, C=ID`). Signing config wired into `build.gradle` (release builds auto-sign).
+- **Android toolchain installed on system:**
+  - Android SDK → `C:\Android\Sdk` (cmdline-tools, platform-tools, platforms/android-35, build-tools/35.0.0, build-tools/34.0.0)
+  - OpenJDK 21 JDK → `C:\Android\jdk-21.0.10+7`
+  - Env vars set: `ANDROID_HOME`, `JAVA_HOME` (both persisted to User scope)
+  - All 7 SDK licenses accepted.
+- **Signed release AAB built:** `mobile/android/app/build/outputs/bundle/release/app-release.aab` — **2.87 MB**, versionCode 1269, versionName 1.2.69, targetSdk 35, minSdk 23.
+- **Package name changed** per user request from `com.jstylr.n3ondashj` → `com.evefable.jstylr.n3ondashj`. Updated in capacitor.config.json, build.gradle (namespace + applicationId), AndroidManifest.xml activity name, strings.xml (package_name + custom_url_scheme), and Java package path (`com/evefable/jstylr/n3ondashj/MainActivity.java`). Rebuilt AAB successfully.
+- **Scripts created:** `mobile/scripts/sync-assets.ps1` (re-copies game files + cap sync), `mobile/scripts/build-release.ps1` (checks SDK/keystore, builds signed AAB).
+- **Documentation:** `mobile/README.md` with complete setup guide, Play Store submission checklist, versioning instructions, troubleshooting table.
+- **Gitignore:** Updated root `.gitignore` with mobile build artifacts (`mobile/node_modules/`, `mobile/android/app/build/`, `*.jks`, `*.keystore`).
+- **Files created/modified:** `mobile/` (entire directory — 40+ files), `.gitignore`, `.ai/activity/log.md` (this entry).
+
 ## 2026-05-29 — kiro-cli (handoff 008 — v1.2.69 dailyStreak stale-memory fix)
 - Action: 2-line surgical fix per handoff 008 (which itself was dispatched from Kiro 007's static finding). Appended `;dailyStreak=cloud.dailyStreak;` inside the existing `if(typeof cloud.dailyStreak==='number')` block at `03-save.js:502` (mergeSyncData) and `:605` (replaceSyncData), matching the pre-existing module-var-update pattern of `playDays=trimmed;` (line 507/613) and `dailyCollection=cloud.dailyCollection.slice()` (line 508/614). Pre-existing assignments unchanged. `dailyStats` and `frozenDays` confirmed still localStorage-direct (not module vars). Bumped v1.2.68 → v1.2.69 via auto-detect (source-change branch). Zip: `deploy/20260529231708_v1.2.69.zip` (199.2KB, sha256 013a403d…26f8f892d2ecae).
 - Files: src/n3ondashj/03-save.js, src/n3ondashj/index.html (auto), src/n3ondashj/sw.js (auto), CHANGELOG.md, deploy/20260529231708_v1.2.69.zip, deploy/latest/, .zipgame-last-build-hash, .ai/handoffs/to-claude/open/008-dailystreak-stale-memory-fix-complete.md (NEW)

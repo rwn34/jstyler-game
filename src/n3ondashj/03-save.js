@@ -27,7 +27,7 @@ if(!isV2) {
 
 // === METRICS (anonymous, opt-out by setting METRIC_URL='') ===
 var METRIC_URL = 'https://ndj-metrics.jstylr.workers.dev'; // Cloudflare Worker — set to '' to disable metrics
-var APP_VERSION = 'v1.2.69'; // Build version — updated by zipgame.ps1
+var APP_VERSION = 'v1.2.70'; // Build version — updated by zipgame.ps1
 var playerId = load('playerId', null);
 if(!playerId){playerId='p_'+Math.random().toString(36).slice(2,10)+Date.now().toString(36);save('playerId',playerId);}
 
@@ -48,6 +48,14 @@ showWelcomeFromFriendToast();
 })();
 function showWelcomeFromFriendToast(){var t=document.createElement('div');t.textContent='Welcomed via friend';t.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(0,255,255,0.15);color:#0ff;border:1px solid #0ff;padding:8px 16px;border-radius:8px;font-family:monospace;font-size:0.8rem;z-index:9999;backdrop-filter:blur(8px);box-shadow:0 0 12px rgba(0,255,255,0.3);';document.body.appendChild(t);setTimeout(function(){t.style.transition='opacity 500ms';t.style.opacity='0';},3500);setTimeout(function(){if(t.parentNode)t.parentNode.removeChild(t);},4200);}
 function showGhostNotSyncedToast(){try{if(localStorage.getItem('ndj_ghostNoticeSeen')==='1')return;}catch(e){return;}try{localStorage.setItem('ndj_ghostNoticeSeen','1');}catch(e){}var t=document.createElement('div');t.textContent='\uD83D\uDC7B Ghost rival data is local-only. Replay times sync; ghost runs do not.';t.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(128,0,255,0.15);color:#c8f;border:1px solid #c8f;padding:8px 16px;border-radius:8px;font-family:monospace;font-size:0.7rem;z-index:9999;backdrop-filter:blur(8px);box-shadow:0 0 12px rgba(128,0,255,0.3);max-width:90vw;text-align:center;';document.body.appendChild(t);setTimeout(function(){t.style.transition='opacity 500ms';t.style.opacity='0';},5000);setTimeout(function(){if(t.parentNode)t.parentNode.removeChild(t);},5700);}
+function showGhostsInvalidatedToast(count){
+    var t=document.createElement('div');
+    t.textContent='\uD83D\uDC7B '+(count===1?'1 ghost replay removed':'Ghost replays removed: '+count)+' \u2014 cloud has better times. Beat your new best to record a fresh ghost!';
+    t.style.cssText='position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(255,136,0,0.15);color:#fa0;border:1px solid #fa0;padding:8px 16px;border-radius:8px;font-family:monospace;font-size:0.7rem;z-index:9999;backdrop-filter:blur(8px);box-shadow:0 0 12px rgba(255,136,0,0.3);max-width:90vw;text-align:center;';
+    document.body.appendChild(t);
+    setTimeout(function(){t.style.transition='opacity 500ms';t.style.opacity='0';},5000);
+    setTimeout(function(){if(t.parentNode)t.parentNode.removeChild(t);},5700);
+}
 
 // v2: session token + HMAC signing for anti-cheat
 var _sessionToken=null,_sessionExpiresAt=0,_sessionPromise=null;
@@ -463,12 +471,13 @@ function mergeSyncData(cloud){
     }
     // Best scores: per-level max
     if(cloud.scores){for(var k in cloud.scores){if(cloud.scores[k]>(bestScores[k]||0))bestScores[k]=cloud.scores[k];}save('scores',bestScores);}
-    // Best times: per-level min
-    if(cloud.times){for(var k in cloud.times){if(cloud.times[k]<(bestTimes[k]||Infinity))bestTimes[k]=cloud.times[k];}save('times',bestTimes);}
+    // Best times: per-level min. If cloud has a better time, local ghost is now stale (from a slower run).
+    var _ghostsInvalidated=0;
+    if(cloud.times){for(var k in cloud.times){if(cloud.times[k]<(bestTimes[k]||Infinity)){bestTimes[k]=cloud.times[k];if(ghostData[k]&&ghostData[k].length>0){delete ghostData[k];_ghostsInvalidated++;}}}save('times',bestTimes);if(_ghostsInvalidated>0){save('ghostData',ghostData);}}
     // Best chips: per-index OR
     if(cloud.chips){for(var k in cloud.chips){var ca=cloud.chips[k]||[];var ba=bestChips[k]||[];var maxLen=Math.max(ca.length,ba.length);var merged=[];for(var i=0;i<maxLen;i++)merged[i]=!!ca[i]||!!ba[i];bestChips[k]=merged;}save('chips',bestChips);}
-    // Stats: per-level max completions/attempts/silver
-    if(cloud.stats){for(var k in cloud.stats){var cs=cloud.stats[k]||{};var ls=levelStats[k]||{};levelStats[k]={attempts:Math.max(ls.attempts||0,cs.attempts||0),completions:Math.max(ls.completions||0,cs.completions||0),hazards:Math.max(ls.hazards||0,cs.hazards||0),silver:Math.max(ls.silver||0,cs.silver||0),timePlayed:Math.max(ls.timePlayed||0,cs.timePlayed||0),contentVersion:Math.max(ls.contentVersion||0,cs.contentVersion||0),masterGems:Array.isArray(cs.masterGems)?cs.masterGems.slice():([])};}save('stats',levelStats);}
+    // Stats: per-level max completions/attempts/silver, masterGems union both sides
+    if(cloud.stats){for(var k in cloud.stats){var cs=cloud.stats[k]||{};var ls=levelStats[k]||{};var mgSet=new Set();(ls.masterGems||[]).forEach(function(g){mgSet.add(g);});(cs.masterGems||[]).forEach(function(g){mgSet.add(g);});levelStats[k]={attempts:Math.max(ls.attempts||0,cs.attempts||0),completions:Math.max(ls.completions||0,cs.completions||0),hazards:Math.max(ls.hazards||0,cs.hazards||0),silver:Math.max(ls.silver||0,cs.silver||0),timePlayed:Math.max(ls.timePlayed||0,cs.timePlayed||0),contentVersion:Math.max(ls.contentVersion||0,cs.contentVersion||0),masterGems:Array.from(mgSet)};}save('stats',levelStats);}
     // Silver: max
     if(typeof cloud.silver==='number'){silverWallet=Math.max(silverWallet,cloud.silver);save('silver',silverWallet);}
     // Gold spent: max
@@ -498,6 +507,11 @@ function mergeSyncData(cloud){
         championStatus.unlocked=!!(championStatus.unlocked||cloud.championStatus.unlocked);
         save('championStatus',championStatus);
     }
+    // Hints discovered (bitmask) — merge via OR so any hint seen on either device counts
+    if(typeof cloud.hintsSeen==='number'){hintsSeen=hintsSeen|cloud.hintsSeen;save('hintsSeen',hintsSeen);}
+    // Tutorial / control picked — OR so completion on any device counts
+    if(cloud.tutorialDone===true){save('tutorialDone',true);}
+    if(cloud.ctrlPicked===true){save('ctrlPicked',true);}
     // Daily/streak
     if(typeof cloud.dailyStreak==='number'){save('dailyStreak',cloud.dailyStreak);dailyStreak=cloud.dailyStreak;}
     if(typeof cloud.streakFreezes==='number'){save('streakFreezes',cloud.streakFreezes);}
@@ -564,8 +578,9 @@ function replaceSyncData(cloud){
     if(Array.isArray(cloud.unlocked)){unlocked=cloud.unlocked.slice();save('unlocked',unlocked);}
     // Replace scores
     if(cloud.scores){bestScores=JSON.parse(JSON.stringify(cloud.scores));save('scores',bestScores);}
-    // Replace times
-    if(cloud.times){bestTimes=JSON.parse(JSON.stringify(cloud.times));save('times',bestTimes);}
+    // Replace times. Since times are replaced from cloud, any local ghosts for levels with cloud times are now stale.
+    var _ghostsInvalidatedRep=0;
+    if(cloud.times){bestTimes=JSON.parse(JSON.stringify(cloud.times));save('times',bestTimes);for(var k in bestTimes){if(ghostData[k]&&ghostData[k].length>0){delete ghostData[k];_ghostsInvalidatedRep++;}}if(_ghostsInvalidatedRep>0){save('ghostData',ghostData);}}
     // Replace chips
     if(cloud.chips){bestChips=JSON.parse(JSON.stringify(cloud.chips));save('chips',bestChips);}
     // Replace stats
@@ -607,7 +622,7 @@ function replaceSyncData(cloud){
     if(Array.isArray(cloud.frozenDays)){save('frozenDays',cloud.frozenDays);}
     if(typeof cloud.lastChest==='number'){lastChestClaim=cloud.lastChest;save('lastChest',lastChestClaim);}
     if(typeof cloud.lastResurrect==='number'){lastResurrectTime=cloud.lastResurrect;save('lastResurrect',lastResurrectTime);}
-    if(Array.isArray(cloud.hintsSeen)){hintsSeen=cloud.hintsSeen.slice();save('hintsSeen',hintsSeen);}
+    if(typeof cloud.hintsSeen==='number'){hintsSeen=cloud.hintsSeen;save('hintsSeen',hintsSeen);}
     if(typeof cloud.tutorialDone==='boolean'){save('tutorialDone',cloud.tutorialDone);}
     if(typeof cloud.ctrlPicked==='boolean'){save('ctrlPicked',cloud.ctrlPicked);}
     if(Array.isArray(cloud.playDays)){var trimmed=cloud.playDays.slice(-31);save('playDays',trimmed);playDays=trimmed;}
@@ -638,6 +653,10 @@ function loadSync(username,mmyy,pin,callback,replace){
             else mergeSyncData(d.data);
             try{localStorage.setItem('ndj_lastSyncAt',''+Date.now());}catch(e){}
             if(replace&&typeof showGhostNotSyncedToast==='function')setTimeout(showGhostNotSyncedToast,1500);
+            if(typeof showGhostsInvalidatedToast==='function'){
+                if(!replace&&_ghostsInvalidated>0)setTimeout(function(){showGhostsInvalidatedToast(_ghostsInvalidated);},1800);
+                if(replace&&_ghostsInvalidatedRep>0)setTimeout(function(){showGhostsInvalidatedToast(_ghostsInvalidatedRep);},1800);
+            }
             if(typeof callback==='function')callback(true,d);
             // Reflect authoritative server state into local recovery-code flag.
             var serverFlag=(d.requiresRecoveryCodeSetup!==undefined

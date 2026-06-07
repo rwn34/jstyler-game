@@ -940,6 +940,7 @@ function renderStreakCalendar(){
     }
     var visStreak=0;
     for(var k in streakChain){if(streakChain.hasOwnProperty(k))visStreak++;}
+    var todayCompleted=getDailyStats().completed;
     var html='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px 4px;max-width:320px;margin:0 auto;">';
     var weekLabels=['M','T','W','T','F','S','S'];
     for(var wi=0;wi<7;wi++){
@@ -948,9 +949,16 @@ function renderStreakCalendar(){
     for(var i=0;i<days.length;i++){
         var d=days[i];
         var inChain=streakChain[d.day];
-        var circleStyle='width:22px;height:22px;border-radius:50%;border:2px solid;margin:0 auto;';
+        var circleStyle='width:22px;height:22px;border-radius:50%;border:2px solid;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:900;';
+        var inner='';
         if(d.isToday){
-            circleStyle+='background:#fff;border-color:#fff;box-shadow:0 0 8px rgba(255,255,255,0.6);';
+            if(todayCompleted){
+                circleStyle+='background:#0f8;border-color:#0f8;box-shadow:0 0 8px rgba(0,255,136,0.5);color:#000;';
+                inner='✓';
+            }else{
+                circleStyle+='background:#fff;border-color:#fff;box-shadow:0 0 8px rgba(255,255,255,0.6);color:#000;';
+                inner='·';
+            }
         }else if(d.isFuture){
             circleStyle+='border-color:rgba(255,255,255,0.12);background:transparent;';
         }else if(inChain){
@@ -965,10 +973,16 @@ function renderStreakCalendar(){
         if(d.isToday) circleStyle+='transform:scale(1.2);';
         var labelColor=d.isToday?'#fff':d.isFuture?'#444':'#666';
         html+='<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">';
-        html+='<div style="'+circleStyle+'"></div>';
+        html+='<div style="'+circleStyle+'">'+inner+'</div>';
         html+='<div style="font-size:0.5rem;color:'+labelColor+';font-weight:'+(d.isToday?'700':'400')+';">'+d.label+'</div>';
         html+='</div>';
     }
+    html+='</div>';
+    html+='<div style="margin-top:10px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;font-size:0.5rem;color:#666;">';
+    html+='<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0f8;margin-right:3px;vertical-align:middle;"></span>Today done</span>';
+    html+='<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#fff;margin-right:3px;vertical-align:middle;"></span>Today pending</span>';
+    html+='<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f90;margin-right:3px;vertical-align:middle;"></span>Streak day</span>';
+    html+='<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0af;margin-right:3px;vertical-align:middle;"></span>Frozen</span>';
     html+='</div>';
     strip.innerHTML=html;
     var sb=$('streakBig');
@@ -1006,13 +1020,30 @@ function openDailyPreview(){
     var dpDate=$('dpDate');
     var dpTheme=$('dpTheme');
     var dpCollection=$('dpCollection');
+    var dpStatus=$('dpStatus');
+    var stats=getDailyStats();
+    if(dpStatus){
+        dpStatus.style.display='block';
+        if(stats.completed){
+            dpStatus.textContent='✓ COMPLETED TODAY'+(stats.bestTime?' — Best: '+(stats.bestTime/1000).toFixed(2)+'s':'');
+            dpStatus.style.background='rgba(0,255,136,0.15)';
+            dpStatus.style.color='#0f8';
+            dpStatus.style.border='1px solid rgba(0,255,136,0.4)';
+            dpStatus.style.animation='none';
+        }else{
+            dpStatus.textContent='💎 READY — Complete today\'s stage to earn a badge!';
+            dpStatus.style.background='rgba(0,255,255,0.08)';
+            dpStatus.style.color='#0ff';
+            dpStatus.style.border='1px solid rgba(0,255,255,0.3)';
+            dpStatus.style.animation='pulseStatus 1.5s ease-in-out infinite';
+        }
+    }
     if(dpDiff){dpDiff.textContent=lv.diff;dpDiff.style.color=lv.diff==='HARD'?'#f44':lv.diff==='MODERATE'?'#fa0':'#0f8';}
     if(dpLayout){
         var layoutNames={wave:'Rolling Hills',clusters:'Platform Clusters',stairs:'Stair Steps',islands:'Sky Islands',gaps:'Leap of Faith',vertical:'Cliffhanger',dense:'Tightrope'};
         dpLayout.textContent=(layoutNames[lv.layoutType]||lv.layoutType||'Standard').toUpperCase();
     }
     if(dpStreak) dpStreak.textContent='🔥 Streak: '+dailyStreak+' days';
-    var stats=getDailyStats();
     if(dpBest) dpBest.textContent=stats.bestTime?'Best today: '+(stats.bestTime/1000).toFixed(2)+'s':'Best today: --';
     if(dpDate){
         var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -1024,6 +1055,9 @@ function openDailyPreview(){
         var ct=lv.customTheme;
         dpTheme.innerHTML='<span style="color:#888">Mood:</span> '+(ct&&ct.moodName?ct.moodName:'--')+' <span style="color:#888">Energy:</span> '+(ct&&ct.energyName?ct.energyName:'--')+' <span style="color:#888">Feel:</span> '+(ct&&ct.feelName?ct.feelName:'--');
     }
+    // PLAY / RETRY button label
+    var playBtn=$('dailyPreview').querySelector('button[onclick="playDailyFromPreview()"]');
+    if(playBtn) playBtn.textContent=stats.completed?'🔁 RETRY':'▶ PLAY';
     if(dpCollection){
         if(!Array.isArray(dailyCollection)) dailyCollection=[];
         if(dailyCollection.length>0){
@@ -1282,13 +1316,16 @@ function updateLsDailyBtn(){
     if(!btn)return;
     btn.style.display='flex';
     var stats=getDailyStats();
+    btn.classList.remove('done','ready');
     if(stats.completed){
-        btn.innerHTML='<span style="font-size:0.9rem;">✓</span><span style="font-size:0.55rem;font-weight:700;letter-spacing:1px;">DAILY STAGE</span>';
-        btn.style.opacity='0.5';
-        btn.style.filter='grayscale(0.5)';
-        btn.title='Daily Stage completed today';
+        btn.innerHTML='<span style="font-size:0.9rem;">✓</span><span style="font-size:0.55rem;font-weight:700;letter-spacing:1px;">DONE</span>';
+        btn.classList.add('done');
+        btn.style.opacity='1';
+        btn.style.filter='none';
+        btn.title='Daily Stage completed today — come back tomorrow!';
     }else{
-        btn.innerHTML='<span style="font-size:0.9rem;">💎</span><span style="font-size:0.55rem;font-weight:700;letter-spacing:1px;">DAILY STAGE</span>';
+        btn.innerHTML='<span style="font-size:0.9rem;">💎</span><span style="font-size:0.55rem;font-weight:700;letter-spacing:1px;">DAILY</span>';
+        btn.classList.add('ready');
         btn.style.opacity='1';
         btn.style.filter='none';
         btn.title='Daily Stage ready!';

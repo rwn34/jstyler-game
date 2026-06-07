@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.2.70 — May 30, 2026
+
+### Added
+- **Store system** — skill shop, cosmetic shop, consumables, chest rewards
+- **PWA support** — manifest, service worker, offline caching, installable app
+
+### Fixed
+- **Ghost replay integrity** — ghost is now saved only on new best time. Prevents ghost/bestTime mismatch after migrations or cloud sync wipe ghost data while preserving best times.
+- **Cloud sync achievement loss** — `masterGems` now union-merges from both devices instead of cloud overwriting local. `hintsSeen` type check fixed (was `Array.isArray` on a number). `tutorialDone` and `ctrlPicked` now merge via OR.
+- **Cloud sync stale ghosts** — when cloud brings a better time, local ghost is auto-removed and user is notified via toast.
+
+### Changed
+- **Boot / stage select redesign** — new visual layout, animated transitions
+- **Visual improvements** — particle effects, UI polish, responsive layout
+- **Control adjustments** — refined touch controls, joystick sizing, fullscreen behavior
+- **Daily stage clarity** — button shows green "✓ DONE" when completed (was faded gray), pulsing cyan glow when ready.
+- **Daily preview panel** — adds prominent completion status banner (green for done, pulsing cyan for ready). PLAY button becomes "🔁 RETRY" when already completed.
+- **Streak calendar** — today's circle shows ✓ checkmark when daily is completed (green), · dot when pending (white). Added color legend below calendar.
+
 ## v1.2.69 — May 29, 2026
 
 ### Fixed

@@ -26,8 +26,10 @@ if(_newBest) {
     bestTimes[curLvl] = runTime;
     save('times', bestTimes);
 }
-// Save ghost if new best OR no ghost data yet (first capture after migration/wipe)
-if(_newBest || !ghostData[curLvl] || ghostData[curLvl].length === 0) {
+// Save ghost ONLY on new best time — ghost must always match the actual best time.
+// The old fallback (|| !ghostData[curLvl]) caused ghost/bestTime desync after
+// migrations or cloud sync wiped ghostData while preserving bestTimes.
+if(_newBest) {
     ghostData[curLvl]=ghostFrames;
     save('ghostData',ghostData);
 }
