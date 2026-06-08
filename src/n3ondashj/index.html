@@ -781,6 +781,8 @@ body:has(#pause.active) #levelSelect .ls-ui { visibility: hidden !important; }
 <li>**Daily stage clarity** — button shows green "✓ DONE" when completed (was faded gray), pulsing cyan glow when ready.</li>
 <li>**Daily preview panel** — adds prominent completion status banner (green for done, pulsing cyan for ready). PLAY button becomes "🔁 RETRY" when already completed.</li>
 <li>**Streak calendar** — today's circle shows ✓ checkmark when daily is completed (green), · dot when pending (white). Added color legend below calendar.</li>
+<li>**Auto-resurrect safety** — respawns on the last **safe** platform (static, non-pulse, non-bounce, no nearby spikes or active lasers) instead of the last platform which could be moving or about to disappear.</li>
+<li>**Auto-resurrect recovery pause** — 1-second freeze after resurrection with green flash animation. Player controls are disabled so they don't accidentally walk off. Game timer pauses and resumes cleanly. Ghost rival also freezes during the pause.</li>
 </ul>
 <div style="font-size:0.75rem;color:#0ff;font-weight:700;margin-bottom:6px;">v1.2.69</div>
 <ul style="font-size:0.65rem;color:#ccc;padding-left:16px;margin:0 0 12px 0;line-height:1.6;">

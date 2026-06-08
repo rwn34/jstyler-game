@@ -18,6 +18,8 @@
 - **Daily stage clarity** — button shows green "✓ DONE" when completed (was faded gray), pulsing cyan glow when ready.
 - **Daily preview panel** — adds prominent completion status banner (green for done, pulsing cyan for ready). PLAY button becomes "🔁 RETRY" when already completed.
 - **Streak calendar** — today's circle shows ✓ checkmark when daily is completed (green), · dot when pending (white). Added color legend below calendar.
+- **Auto-resurrect safety** — respawns on the last **safe** platform (static, non-pulse, non-bounce, no nearby spikes or active lasers) instead of the last platform which could be moving or about to disappear.
+- **Auto-resurrect recovery pause** — 1-second freeze after resurrection with green flash animation. Player controls are disabled so they don't accidentally walk off. Game timer pauses and resumes cleanly. Ghost rival also freezes during the pause.
 
 ## v1.2.69 — May 29, 2026
 

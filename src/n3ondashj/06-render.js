@@ -301,7 +301,9 @@ function handleDeath(cause) {
         resurrectFlash=1.0;
         runUsedResurrect=true;
         _ghostTeleportFlag=true;
-        player.x=lastPlatPos.x;player.y=lastPlatPos.y;player.vx=0;player.vy=0;player.og=true;
+        player.x=lastSafePlatPos.x;player.y=lastSafePlatPos.y;player.vx=0;player.vy=0;player.og=true;
+        _resurrectPause=60;
+        _resurrectPauseStart=Date.now();
         addFloat(player.x+player.w/2,player.y-30,'\u2728 REVIVED \u2728','#0f8');
         playSfx('land');vib([30,30,60,30,30]);
         return;

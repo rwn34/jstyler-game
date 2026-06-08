@@ -14,6 +14,7 @@ var shieldUsed=false,shieldHits=0,dblshieldActivated=false,dblshieldUsed=false,s
 var sessionCollectedChips=[],sessionStage=-1,sessionRunTime=0;
 var ghostFrames=[],ghostIdx=0,ghostVisible=true,currentGhost=null,runUsedResurrect=false,_ghostTeleportFlag=false,replayMode=false,_replayEnded=false,_isFreshStageEntry=false,_isDailyRun=false;
 var _winTimer=null,_dieTimer=null;
+var _resurrectPause=0,_resurrectPauseStart=0,lastSafePlatPos={x:150,y:400};
 var startTime=0, runTime=0;
 var camX=0,camY=0,stars=[],bgShapes=[],atmosParts=[],dayNightStart=0,lightningStrikes=[],nextLightningT=0;
 var player={x:150,y:300,w:22,h:48,vx:0,vy:0,og:false,face:1,at:0,dead:false,won:false,djU:false,djCD:0,djMax:180};
